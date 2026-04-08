@@ -18,9 +18,26 @@ export const SECURITY_CONFIG = {
   LOCKOUT_DURATION: 15 * 60 * 1000, // 15 minutes
   
   // Security headers
+  //
+  // CSP notes:
+  // - Inline <script> blocks have been retained ('unsafe-inline') because most
+  //   role pages still ship one large inline script per page. Migrate them to
+  //   external files served from /lib/ (see static-handler) and remove
+  //   'unsafe-inline' once that work is done.
+  // - 'unsafe-inline' for styles is required by Tailwind utility classes set
+  //   via `style="..."` in some templates.
+  // - The Tailwind CDN was removed; the project ships its own globals.css.
   SECURITY_HEADERS: {
     'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
-    'Content-Security-Policy': "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com",
+    'Content-Security-Policy':
+      "default-src 'self'; " +
+      "style-src 'self' 'unsafe-inline'; " +
+      "script-src 'self' 'unsafe-inline'; " +
+      "img-src 'self' data:; " +
+      "connect-src 'self'; " +
+      "frame-ancestors 'none'; " +
+      "base-uri 'self'; " +
+      "form-action 'self'",
     'X-Frame-Options': 'DENY',
     'X-Content-Type-Options': 'nosniff',
     'Referrer-Policy': 'strict-origin-when-cross-origin',
@@ -116,30 +133,6 @@ export function generateSecureToken(length: number = 32): string {
   const bytes = new Uint8Array(length);
   crypto.getRandomValues(bytes);
   return Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
-}
-
-// Encrypt session data (in production, use proper key management)
-export async function encryptSessionData(data: any): Promise<string> {
-  // For demonstration - in production use proper encryption with managed keys
-  const encoder = new TextEncoder();
-  const dataBytes = encoder.encode(JSON.stringify(data));
-  
-  // Generate a random key (in production, use proper key derivation)
-  const key = await crypto.subtle.generateKey(
-    { name: 'AES-GCM', length: 256 },
-    true,
-    ['encrypt', 'decrypt']
-  );
-  
-  const iv = crypto.getRandomValues(new Uint8Array(12));
-  const encrypted = await crypto.subtle.encrypt(
-    { name: 'AES-GCM', iv },
-    key,
-    dataBytes
-  );
-  
-  // In production, securely store the key and return just the encrypted data + IV
-  return btoa(String.fromCharCode(...new Uint8Array(encrypted)));
 }
 
 // Create secure session
@@ -277,56 +270,59 @@ export async function switchSessionRole(
 
 // Validate session
 export async function validateSession(
-  sessionId: string, 
-  ipAddress: string, 
+  sessionId: string,
+  ipAddress: string,
   userAgent: string
 ): Promise<SecureSession | null> {
   const session = sessionStore.get(sessionId);
-  
+
   if (!session || !session.isActive) {
     return null;
   }
-  
+
   const now = Date.now();
-  
+
   // Check session timeout
   if (now - session.lastActivity > SECURITY_CONFIG.SESSION_TIMEOUT) {
     await destroySession(sessionId, 'SESSION_TIMEOUT');
     return null;
   }
-  
+
   // Check max session duration
   if (now - session.createdAt > SECURITY_CONFIG.MAX_SESSION_DURATION) {
     await destroySession(sessionId, 'MAX_DURATION_EXCEEDED');
     return null;
   }
-  
-  // Verify IP and User Agent (optional - can be made configurable)
+
+  // Bind sessions to the originating IP. A mismatch is treated as session
+  // theft and the session is destroyed.
   if (session.ipAddress !== ipAddress) {
-    await auditLog(session.userId, 'SUSPICIOUS_IP_CHANGE', 
-      `IP changed from ${session.ipAddress} to ${ipAddress}`, ipAddress);
-    // In high-security mode, you might want to invalidate the session here
+    await auditLog(session.userId, 'SESSION_IP_MISMATCH',
+      `IP changed from ${session.ipAddress} to ${ipAddress}; destroying session`, ipAddress);
+    await destroySession(sessionId, 'IP_MISMATCH');
+    return null;
   }
-  
-  // Optional: Verify User Agent for additional security
+
+  // Bind sessions to the originating user-agent. A change is suspicious; we
+  // log it but do not destroy the session by default to avoid breaking
+  // clients that legitimately update their UA mid-session.
   if (session.userAgent !== userAgent) {
-    await auditLog(session.userId, 'SUSPICIOUS_USER_AGENT_CHANGE', 
+    await auditLog(session.userId, 'SUSPICIOUS_USER_AGENT_CHANGE',
       `User agent changed for session`, ipAddress);
-    // Could invalidate session for stricter security if needed
   }
-  
+
   // Update last activity
   session.lastActivity = now;
   sessionStore.set(sessionId, session);
-  
+
   // Update database
   const db = getDb();
   db.query(`
-    UPDATE sessions 
-    SET last_activity = ? 
+    UPDATE sessions
+    SET last_activity = ?
     WHERE session_id = ?
   `).run(now, sessionId);
-  
+
   return session;
 }
 
@@ -495,17 +491,45 @@ export async function auditLog(
 }
 
 // Generate secure cookie options
+//
+// Cookies are always Secure unless AFT_ALLOW_INSECURE_COOKIES=1 is set in the
+// environment. The previous behaviour relied on NODE_ENV (which defaults to
+// undefined and therefore disabled the Secure flag); the new default is safe
+// and explicit.
 export function getSecureCookieOptions(maxAge?: number) {
-  // Detect if we're in development (localhost) or production
-  const isProduction = process.env.NODE_ENV === 'production';
-  
+  const allowInsecure = process.env.AFT_ALLOW_INSECURE_COOKIES === '1';
   return {
     httpOnly: true,
-    secure: isProduction, // Only require HTTPS in production
+    secure: !allowInsecure,
     sameSite: 'strict' as const,
-    maxAge: maxAge || SECURITY_CONFIG.MAX_SESSION_DURATION / 1000, // Use max duration, not timeout
+    maxAge: maxAge || SECURITY_CONFIG.MAX_SESSION_DURATION / 1000,
     path: '/'
   };
+}
+
+function cookieSecureFlag(): string {
+  return process.env.AFT_ALLOW_INSECURE_COOKIES === '1' ? '' : ' Secure;';
+}
+
+// Build the HttpOnly session cookie. Never readable from JavaScript.
+export function buildSessionCookie(sessionId: string): string {
+  const opts = getSecureCookieOptions();
+  return `session=${sessionId}; HttpOnly;${cookieSecureFlag()} SameSite=Strict; Path=/; Max-Age=${opts.maxAge}`;
+}
+
+// Build the CSRF cookie. NOT HttpOnly so client JS can read it and echo it
+// back via the X-CSRF-Token header (the double-submit cookie pattern).
+export function buildCsrfCookie(csrfToken: string): string {
+  const opts = getSecureCookieOptions();
+  return `csrf=${csrfToken};${cookieSecureFlag()} SameSite=Strict; Path=/; Max-Age=${opts.maxAge}`;
+}
+
+// Build a cookie header string that clears both cookies on logout.
+export function buildClearAuthCookies(): string[] {
+  return [
+    `session=; HttpOnly;${cookieSecureFlag()} SameSite=Strict; Path=/; Max-Age=0`,
+    `csrf=;${cookieSecureFlag()} SameSite=Strict; Path=/; Max-Age=0`
+  ];
 }
 
 // Apply security headers to response

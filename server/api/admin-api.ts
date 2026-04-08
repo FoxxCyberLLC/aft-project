@@ -2,15 +2,26 @@
 import { getDb, UserRole, getRoleDisplayName, getRoleDescription, backupDatabase, runMaintenance, getSystemSettings, saveSystemSettings } from "../../lib/database-bun";
 import { auditLog } from "../../lib/security";
 import { RoleMiddleware } from "../../middleware/role-middleware";
+import { escapeCsv } from "../../lib/formatters";
 
 const db = getDb();
+
+// Helper that runs the standard admin-API checks: must be authenticated as
+// admin AND, for state-changing methods, must present a valid CSRF token.
+async function adminAuth(request: Request, ipAddress: string) {
+  const authResult = await RoleMiddleware.checkAuthAndRole(request, ipAddress, UserRole.ADMIN);
+  if (authResult.response) return authResult;
+  const csrfFail = RoleMiddleware.verifyCsrf(request, authResult.session);
+  if (csrfFail) return { session: authResult.session, response: csrfFail };
+  return authResult;
+}
 
 export async function handleAdminAPI(request: Request, path: string, ipAddress: string): Promise<Response | null> {
   const method = request.method;
   
   // Admin stats API
   if (path === '/api/admin/stats' && method === 'GET') {
-    const authResult = await RoleMiddleware.checkAuthAndRole(request, ipAddress, UserRole.ADMIN);
+    const authResult = await adminAuth(request, ipAddress);
     if (authResult.response) return authResult.response;
     
     const userCount = db.query("SELECT COUNT(*) as count FROM users WHERE is_active = 1").get() as any;
@@ -32,7 +43,7 @@ export async function handleAdminAPI(request: Request, path: string, ipAddress: 
   
   // Security audit API
   if (path === '/api/security/audit' && method === 'GET') {
-    const authResult = await RoleMiddleware.checkAuthAndRole(request, ipAddress, UserRole.ADMIN);
+    const authResult = await adminAuth(request, ipAddress);
     if (authResult.response) return authResult.response;
     
     const logs = db.query(`
@@ -53,7 +64,7 @@ export async function handleAdminAPI(request: Request, path: string, ipAddress: 
   
   // User Management APIs
   if (path === '/api/admin/users' && method === 'POST') {
-    const authResult = await RoleMiddleware.checkAuthAndRole(request, ipAddress, UserRole.ADMIN);
+    const authResult = await adminAuth(request, ipAddress);
     if (authResult.response) return authResult.response;
     
     try {
@@ -102,7 +113,7 @@ export async function handleAdminAPI(request: Request, path: string, ipAddress: 
   }
   
   if (path.startsWith('/api/admin/users/') && path.endsWith('/roles') && method === 'GET') {
-    const authResult = await RoleMiddleware.checkAuthAndRole(request, ipAddress, UserRole.ADMIN);
+    const authResult = await adminAuth(request, ipAddress);
     if (authResult.response) return authResult.response;
     
     const userId = path.split('/')[4];
@@ -145,7 +156,7 @@ export async function handleAdminAPI(request: Request, path: string, ipAddress: 
   }
   
   if (path.startsWith('/api/admin/users/') && path.endsWith('/roles') && method === 'PUT') {
-    const authResult = await RoleMiddleware.checkAuthAndRole(request, ipAddress, UserRole.ADMIN);
+    const authResult = await adminAuth(request, ipAddress);
     if (authResult.response) return authResult.response;
     
     const userId = path.split('/')[4];
@@ -189,7 +200,7 @@ export async function handleAdminAPI(request: Request, path: string, ipAddress: 
   }
   
   if (path.startsWith('/api/admin/users/') && method === 'GET') {
-    const authResult = await RoleMiddleware.checkAuthAndRole(request, ipAddress, UserRole.ADMIN);
+    const authResult = await adminAuth(request, ipAddress);
     if (authResult.response) return authResult.response;
     
     const userId = path.split('/')[4];
@@ -214,7 +225,7 @@ export async function handleAdminAPI(request: Request, path: string, ipAddress: 
   }
   
   if (path.startsWith('/api/admin/users/') && method === 'PUT') {
-    const authResult = await RoleMiddleware.checkAuthAndRole(request, ipAddress, UserRole.ADMIN);
+    const authResult = await adminAuth(request, ipAddress);
     if (authResult.response) return authResult.response;
     
     try {
@@ -293,7 +304,7 @@ export async function handleAdminAPI(request: Request, path: string, ipAddress: 
   
   // Database Backup API
   if (path === '/api/admin/backup-database' && method === 'POST') {
-    const authResult = await RoleMiddleware.checkAuthAndRole(request, ipAddress, UserRole.ADMIN);
+    const authResult = await adminAuth(request, ipAddress);
     if (authResult.response) return authResult.response;
 
     try {
@@ -325,7 +336,7 @@ export async function handleAdminAPI(request: Request, path: string, ipAddress: 
   
   // Database Maintenance API
   if (path === '/api/admin/run-maintenance' && method === 'POST') {
-    const authResult = await RoleMiddleware.checkAuthAndRole(request, ipAddress, UserRole.ADMIN);
+    const authResult = await adminAuth(request, ipAddress);
     if (authResult.response) return authResult.response;
 
     try {
@@ -356,7 +367,7 @@ export async function handleAdminAPI(request: Request, path: string, ipAddress: 
   
   // Email Settings API
   if (path === '/api/admin/email-settings' && method === 'GET') {
-    const authResult = await RoleMiddleware.checkAuthAndRole(request, ipAddress, UserRole.ADMIN);
+    const authResult = await adminAuth(request, ipAddress);
     if (authResult.response) return authResult.response;
 
     const allSettings = getSystemSettings();
@@ -372,7 +383,7 @@ export async function handleAdminAPI(request: Request, path: string, ipAddress: 
   }
 
   if (path === '/api/admin/email-settings' && method === 'POST') {
-    const authResult = await RoleMiddleware.checkAuthAndRole(request, ipAddress, UserRole.ADMIN);
+    const authResult = await adminAuth(request, ipAddress);
     if (authResult.response) return authResult.response;
 
     try {
@@ -400,7 +411,7 @@ export async function handleAdminAPI(request: Request, path: string, ipAddress: 
   }
   
   if (path === '/api/admin/test-email' && method === 'POST') {
-    const authResult = await RoleMiddleware.checkAuthAndRole(request, ipAddress, UserRole.ADMIN);
+    const authResult = await adminAuth(request, ipAddress);
     if (authResult.response) return authResult.response;
 
     try {
@@ -430,30 +441,37 @@ export async function handleAdminAPI(request: Request, path: string, ipAddress: 
   }
   
   if (path === '/api/admin/export-logs' && method === 'GET') {
-    const authResult = await RoleMiddleware.checkAuthAndRole(request, ipAddress, UserRole.ADMIN);
+    const authResult = await adminAuth(request, ipAddress);
     if (authResult.response) return authResult.response;
 
     try {
       const logs = db.query(`
-        SELECT 
-          sal.id, 
-          sal.timestamp, 
-          sal.action, 
-          sal.details, 
-          sal.ip_address, 
+        SELECT
+          sal.id,
+          sal.timestamp,
+          sal.action,
+          sal.description,
+          sal.ip_address,
           u.email as user_email
         FROM security_audit_log sal
         LEFT JOIN users u ON sal.user_id = u.id
         ORDER BY sal.timestamp DESC
       `).all() as any[];
 
-      // Convert to CSV
-      const header = 'ID,Timestamp,User,Action,Details,IP Address\n';
+      // Convert to CSV with proper quoting and CSV-injection scrubbing.
+      const header = ['ID','Timestamp','User','Action','Details','IP Address']
+        .map(escapeCsv).join(',') + '\n';
       const csvRows = logs.map(log => {
         const timestamp = new Date(log.timestamp * 1000).toISOString();
         const user = log.user_email || 'System';
-        const details = `\"${(log.details || '').replace(/"/g, '""')}\"`
-        return `${log.id},${timestamp},${user},${log.action},${details},${log.ip_address}`;
+        return [
+          log.id,
+          timestamp,
+          user,
+          log.action,
+          log.description || '',
+          log.ip_address || ''
+        ].map(escapeCsv).join(',');
       }).join('\n');
 
       const csv = header + csvRows;
@@ -476,7 +494,7 @@ export async function handleAdminAPI(request: Request, path: string, ipAddress: 
   }
   
   if (path === '/api/admin/health-check' && method === 'GET') {
-    const authResult = await RoleMiddleware.checkAuthAndRole(request, ipAddress, UserRole.ADMIN);
+    const authResult = await adminAuth(request, ipAddress);
     if (authResult.response) return authResult.response;
 
     try {
@@ -512,7 +530,7 @@ export async function handleAdminAPI(request: Request, path: string, ipAddress: 
   
   // Security Settings API
   if (path === '/api/admin/security-settings' && method === 'GET') {
-    const authResult = await RoleMiddleware.checkAuthAndRole(request, ipAddress, UserRole.ADMIN);
+    const authResult = await adminAuth(request, ipAddress);
     if (authResult.response) return authResult.response;
 
     const allSettings = getSystemSettings();
@@ -522,7 +540,7 @@ export async function handleAdminAPI(request: Request, path: string, ipAddress: 
   }
 
   if (path === '/api/admin/security-settings' && method === 'POST') {
-    const authResult = await RoleMiddleware.checkAuthAndRole(request, ipAddress, UserRole.ADMIN);
+    const authResult = await adminAuth(request, ipAddress);
     if (authResult.response) return authResult.response;
 
     try {
@@ -544,7 +562,7 @@ export async function handleAdminAPI(request: Request, path: string, ipAddress: 
   }
   
   if (path === '/api/admin/restart-system' && method === 'POST') {
-    const authResult = await RoleMiddleware.checkAuthAndRole(request, ipAddress, UserRole.ADMIN);
+    const authResult = await adminAuth(request, ipAddress);
     if (authResult.response) return authResult.response;
 
     await auditLog(authResult.session.userId, 'SYSTEM_RESTART_INITIATED', 
@@ -562,7 +580,7 @@ export async function handleAdminAPI(request: Request, path: string, ipAddress: 
   }
   
   if (path === '/api/admin/clear-cache' && method === 'POST') {
-    const authResult = await RoleMiddleware.checkAuthAndRole(request, ipAddress, UserRole.ADMIN);
+    const authResult = await adminAuth(request, ipAddress);
     if (authResult.response) return authResult.response;
 
     // In a real app, this would clear a Redis/Memcached cache or an in-memory store.
@@ -577,7 +595,7 @@ export async function handleAdminAPI(request: Request, path: string, ipAddress: 
   
   // Backup Settings API
   if (path === '/api/admin/backup-settings' && method === 'GET') {
-    const authResult = await RoleMiddleware.checkAuthAndRole(request, ipAddress, UserRole.ADMIN);
+    const authResult = await adminAuth(request, ipAddress);
     if (authResult.response) return authResult.response;
 
     const settings = getSystemSettings();
@@ -587,7 +605,7 @@ export async function handleAdminAPI(request: Request, path: string, ipAddress: 
   }
 
   if (path === '/api/admin/backup-settings' && method === 'POST') {
-    const authResult = await RoleMiddleware.checkAuthAndRole(request, ipAddress, UserRole.ADMIN);
+    const authResult = await adminAuth(request, ipAddress);
     if (authResult.response) return authResult.response;
 
     try {
@@ -609,7 +627,7 @@ export async function handleAdminAPI(request: Request, path: string, ipAddress: 
   }
   
   if (path.startsWith('/api/admin/requests/') && method === 'DELETE') {
-    const authResult = await RoleMiddleware.checkAuthAndRole(request, ipAddress, UserRole.ADMIN);
+    const authResult = await adminAuth(request, ipAddress);
     if (authResult.response) return authResult.response;
 
     const requestId = path.split('/')[4];

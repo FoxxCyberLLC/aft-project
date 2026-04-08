@@ -61,7 +61,9 @@ export async function handleRequestorAPI(request: Request, path: string, ipAddre
     // Allow any authenticated user to access requestor APIs
     const authResult = await RoleMiddleware.checkAuth(request, ipAddress);
     if (authResult.response) return authResult.response;
-    
+    const csrfFail = RoleMiddleware.verifyCsrf(request, authResult.session);
+    if (csrfFail) return csrfFail;
+
     try {
       const requestData = await request.json() as any;
 
@@ -241,8 +243,8 @@ export async function handleRequestorAPI(request: Request, path: string, ipAddre
           requestData.media_encrypted ? 'Yes' : 'No',
           transferDataJson
         ) as any;
-        
-        requestId = result.id;
+
+        requestId = Number(result.lastInsertRowid);
       }
 
       // Send notification if DTA was selected
@@ -292,7 +294,9 @@ export async function handleRequestorAPI(request: Request, path: string, ipAddre
     // Allow any authenticated user to access requestor APIs
     const authResult = await RoleMiddleware.checkAuth(request, ipAddress);
     if (authResult.response) return authResult.response;
-    
+    const csrfFail = RoleMiddleware.verifyCsrf(request, authResult.session);
+    if (csrfFail) return csrfFail;
+
     try {
       const requestData = await request.json() as any;
       const { requestId, signatureMethod, manualSignature, cacCertificate } = requestData;
@@ -360,35 +364,47 @@ export async function handleRequestorAPI(request: Request, path: string, ipAddre
       let signatureResult;
       
       if (signatureMethod === 'cac') {
-        // Use real CAC certificate data if provided, otherwise use placeholder
-        const cacSignatureData: CACSignatureData = cacCertificate ? {
-          signature: Buffer.from(`CAC_SIGNATURE_${requestId}_${Date.now()}`).toString('base64'),
+        // CAC signing requires the client to provide the actual signature value,
+        // certificate, and the timestamp/algorithm produced by the local CAC
+        // middleware (browser plugin / native host). We do not synthesise these
+        // values server-side - that would defeat the entire purpose of a CAC
+        // signature. Validate that all the required pieces are present.
+        if (
+          !cacCertificate ||
+          !cacCertificate.signature ||
+          !cacCertificate.thumbprint ||
+          !cacCertificate.subject ||
+          !cacCertificate.issuer ||
+          !cacCertificate.serialNumber ||
+          !cacCertificate.validFrom ||
+          !cacCertificate.validTo ||
+          !cacCertificate.certificateData ||
+          !cacCertificate.timestamp ||
+          !cacCertificate.algorithm
+        ) {
+          return new Response(JSON.stringify({
+            success: false,
+            message: 'CAC signature data is incomplete. The browser CAC client must provide signature, certificate (subject/issuer/serial/thumbprint/validFrom/validTo/certificateData), timestamp and algorithm.'
+          }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
+
+        const cacSignatureData: CACSignatureData = {
+          signature: cacCertificate.signature,
           certificate: {
-            thumbprint: cacCertificate.thumbprint || `CAC_${authResult.session.userId}_${Date.now()}`,
-            subject: cacCertificate.subject || `CN=DOD.USER.${authResult.session.userId},OU=DOD,O=U.S. Government`,
-            issuer: cacCertificate.issuer || 'CN=DOD CA-XX,OU=PKI,OU=DoD,O=U.S. Government,C=US',
-            validFrom: cacCertificate.validFrom || new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString(),
-            validTo: cacCertificate.validTo || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
-            serialNumber: cacCertificate.serialNumber || Math.random().toString(16).toUpperCase(),
-            certificateData: Buffer.from('REAL_CAC_CERT_DATA').toString('base64')
+            thumbprint: cacCertificate.thumbprint,
+            subject: cacCertificate.subject,
+            issuer: cacCertificate.issuer,
+            validFrom: cacCertificate.validFrom,
+            validTo: cacCertificate.validTo,
+            serialNumber: cacCertificate.serialNumber,
+            certificateData: cacCertificate.certificateData
           },
-          timestamp: new Date().toISOString(),
-          algorithm: 'SHA256withRSA',
-          notes: 'Requestor CAC signature via HTTPS client certificate - Real CAC data'
-        } : {
-          signature: Buffer.from(`CAC_SIGNATURE_${requestId}_${Date.now()}`).toString('base64'),
-          certificate: {
-            thumbprint: `CAC_${authResult.session.userId}_${Date.now()}`,
-            subject: `CN=DOD.USER.${authResult.session.userId},OU=DOD,O=U.S. Government`,
-            issuer: 'CN=DOD CA-XX,OU=PKI,OU=DoD,O=U.S. Government,C=US',
-            validFrom: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString(),
-            validTo: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
-            serialNumber: Math.random().toString(16).toUpperCase(),
-            certificateData: Buffer.from('PLACEHOLDER_CERT_DATA').toString('base64')
-          },
-          timestamp: new Date().toISOString(),
-          algorithm: 'SHA256withRSA',
-          notes: 'Requestor CAC signature via HTTPS client certificate - Placeholder'
+          timestamp: cacCertificate.timestamp,
+          algorithm: cacCertificate.algorithm,
+          notes: cacCertificate.notes || 'Requestor CAC signature'
         };
 
         // Apply the CAC signature using the proper CAC signature manager

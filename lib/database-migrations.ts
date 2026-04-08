@@ -145,5 +145,8 @@ export function runApproverMigrations() {
   }
 }
 
-// Run migrations on import
-runApproverMigrations();
+// NOTE: runApproverMigrations() used to be invoked here at module load,
+// which created an ordering hazard with database-bun.ts (the migrations ran
+// before the base CREATE TABLE statements completed on a fresh database).
+// The migrations are now invoked explicitly by database-bun.ts /
+// runStartupMigrations() once the schema has been created.

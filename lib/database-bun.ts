@@ -1,5 +1,7 @@
 // Native Bun SQLite implementation without external dependencies
 import { Database } from "bun:sqlite";
+import * as fs from "node:fs";
+import { runApproverMigrations } from "./database-migrations";
 
 // User roles enum
 export const UserRole = {
@@ -60,31 +62,86 @@ let db: Database;
 
 export function getDb() {
   if (!db) {
-    // Ensure data directory exists
-    import("node:fs").then(fs => {
-      try {
-        fs.mkdirSync('./data', { recursive: true });
-      } catch {
-        // Directory might already exist
-      }
-    });
-    
+    // Ensure data directory exists *before* opening the database. The
+    // previous implementation used a dynamic import, which made directory
+    // creation race the synchronous Database open and could cause a fresh
+    // checkout to crash on first boot.
+    try {
+      fs.mkdirSync('./data', { recursive: true });
+    } catch {
+      // Directory might already exist
+    }
+
     db = new Database("./data/aft.db", { create: true });
     db.exec("PRAGMA journal_mode = WAL");
-    
-    // Create tables
-    createTables();
-    initializeDatabase();
-    
-    // Run migrations
-    import("./database-migrations").then(m => {
-      // Migrations run automatically on import
-    }).catch(err => {
-      console.error("Failed to run migrations:", err);
-    });
+    db.exec("PRAGMA foreign_keys = ON");
 
+    // Create tables synchronously so callers cannot hit the DB before the
+    // schema exists.
+    createTables();
+    runStartupMigrations();
+    initializeDatabase();
   }
   return db;
+}
+
+// Apply schema migrations that are not handled in createTables(). Kept
+// synchronous and idempotent. Adds columns/tables added after the original
+// create script was written.
+function runStartupMigrations() {
+  // notification_log + notification_preferences (used by lib/email-service)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS notification_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      request_id INTEGER,
+      recipient TEXT NOT NULL,
+      subject TEXT NOT NULL,
+      status TEXT NOT NULL CHECK(status IN ('sent','failed','pending')),
+      message_id TEXT,
+      error TEXT,
+      created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+      FOREIGN KEY (request_id) REFERENCES aft_requests(id)
+    )
+  `);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_notification_log_request_id ON notification_log(request_id)`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_notification_log_recipient ON notification_log(recipient)`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_notification_log_status ON notification_log(status)`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_notification_log_created_at ON notification_log(created_at)`);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS notification_preferences (
+      user_id INTEGER PRIMARY KEY,
+      email_enabled INTEGER DEFAULT 1,
+      notify_on_assignment INTEGER DEFAULT 1,
+      notify_on_approval INTEGER DEFAULT 1,
+      notify_on_rejection INTEGER DEFAULT 1,
+      notify_on_completion INTEGER DEFAULT 1,
+      created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+      updated_at INTEGER NOT NULL DEFAULT (unixepoch()),
+      FOREIGN KEY (user_id) REFERENCES users(id)
+    )
+  `);
+
+  // must_change_password flag - set to 1 when an admin is auto-seeded with a
+  // bootstrap password so the first interactive login forces a password reset.
+  try {
+    const cols = db.query("PRAGMA table_info(users)").all() as Array<{ name: string }>;
+    if (!cols.some(c => c.name === 'must_change_password')) {
+      db.exec("ALTER TABLE users ADD COLUMN must_change_password INTEGER NOT NULL DEFAULT 0");
+    }
+  } catch (e) {
+    console.error('Failed to add must_change_password column:', e);
+  }
+
+  // Apply the rest of the migrations defined in database-migrations.ts.
+  // This is now a synchronous, statically-imported function call so the
+  // schema is fully up to date before getDb() returns.
+  try {
+    runApproverMigrations();
+  } catch (err) {
+    console.error('Failed to run startup migrations:', err);
+    throw err;
+  }
 }
 
 function createTables() {
@@ -150,84 +207,10 @@ function createTables() {
     console.error('Failed to migrate media_drives schema:', e);
   }
 
-  // Migration: add Section 4 (Anti-Virus Scan and TPI) fields to aft_requests
-  try {
-    const aftColCheck = db.query("PRAGMA table_info(aft_requests)").all() as Array<{ name: string }>;
-    const existingCols = aftColCheck.map(c => c.name);
-    
-    // Section IV Anti-Virus Scan fields
-    if (!existingCols.includes('origination_scan_performed')) {
-      db.exec("ALTER TABLE aft_requests ADD COLUMN origination_scan_performed BOOLEAN DEFAULT 0");
-    }
-    if (!existingCols.includes('origination_files_scanned')) {
-      db.exec("ALTER TABLE aft_requests ADD COLUMN origination_files_scanned INTEGER");
-    }
-    if (!existingCols.includes('origination_threats_found')) {
-      db.exec("ALTER TABLE aft_requests ADD COLUMN origination_threats_found INTEGER DEFAULT 0");
-    }
-    if (!existingCols.includes('destination_scan_performed')) {
-      db.exec("ALTER TABLE aft_requests ADD COLUMN destination_scan_performed BOOLEAN DEFAULT 0");
-    }
-    if (!existingCols.includes('destination_files_scanned')) {
-      db.exec("ALTER TABLE aft_requests ADD COLUMN destination_files_scanned INTEGER");
-    }
-    if (!existingCols.includes('destination_threats_found')) {
-      db.exec("ALTER TABLE aft_requests ADD COLUMN destination_threats_found INTEGER DEFAULT 0");
-    }
-    
-    // Transfer completion fields
-    if (!existingCols.includes('transfer_completed_date')) {
-      db.exec("ALTER TABLE aft_requests ADD COLUMN transfer_completed_date INTEGER");
-    }
-    if (!existingCols.includes('files_transferred_count')) {
-      db.exec("ALTER TABLE aft_requests ADD COLUMN files_transferred_count INTEGER");
-    }
-    if (!existingCols.includes('dta_signature_date')) {
-      db.exec("ALTER TABLE aft_requests ADD COLUMN dta_signature_date INTEGER");
-    }
-    if (!existingCols.includes('sme_signature_date')) {
-      db.exec("ALTER TABLE aft_requests ADD COLUMN sme_signature_date INTEGER");
-    }
-    if (!existingCols.includes('assigned_sme_id')) {
-      db.exec("ALTER TABLE aft_requests ADD COLUMN assigned_sme_id INTEGER REFERENCES users(id)");
-    }
-    if (!existingCols.includes('tpi_maintained')) {
-      db.exec("ALTER TABLE aft_requests ADD COLUMN tpi_maintained BOOLEAN DEFAULT 0");
-    }
-    
-    // Section V Media Disposition fields
-    if (!existingCols.includes('disposition_optical_destroyed')) {
-      db.exec("ALTER TABLE aft_requests ADD COLUMN disposition_optical_destroyed TEXT");
-    }
-    if (!existingCols.includes('disposition_optical_retained')) {
-      db.exec("ALTER TABLE aft_requests ADD COLUMN disposition_optical_retained TEXT");
-    }
-    if (!existingCols.includes('disposition_ssd_sanitized')) {
-      db.exec("ALTER TABLE aft_requests ADD COLUMN disposition_ssd_sanitized TEXT");
-    }
-    if (!existingCols.includes('disposition_custodian_name')) {
-      db.exec("ALTER TABLE aft_requests ADD COLUMN disposition_custodian_name TEXT");
-    }
-    if (!existingCols.includes('disposition_date')) {
-      db.exec("ALTER TABLE aft_requests ADD COLUMN disposition_date INTEGER");
-    }
-    if (!existingCols.includes('disposition_signature')) {
-      db.exec("ALTER TABLE aft_requests ADD COLUMN disposition_signature TEXT");
-    }
-    if (!existingCols.includes('disposition_notes')) {
-      db.exec("ALTER TABLE aft_requests ADD COLUMN disposition_notes TEXT");
-    }
-    if (!existingCols.includes('disposition_completed_at')) {
-      db.exec("ALTER TABLE aft_requests ADD COLUMN disposition_completed_at INTEGER");
-    }
-    if (!existingCols.includes('additional_systems')) {
-      db.exec("ALTER TABLE aft_requests ADD COLUMN additional_systems TEXT");
-    }
-    
-    console.log("✓ DTA Section 4 and Media Disposition migrations completed successfully");
-  } catch (e) {
-    console.error('Failed to migrate aft_requests schema for DTA Section 4 and Media Disposition:', e);
-  }
+  // The aft_requests migrations that used to live here ran BEFORE the
+  // CREATE TABLE below, which crashed on a fresh database. They are now
+  // performed by runStartupMigrations() (which calls into
+  // ./database-migrations) AFTER the CREATE TABLE statements complete.
 
   // AFT Requests table
   db.exec(`
@@ -378,48 +361,76 @@ export async function verifyPassword(password: string, hash: string): Promise<bo
   return await Bun.password.verify(password, hash);
 }
 
-// Initialize database with default admin user
+// Update a user's password hash and clear the must_change_password flag.
+// The caller must already have authenticated the user.
+export async function setUserPassword(userId: number, plainPassword: string): Promise<void> {
+  const hash = await hashPassword(plainPassword);
+  getDb().query(`
+    UPDATE users
+    SET password = ?, must_change_password = 0, updated_at = unixepoch()
+    WHERE id = ?
+  `).run(hash, userId);
+}
+
+// Initialize database with a bootstrap admin user.
+//
+// To avoid shipping a hardcoded "admin123" password, the bootstrap password
+// must be supplied via the AFT_ADMIN_BOOTSTRAP_PASSWORD environment variable.
+// When that variable is set AND there is currently no admin in the database,
+// we create one with must_change_password=1 so the first login forces a
+// password reset. The bootstrap value is wiped from process.env immediately
+// after use.
 async function initializeDatabase() {
   try {
-    // Check if admin user already exists
-    const adminCheck = db.query("SELECT id FROM users WHERE email = 'admin@aft.gov'").get() as { id: number } | undefined;
-    
-    if (!adminCheck) {
-      // Create admin user
-      const adminPassword = 'admin123'; // Default password, should be changed on first login
-      const hashedPassword = await hashPassword(adminPassword);
-      
-      // Insert admin user
-      const adminStmt = db.prepare(`
-        INSERT INTO users (email, password, first_name, last_name, primary_role, is_active, organization, phone)
-        VALUES (?, ?, ?, ?, ?, 1, 'System', 'N/A')
-      `);
-      
-      const result = adminStmt.run(
-        'admin@aft.gov',
-        hashedPassword,
-        'System',
-        'Administrator',
-        UserRole.ADMIN
-      ) as any;
-      
-      const adminId = result.lastInsertRowid as number;
-      
-      // Add admin role
-      const roleStmt = db.prepare(`
-        INSERT INTO user_roles (user_id, role, is_active, assigned_by)
-        VALUES (?, ?, 1, ?)
-      `);
-      
-      roleStmt.run(adminId, UserRole.ADMIN, adminId);
-      
-      console.log('✓ Created default admin user');
-      console.log('  Email: admin@  aft.gov');
-      console.log('  Password: admin123');
+    const anyAdmin = db.query(
+      "SELECT 1 FROM users WHERE primary_role = 'admin' LIMIT 1"
+    ).get();
+
+    if (anyAdmin) return;
+
+    const bootstrap = process.env.AFT_ADMIN_BOOTSTRAP_PASSWORD || '';
+    const bootstrapEmail = process.env.AFT_ADMIN_BOOTSTRAP_EMAIL || 'admin@aft.gov';
+
+    if (!bootstrap) {
+      console.warn('No admin user exists and AFT_ADMIN_BOOTSTRAP_PASSWORD is not set.');
+      console.warn('Set both AFT_ADMIN_BOOTSTRAP_EMAIL and AFT_ADMIN_BOOTSTRAP_PASSWORD on first boot to seed an initial admin.');
+      return;
     }
+
+    if (bootstrap.length < 12) {
+      throw new Error('AFT_ADMIN_BOOTSTRAP_PASSWORD must be at least 12 characters');
+    }
+
+    const hashedPassword = await hashPassword(bootstrap);
+
+    const adminStmt = db.prepare(`
+      INSERT INTO users (email, password, first_name, last_name, primary_role, is_active, organization, phone, must_change_password)
+      VALUES (?, ?, ?, ?, ?, 1, 'System', 'N/A', 1)
+    `);
+
+    const result = adminStmt.run(
+      bootstrapEmail,
+      hashedPassword,
+      'System',
+      'Administrator',
+      UserRole.ADMIN
+    ) as any;
+
+    const adminId = result.lastInsertRowid as number;
+
+    db.prepare(`
+      INSERT INTO user_roles (user_id, role, is_active, assigned_by)
+      VALUES (?, ?, 1, ?)
+    `).run(adminId, UserRole.ADMIN, adminId);
+
+    // Wipe the bootstrap password from the process environment so it does not
+    // leak via /proc/<pid>/environ or future child processes.
+    delete process.env.AFT_ADMIN_BOOTSTRAP_PASSWORD;
+
+    console.log(`Created bootstrap admin user (${bootstrapEmail}) - password change required at first login.`);
   } catch (error) {
     console.error('Database initialization failed:', error);
-    throw error; // Re-throw to allow proper error handling upstream
+    throw error;
   }
 }
 
@@ -569,6 +580,7 @@ export type User = {
   organization?: string;
   phone?: string;
   is_active: boolean;
+  must_change_password: boolean;
   created_at: number;
   updated_at: number;
 };

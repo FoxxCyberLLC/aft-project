@@ -4,6 +4,7 @@ import { RoleMiddleware } from "../../middleware/role-middleware";
 import { UserRole } from "../../lib/database-bun";
 import { auditLog } from "../../lib/security";
 import { CACSignatureManager, type CACSignatureData } from "../../lib/cac-signature";
+import { escapeHtml, escapeCsv } from "../../lib/formatters";
 
 export async function handleCPSOAPI(request: Request, path: string, ipAddress: string): Promise<Response> {
   // Check authentication and CPSO role
@@ -13,6 +14,9 @@ export async function handleCPSOAPI(request: Request, path: string, ipAddress: s
   if (activeRole !== UserRole.CPSO) {
     return RoleMiddleware.accessDenied(`This API requires CPSO role. Your current role is ${activeRole?.toUpperCase()}.`);
   }
+  // CSRF protection for unsafe methods
+  const csrfFail = RoleMiddleware.verifyCsrf(request, authResult.session);
+  if (csrfFail) return csrfFail;
 
   const db = getDb();
   const method = request.method;
@@ -185,9 +189,9 @@ export async function handleCPSOAPI(request: Request, path: string, ipAddress: s
           'REQUEST_APPROVED_CAC',
           `CPSO approved request #${requestId} with CAC signature`,
           ipAddress,
-          'info'
+          { requestId }
         );
-        
+
         return new Response(JSON.stringify({ 
           success: true, 
           message: 'Request approved with CAC signature and forwarded to DTA' 
@@ -204,11 +208,12 @@ export async function handleCPSOAPI(request: Request, path: string, ipAddress: s
             return new Response(JSON.stringify({ error: 'Request ID is required' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
         }
         const { notes }: { notes?: string } = body;
-        
-        // Update request status to approved (final approval)
-        db.prepare(`
-          UPDATE aft_requests 
-          SET status = 'approved', 
+
+        // Update request status to approved (final approval), but only if it
+        // is currently pending_cpso. Verify the row count to detect races.
+        const result = db.prepare(`
+          UPDATE aft_requests
+          SET status = 'approved',
               approver_email = ?,
               approver_id = (SELECT id FROM users WHERE email = ?),
               updated_at = unixepoch(),
@@ -216,27 +221,38 @@ export async function handleCPSOAPI(request: Request, path: string, ipAddress: s
               rejection_reason = NULL
           WHERE id = ? AND status = 'pending_cpso'
         `).run(session.email, session.email, notes || null, requestId);
-        
+
+        if (result.changes === 0) {
+          const current = db.query('SELECT status FROM aft_requests WHERE id = ?').get(requestId) as any;
+          const errorMessage = current
+            ? `This request is in "${current.status}" status and cannot be approved by CPSO.`
+            : 'Request not found.';
+          return new Response(JSON.stringify({ error: errorMessage }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
+
         // Add to history
         db.prepare(`
           INSERT INTO aft_request_history (request_id, action, user_email, notes, created_at)
           VALUES (?, 'CPSO_APPROVED', ?, ?, unixepoch())
         `).run(requestId, session.email, notes || 'Request approved by CPSO - Final approval');
-        
+
         // Log the action
         await auditLog(
           session.userId,
           'REQUEST_APPROVED',
           `CPSO approved request #${requestId}`,
           ipAddress,
-          'info'
+          { requestId, notes: notes || null }
         );
-        
+
         return new Response(JSON.stringify({ success: true }), {
           headers: { 'Content-Type': 'application/json' }
         });
       }
-      
+
       // Reject request
       if (apiPath.startsWith('reject/')) {
         const requestId = apiPath.split('/')[1];
@@ -245,17 +261,16 @@ export async function handleCPSOAPI(request: Request, path: string, ipAddress: s
             return new Response(JSON.stringify({ error: 'Request ID is required' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
         }
         const { reason, notes }: { reason: string; notes?: string } = body;
-        
+
         if (!reason) {
           return new Response(JSON.stringify({ error: 'Rejection reason is required' }), {
             status: 400,
             headers: { 'Content-Type': 'application/json' }
           });
         }
-        
-        // Update request status
-        db.prepare(`
-          UPDATE aft_requests 
+
+        const result = db.prepare(`
+          UPDATE aft_requests
           SET status = 'rejected',
               approver_email = ?,
               approver_id = (SELECT id FROM users WHERE email = ?),
@@ -264,22 +279,33 @@ export async function handleCPSOAPI(request: Request, path: string, ipAddress: s
               approval_notes = ?
           WHERE id = ? AND status = 'pending_cpso'
         `).run(session.email, session.email, reason, notes || null, requestId);
-        
+
+        if (result.changes === 0) {
+          const current = db.query('SELECT status FROM aft_requests WHERE id = ?').get(requestId) as any;
+          const errorMessage = current
+            ? `This request is in "${current.status}" status and cannot be rejected by CPSO.`
+            : 'Request not found.';
+          return new Response(JSON.stringify({ error: errorMessage }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
+
         // Add to history
         db.prepare(`
           INSERT INTO aft_request_history (request_id, action, user_email, notes, created_at)
           VALUES (?, 'CPSO_REJECTED', ?, ?, unixepoch())
         `).run(requestId, session.email, `Reason: ${reason}. ${notes || ''}`);
-        
+
         // Log the action
         await auditLog(
           session.userId,
           'REQUEST_REJECTED',
           `CPSO rejected request #${requestId}: ${reason}`,
           ipAddress,
-          'info'
+          { requestId, reason, notes: notes || null }
         );
-        
+
         return new Response(JSON.stringify({ success: true }), {
           headers: { 'Content-Type': 'application/json' }
         });
@@ -288,30 +314,38 @@ export async function handleCPSOAPI(request: Request, path: string, ipAddress: s
       // Generate reports
       if (apiPath === 'reports/generate') {
         const { type }: { type: 'monthly' | 'quarterly' | 'annual' } = body;
-        
+
+        // r.updated_at is stored as unixepoch (seconds), so use unixepoch()
+        // arithmetic instead of comparing against date() text.
         let dateFilter = '';
-        
         switch(type) {
           case 'monthly':
-            dateFilter = `AND updated_at >= date('now', '-1 month')`;
+            dateFilter = `AND r.updated_at >= unixepoch('now', '-1 month')`;
             break;
           case 'quarterly':
-            dateFilter = `AND updated_at >= date('now', '-3 months')`;
+            dateFilter = `AND r.updated_at >= unixepoch('now', '-3 months')`;
             break;
           case 'annual':
-            dateFilter = `AND updated_at >= date('now', '-1 year')`;
+            dateFilter = `AND r.updated_at >= unixepoch('now', '-1 year')`;
             break;
         }
         
+        // CPSO reports show requests this CPSO acted on. We don't have
+        // dedicated cpso_email/cpso_reviewed_at columns; the CPSO records its
+        // approval through the shared approver_email column when status moved
+        // out of pending_cpso, and the action timestamp lives in updated_at
+        // (and in aft_request_history for audit). Filter on those.
         const reportData = db.query(`
-          SELECT 
+          SELECT
             r.*,
             u.first_name || ' ' || u.last_name as requestor_name,
             u.email as requestor_email
           FROM aft_requests r
           LEFT JOIN users u ON r.requestor_id = u.id
-          WHERE r.cpso_email = ? ${dateFilter}
-          ORDER BY r.cpso_reviewed_at DESC
+          WHERE r.approver_email = ?
+            AND r.status IN ('approved', 'rejected', 'pending_dta', 'active_transfer', 'pending_sme_signature', 'pending_media_custodian', 'completed', 'disposed')
+            ${dateFilter}
+          ORDER BY r.updated_at DESC
         `).all(session.email) as any[];
         
         // Generate a printable HTML report
@@ -352,16 +386,16 @@ function generateCSV(requests: any[]): string {
   const rows = requests.map(r => [
     r.id,
     r.source_system,
-    r.destination_system,
+    r.dest_system,
     r.classification || 'UNCLASSIFIED',
     r.requestor_email,
-    new Date(r.updated_at).toLocaleDateString(),
+    r.updated_at ? new Date(r.updated_at * 1000).toLocaleDateString() : '',
     r.status
   ]);
-  
+
   return [
-    headers.join(','),
-    ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+    headers.map(escapeCsv).join(','),
+    ...rows.map(row => row.map(escapeCsv).join(','))
   ].join('\n');
 }
 
@@ -377,12 +411,12 @@ function generatePrintableReport(requests: any[], type: string, approverEmail: s
 
   const tableRows = requests.map(r => `
     <tr>
-        <td>${r.id}</td>
-        <td>${new Date(r.created_at).toLocaleDateString()}</td>
-        <td>${new Date(r.updated_at).toLocaleDateString()}</td>
-        <td>${r.status}</td>
-        <td>${r.source_system} -> ${r.destination_system}</td>
-        <td>${r.requestor_name || r.requestor_email}</td>
+        <td>${escapeHtml(r.id)}</td>
+        <td>${escapeHtml(r.created_at ? new Date(r.created_at * 1000).toLocaleDateString() : '')}</td>
+        <td>${escapeHtml(r.updated_at ? new Date(r.updated_at * 1000).toLocaleDateString() : '')}</td>
+        <td>${escapeHtml(r.status)}</td>
+        <td>${escapeHtml(r.source_system)} -&gt; ${escapeHtml(r.dest_system)}</td>
+        <td>${escapeHtml(r.requestor_name || r.requestor_email)}</td>
     </tr>
   `).join('');
 
@@ -416,9 +450,9 @@ function generatePrintableReport(requests: any[], type: string, approverEmail: s
     </head>
     <body>
         <div class="header">
-            <h1>${reportTitle}</h1>
-            <p><strong>CPSO:</strong> ${approverEmail}</p>
-            <p><strong>Generated on:</strong> ${generatedDate}</p>
+            <h1>${escapeHtml(reportTitle)}</h1>
+            <p><strong>CPSO:</strong> ${escapeHtml(approverEmail)}</p>
+            <p><strong>Generated on:</strong> ${escapeHtml(generatedDate)}</p>
         </div>
 
         <h2>Summary</h2>

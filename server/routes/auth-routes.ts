@@ -1,6 +1,6 @@
 // Authentication page routes
 import { getDb, UserRole } from "../../lib/database-bun";
-import { destroySession } from "../../lib/security";
+import { destroySession, buildClearAuthCookies } from "../../lib/security";
 import { RoleMiddleware } from "../../middleware/role-middleware";
 import { LoginPage } from "../../login/login-page";
 import { RoleSelectionPage } from "../../role-selection/role-selection-page";
@@ -75,12 +75,8 @@ export async function handleLogout(request: Request): Promise<Response> {
       await destroySession(sessionMatch[1], 'USER_LOGOUT');
     }
   }
-  
-  return new Response("", {
-    status: 302,
-    headers: {
-      "Location": "/login",
-      "Set-Cookie": "session=; HttpOnly; Secure; SameSite=Strict; Path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT"
-    }
-  });
+
+  const headers = new Headers({ "Location": "/login" });
+  for (const c of buildClearAuthCookies()) headers.append("Set-Cookie", c);
+  return new Response("", { status: 302, headers });
 }

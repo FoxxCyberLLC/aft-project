@@ -5,6 +5,7 @@ import { UserRole } from "../../lib/database-bun";
 import { auditLog } from "../../lib/security";
 import { CACSignatureManager, type CACSignatureData } from "../../lib/cac-signature";
 import { emailService, getNextApproverEmails } from "../../lib/email-service";
+import { escapeHtml, escapeCsv } from "../../lib/formatters";
 
 export async function handleApproverAPI(request: Request, path: string, ipAddress: string): Promise<Response> {
   // Check authentication and APPROVER role (ISSM only)
@@ -14,6 +15,9 @@ export async function handleApproverAPI(request: Request, path: string, ipAddres
   if (activeRole !== UserRole.APPROVER) {
     return RoleMiddleware.accessDenied(`This API requires APPROVER (ISSM) role. Your current role is ${activeRole?.toUpperCase()}.`);
   }
+  // CSRF protection for unsafe methods
+  const csrfFail = RoleMiddleware.verifyCsrf(request, authResult.session);
+  if (csrfFail) return csrfFail;
 
   const db = getDb();
   const method = request.method;
@@ -187,10 +191,10 @@ export async function handleApproverAPI(request: Request, path: string, ipAddres
           'REQUEST_APPROVED_CAC',
           `Approved request #${requestId} with CAC signature`,
           ipAddress,
-          'info'
+          { requestId }
         );
-        
-        return new Response(JSON.stringify({ 
+
+        return new Response(JSON.stringify({
           success: true, 
           message: 'Request approved with CAC signature' 
         }), {
@@ -299,9 +303,9 @@ export async function handleApproverAPI(request: Request, path: string, ipAddres
           'REQUEST_APPROVED',
           `Approved request #${requestId}`,
           ipAddress,
-          'info'
+          { requestId }
         );
-        
+
         return new Response(JSON.stringify({ success: true }), {
           headers: { 'Content-Type': 'application/json' }
         });
@@ -402,9 +406,9 @@ export async function handleApproverAPI(request: Request, path: string, ipAddres
           'REQUEST_REJECTED',
           `Rejected request #${requestId}: ${reason}`,
           ipAddress,
-          'info'
+          { requestId, reason }
         );
-        
+
         return new Response(JSON.stringify({ success: true }), {
           headers: { 'Content-Type': 'application/json' }
         });
@@ -413,19 +417,18 @@ export async function handleApproverAPI(request: Request, path: string, ipAddres
       // Generate reports
       if (apiPath === 'reports/generate') {
         const { type }: { type: 'monthly' | 'quarterly' | 'annual' } = body;
-        
+
+        // r.updated_at is unixepoch (seconds); compare as unix epoch.
         let dateFilter = '';
-        const now = new Date();
-        
         switch(type) {
           case 'monthly':
-            dateFilter = `AND updated_at >= date('now', '-1 month')`;
+            dateFilter = `AND r.updated_at >= unixepoch('now', '-1 month')`;
             break;
           case 'quarterly':
-            dateFilter = `AND updated_at >= date('now', '-3 months')`;
+            dateFilter = `AND r.updated_at >= unixepoch('now', '-3 months')`;
             break;
           case 'annual':
-            dateFilter = `AND updated_at >= date('now', '-1 year')`;
+            dateFilter = `AND r.updated_at >= unixepoch('now', '-1 year')`;
             break;
         }
         
@@ -478,16 +481,16 @@ function generateCSV(requests: any[]): string {
   const rows = requests.map(r => [
     r.id,
     r.source_system,
-    r.destination_system,
+    r.dest_system,
     r.classification || 'UNCLASSIFIED',
     r.requestor_email,
-    new Date(r.updated_at).toLocaleDateString(),
+    r.updated_at ? new Date(r.updated_at * 1000).toLocaleDateString() : '',
     r.status
   ]);
-  
+
   return [
-    headers.join(','),
-    ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+    headers.map(escapeCsv).join(','),
+    ...rows.map(row => row.map(escapeCsv).join(','))
   ].join('\n');
 }
 
@@ -503,12 +506,12 @@ function generatePrintableReport(requests: any[], type: string, approverEmail: s
 
   const tableRows = requests.map(r => `
     <tr>
-        <td>${r.id}</td>
-        <td>${new Date(r.created_at).toLocaleDateString()}</td>
-        <td>${new Date(r.updated_at).toLocaleDateString()}</td>
-        <td>${r.status}</td>
-        <td>${r.source_system} -> ${r.destination_system}</td>
-        <td>${r.requestor_name || r.requestor_email}</td>
+        <td>${escapeHtml(r.id)}</td>
+        <td>${escapeHtml(r.created_at ? new Date(r.created_at * 1000).toLocaleDateString() : '')}</td>
+        <td>${escapeHtml(r.updated_at ? new Date(r.updated_at * 1000).toLocaleDateString() : '')}</td>
+        <td>${escapeHtml(r.status)}</td>
+        <td>${escapeHtml(r.source_system)} -&gt; ${escapeHtml(r.dest_system)}</td>
+        <td>${escapeHtml(r.requestor_name || r.requestor_email)}</td>
     </tr>
   `).join('');
 
@@ -542,9 +545,9 @@ function generatePrintableReport(requests: any[], type: string, approverEmail: s
     </head>
     <body>
         <div class="header">
-            <h1>${reportTitle}</h1>
-            <p><strong>Approver:</strong> ${approverEmail}</p>
-            <p><strong>Generated on:</strong> ${generatedDate}</p>
+            <h1>${escapeHtml(reportTitle)}</h1>
+            <p><strong>Approver:</strong> ${escapeHtml(approverEmail)}</p>
+            <p><strong>Generated on:</strong> ${escapeHtml(generatedDate)}</p>
         </div>
 
         <h2>Summary</h2>

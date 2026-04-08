@@ -1,6 +1,36 @@
 // lib/formatters.ts
 
 /**
+ * Escape a string for safe inclusion in HTML element/attribute content.
+ * Use this for ANY value derived from user input or the database before
+ * interpolating it into an HTML template.
+ */
+export function escapeHtml(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/**
+ * Escape a single CSV cell value.
+ * - Coerces to string
+ * - Escapes embedded double quotes by doubling them
+ * - Wraps in double quotes
+ * - Prefixes leading =, +, -, @ with a single quote to prevent
+ *   spreadsheet formula injection (CSV injection)
+ */
+export function escapeCsv(value: unknown): string {
+  if (value === null || value === undefined) return '""';
+  let s = String(value);
+  if (/^[=+\-@]/.test(s)) s = "'" + s;
+  return '"' + s.replace(/"/g, '""') + '"';
+}
+
+/**
  * Formats a Unix timestamp, Date object, or date string into a standardized UTC format.
  * Handles null or invalid inputs gracefully.
  * @param timestamp The date value to format (Unix timestamp in seconds, Date, or string).

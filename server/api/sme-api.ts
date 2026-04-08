@@ -12,6 +12,8 @@ export async function handleSMEAPI(request: Request, path: string, ipAddress: st
 
   const authResult = await RoleMiddleware.checkAuthAndRole(request, ipAddress, UserRole.SME);
   if (authResult.response) return authResult.response;
+  const csrfFail = RoleMiddleware.verifyCsrf(request, authResult.session);
+  if (csrfFail) return csrfFail;
 
   const url = new URL(request.url);
   const pathSegments = url.pathname.split('/');

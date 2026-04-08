@@ -131,6 +131,27 @@ export class RoleMiddleware {
   ): Promise<{ session: SecureSession; response?: Response }> {
     return this.checkAuthAndRole(request, ipAddress);
   }
+
+  // Verify a CSRF token for any unsafe HTTP method.
+  // Returns null on success, or a Response describing the failure.
+  // Safe (idempotent) methods are exempt.
+  static verifyCsrf(request: Request, session: SecureSession): Response | null {
+    const method = request.method.toUpperCase();
+    if (method === 'GET' || method === 'HEAD' || method === 'OPTIONS') {
+      return null;
+    }
+    const supplied =
+      request.headers.get('x-csrf-token') ||
+      request.headers.get('csrf-token') ||
+      '';
+    if (!supplied || supplied !== session.csrfToken) {
+      return new Response(JSON.stringify({ error: 'Invalid or missing CSRF token' }), {
+        status: 403,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+    return null;
+  }
   
   // Comprehensive auth check with proper redirects
   static async checkAuthAndRole(

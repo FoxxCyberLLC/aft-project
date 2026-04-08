@@ -13,6 +13,8 @@ export async function handleDTAAPI(request: Request, path: string, ipAddress: st
   // Check authentication and DTA role
   const authResult = await RoleMiddleware.checkAuthAndRole(request, ipAddress, UserRole.DTA);
   if (authResult.response) return authResult.response;
+  const csrfFail = RoleMiddleware.verifyCsrf(request, authResult.session);
+  if (csrfFail) return csrfFail;
 
   const db = getDb();
   const userId = authResult.session.userId;
@@ -830,7 +832,7 @@ async function activateTransfer(db: any, requestId: number, body: any, userId: n
     'TRANSFER_ACTIVATED',
     `Activated transfer for request #${requestId}`,
     ipAddress,
-    'info'
+    { requestId }
   );
 
   return new Response(JSON.stringify({ 
@@ -921,7 +923,7 @@ async function signDTARequest(db: any, requestId: number, body: any, userId: num
     'DTA_SIGNATURE',
     `Signed request #${requestId} as DTA`,
     ipAddress,
-    'info'
+    { requestId, smeUserId }
   );
 
   return new Response(JSON.stringify({ 

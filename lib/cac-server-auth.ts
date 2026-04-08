@@ -78,59 +78,45 @@ export class CACServerAuth {
     return now >= certificate.validFrom && now <= certificate.validTo;
   }
 
-  // Get or create user from CAC certificate
+  // Get or create user from CAC certificate.
+  //
+  // The users table does NOT have a dedicated dod_id column. We match by
+  // email (extracted from the certificate) and, as a fallback, by the
+  // fingerprint stored in the cac_certificates table. We refuse to auto-
+  // create users from a CAC alone - admins must provision the account first.
   static async getUserFromCertificate(certificate: CACClientCertificate): Promise<any> {
     const db = getDb();
-    
-    const dodId = this.extractDODID(certificate.subject);
-    const email = this.extractEmail(certificate.subject);
-    const subject = this.parseSubject(certificate.subject);
-    const commonName = subject.CN || '';
 
-    // Try to find existing user by DOD ID first, then by certificate fingerprint
-    let user = null;
-    
-    if (dodId) {
-      user = db.query(`
-        SELECT * FROM users WHERE dod_id = ? OR email = ?
-      `).get(dodId, email) as any;
+    this.ensureCertificateTable();
+
+    const email = this.extractEmail(certificate.subject);
+
+    let user: any = null;
+    if (email) {
+      user = db.query(
+        `SELECT * FROM users WHERE email = ? AND is_active = 1`
+      ).get(email);
     }
 
     if (!user && certificate.fingerprint) {
       user = db.query(`
         SELECT u.* FROM users u
         JOIN cac_certificates cc ON cc.user_id = u.id
-        WHERE cc.fingerprint = ?
-      `).get(certificate.fingerprint) as any;
+        WHERE cc.fingerprint = ? AND u.is_active = 1
+      `).get(certificate.fingerprint);
     }
 
-    // Create new user if not found
-    if (!user && dodId && email) {
-      const nameParts = commonName.split('.');
-      const lastName = nameParts[0] || 'Unknown';
-      const firstName = nameParts[1] || 'Unknown';
-
-      const userId = db.query(`
-        INSERT INTO users (
-          email, first_name, last_name, is_active, dod_id, 
-          created_at, updated_at
-        ) VALUES (?, ?, ?, 1, ?, unixepoch(), unixepoch())
-      `).run(email, firstName, lastName, dodId).lastInsertRowid as number;
-
-      user = db.query(`SELECT * FROM users WHERE id = ?`).get(userId) as any;
-
-      // Store certificate information
-      this.storeCertificate(userId, certificate);
+    if (user) {
+      // Bind / refresh the certificate <-> user mapping for future lookups.
+      this.storeCertificate(user.id, certificate);
     }
 
     return user;
   }
 
-  // Store CAC certificate information
-  static storeCertificate(userId: number, certificate: CACClientCertificate): void {
+  // Lazy-create the cac_certificates table on first use.
+  private static ensureCertificateTable(): void {
     const db = getDb();
-
-    // Create CAC certificates table if not exists
     db.exec(`
       CREATE TABLE IF NOT EXISTS cac_certificates (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -147,8 +133,13 @@ export class CACServerAuth {
         FOREIGN KEY (user_id) REFERENCES users(id)
       )
     `);
+  }
 
-    // Insert or update certificate
+  // Store CAC certificate information.
+  static storeCertificate(userId: number, certificate: CACClientCertificate): void {
+    const db = getDb();
+    this.ensureCertificateTable();
+
     db.query(`
       INSERT OR REPLACE INTO cac_certificates (
         user_id, subject, issuer, serial_number, fingerprint,

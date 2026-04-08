@@ -2,11 +2,11 @@
 import { initializeSecurity, applySecurityHeaders } from "./lib/security";
 import { handleStaticFiles } from "./server/static-handler";
 import { handleAPI } from "./server/api/index";
-import { 
-  handleLoginPage, 
-  handleRoleSelectionPage, 
-  handleDashboardRoutes, 
-  handleLogout 
+import {
+  handleLoginPage,
+  handleRoleSelectionPage,
+  handleDashboardRoutes,
+  handleLogout
 } from "./server/routes/auth-routes";
 import { handleAdminRoutes } from "./server/routes/admin-routes";
 import { handleRequestorRoutes } from "./server/routes/requestor-routes";
@@ -19,11 +19,91 @@ import { handleCPSORoutes } from "./server/routes/cpso-routes";
 // Initialize security
 initializeSecurity();
 
+// Shared secret nginx must include in X-AFT-Proxy-Secret. When set, the Bun
+// server will refuse any request whose header value does not match. This
+// prevents an attacker that can reach 127.0.0.1:3001 from spoofing CAC
+// headers or otherwise bypassing nginx.
+const PROXY_SHARED_SECRET = process.env.AFT_PROXY_SHARED_SECRET || '';
+if (!PROXY_SHARED_SECRET) {
+  console.warn('⚠️  AFT_PROXY_SHARED_SECRET is not set - skipping reverse-proxy authentication. Do NOT run in production without this.');
+}
+
+// Constant-time string comparison to avoid timing oracles on the secret.
+function timingSafeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let mismatch = 0;
+  for (let i = 0; i < a.length; i++) {
+    mismatch |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return mismatch === 0;
+}
+
+// Headers a client must NEVER be allowed to set themselves. nginx is the only
+// component allowed to populate them, and only after verifying the CAC. We
+// strip them from any request that did not come from a trusted proxy.
+const SENSITIVE_HEADER_NAMES = [
+  'x-client-cert-verify',
+  'x-client-cert-subject',
+  'x-client-cert-issuer',
+  'x-client-cert-serial',
+  'x-client-cert-fingerprint',
+  'x-client-cert-not-before',
+  'x-client-cert-not-after',
+  'x-client-cert-pem'
+];
+
+function sanitizeRequest(request: Request): Request {
+  const proxySecret = request.headers.get('x-aft-proxy-secret') || '';
+  const trusted = PROXY_SHARED_SECRET
+    ? timingSafeEqual(proxySecret, PROXY_SHARED_SECRET)
+    : true; // No secret configured - dev mode, see warning above.
+
+  // If the request did not come through a trusted proxy, drop any header that
+  // claims to carry CAC certificate state. Otherwise, only honour CAC headers
+  // when nginx says verification actually succeeded.
+  const cleanedHeaders = new Headers(request.headers);
+  cleanedHeaders.delete('x-aft-proxy-secret');
+
+  if (!trusted) {
+    for (const name of SENSITIVE_HEADER_NAMES) cleanedHeaders.delete(name);
+  } else {
+    const verify = cleanedHeaders.get('x-client-cert-verify') || '';
+    if (verify !== 'SUCCESS') {
+      for (const name of SENSITIVE_HEADER_NAMES) cleanedHeaders.delete(name);
+    }
+  }
+
+  const init: RequestInit = {
+    method: request.method,
+    headers: cleanedHeaders
+  };
+  // GET/HEAD requests must not carry a body when re-cloned through `new
+  // Request()`. For other methods we forward the original body. duplex:'half'
+  // is required by the Fetch spec when supplying a streaming body.
+  if (request.method !== 'GET' && request.method !== 'HEAD') {
+    (init as any).body = request.body;
+    (init as any).duplex = 'half';
+  }
+  return new Request(request.url, init);
+}
+
 // Main server - nginx handles TLS and client certificates
 Bun.serve({
-  port: 3001, // nginx will proxy to this port
-  
-  async fetch(request: Request, server: any): Promise<Response> {
+  port: 3001,
+  hostname: '127.0.0.1', // Loopback only - nginx is the public entry point.
+
+  async fetch(originalRequest: Request, server: any): Promise<Response> {
+    // Reject anything that didn't come from a trusted proxy when a secret is
+    // configured. We still serve the request when no secret is configured, to
+    // allow local development without nginx.
+    if (PROXY_SHARED_SECRET) {
+      const proxySecret = originalRequest.headers.get('x-aft-proxy-secret') || '';
+      if (!timingSafeEqual(proxySecret, PROXY_SHARED_SECRET)) {
+        return new Response('Forbidden', { status: 403 });
+      }
+    }
+
+    const request = sanitizeRequest(originalRequest);
     const url = new URL(request.url);
     const path = url.pathname;
     const ipAddress = server.requestIP(request)?.address ?? 'unknown';
@@ -97,10 +177,8 @@ Bun.serve({
   },
 });
 
-console.log("=🚀 AFT Server running on http://localhost:3001");
-console.log("=🔧 Database initialized with multi-role support");
-console.log("=🔐 Login with: admin@aft.gov / admin123");
-console.log("=👥 Multi-role authentication enabled");
-console.log("=🌐 Production URL: https://aft.foxxcyber.com");
-console.log("=🏷️  CAC authentication enabled via nginx proxy");
-console.log("=💡 Restart nginx: 'sudo nginx -s reload' to enable CAC support");
+console.log("AFT Server listening on http://127.0.0.1:3001 (loopback only)");
+console.log("Multi-role authentication enabled - public entry point is nginx (HTTPS + CAC)");
+if (!PROXY_SHARED_SECRET) {
+  console.log("WARNING: AFT_PROXY_SHARED_SECRET not set - reverse-proxy auth disabled.");
+}

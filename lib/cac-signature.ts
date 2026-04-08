@@ -30,38 +30,18 @@ export interface SignedRequestData {
 }
 
 // CAC Signature Manager
+//
+// NOTE: The cac_signatures schema is owned by lib/database-bun.ts. Do NOT
+// re-create it here with different columns. This module only adds the
+// supporting `manual_signatures` table and the `signature_method` /
+// `submitted_at` columns on aft_requests, which are not part of the base
+// schema.
 export class CACSignatureManager {
-  
-  // Initialize signature tables
+
+  // Initialize supporting tables. Idempotent.
   static initializeTables(): void {
     const db = getDb();
-    
-    // Create CAC signatures table
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS cac_signatures (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        request_id INTEGER NOT NULL,
-        signer_id INTEGER NOT NULL,
-        signer_email TEXT NOT NULL,
-        certificate_thumbprint TEXT NOT NULL,
-        certificate_subject TEXT NOT NULL,
-        certificate_issuer TEXT NOT NULL,
-        certificate_serial TEXT NOT NULL,
-        certificate_valid_from TEXT NOT NULL,
-        certificate_valid_to TEXT NOT NULL,
-        certificate_data TEXT NOT NULL,
-        signature_data TEXT NOT NULL,
-        signature_hash TEXT NOT NULL,
-        signature_algorithm TEXT NOT NULL,
-        signature_timestamp TEXT NOT NULL,
-        notes TEXT,
-        created_at INTEGER DEFAULT (unixepoch()),
-        FOREIGN KEY (request_id) REFERENCES aft_requests(id),
-        FOREIGN KEY (signer_id) REFERENCES users(id)
-      )
-    `);
 
-    // Create manual signatures table
     db.exec(`
       CREATE TABLE IF NOT EXISTS manual_signatures (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -78,36 +58,25 @@ export class CACSignatureManager {
       )
     `);
 
-    // Create indexes for performance
     db.exec(`
-      CREATE INDEX IF NOT EXISTS idx_cac_signatures_request_id 
+      CREATE INDEX IF NOT EXISTS idx_cac_signatures_request_id
       ON cac_signatures(request_id)
     `);
-
     db.exec(`
-      CREATE INDEX IF NOT EXISTS idx_manual_signatures_request_id 
+      CREATE INDEX IF NOT EXISTS idx_manual_signatures_request_id
       ON manual_signatures(request_id)
     `);
 
-    // Update requests table to include signature method and submitted timestamp
-    // Use IF NOT EXISTS equivalent for SQLite ALTER TABLE
     try {
       db.exec(`ALTER TABLE aft_requests ADD COLUMN signature_method TEXT DEFAULT 'manual'`);
     } catch (error: any) {
-      if (!error.message?.includes('duplicate column name')) {
-        throw error;
-      }
+      if (!error.message?.includes('duplicate column name')) throw error;
     }
-
     try {
       db.exec(`ALTER TABLE aft_requests ADD COLUMN submitted_at INTEGER`);
     } catch (error: any) {
-      if (!error.message?.includes('duplicate column name')) {
-        throw error;
-      }
+      if (!error.message?.includes('duplicate column name')) throw error;
     }
-
-    console.log('🔒 CAC and manual signature tables initialized');
   }
 
   // Apply Approver CAC signature to request
@@ -439,10 +408,13 @@ export class CACSignatureManager {
     `).all(requestId) as any[];
   }
 
-  // Verify signature integrity
+  // Verify signature integrity. The full original signature payload is stored
+  // verbatim in `signed_data` (JSON). To verify integrity we re-generate the
+  // hash from that payload and compare it to a hash recomputed from the
+  // individual columns; the columns and the JSON must agree.
   static async verifySignatureIntegrity(signatureId: number): Promise<{ isValid: boolean; error?: string }> {
     const db = getDb();
-    
+
     try {
       const signature = db.query(`
         SELECT * FROM cac_signatures WHERE id = ?
@@ -452,31 +424,38 @@ export class CACSignatureManager {
         return { isValid: false, error: 'Signature not found' };
       }
 
-      // Reconstruct signature data
-      const signatureData: CACSignatureData = {
+      // signed_data holds the original CACSignatureData JSON.
+      let original: CACSignatureData;
+      try {
+        original = JSON.parse(signature.signed_data);
+      } catch {
+        return { isValid: false, error: 'Stored signature payload is corrupt' };
+      }
+
+      // Reconstruct from the discrete columns and ensure they match.
+      const reconstructed: CACSignatureData = {
         signature: signature.signature_data,
         certificate: {
           thumbprint: signature.certificate_thumbprint,
           subject: signature.certificate_subject,
           issuer: signature.certificate_issuer,
-          validFrom: signature.certificate_valid_from,
-          validTo: signature.certificate_valid_to,
+          validFrom: new Date((signature.certificate_not_before as number) * 1000).toISOString(),
+          validTo: new Date((signature.certificate_not_after as number) * 1000).toISOString(),
           serialNumber: signature.certificate_serial,
-          certificateData: signature.certificate_data
+          certificateData: original.certificate.certificateData
         },
-        timestamp: signature.signature_timestamp,
+        timestamp: original.timestamp,
         algorithm: signature.signature_algorithm
       };
 
-      // Recalculate hash
-      const calculatedHash = await this.generateSignatureHash(signatureData);
-      
-      if (calculatedHash !== signature.signature_hash) {
+      const originalHash = await this.generateSignatureHash(original);
+      const reconstructedHash = await this.generateSignatureHash(reconstructed);
+      if (originalHash !== reconstructedHash) {
         return { isValid: false, error: 'Signature integrity check failed' };
       }
 
       // Verify certificate is still valid
-      const certValid = this.verifyCertificateValidity(signatureData.certificate);
+      const certValid = this.verifyCertificateValidity(reconstructed.certificate);
       if (!certValid.isValid) {
         return { isValid: false, error: `Certificate validation failed: ${certValid.error}` };
       }
@@ -488,7 +467,11 @@ export class CACSignatureManager {
     }
   }
 
-  // Get signature display information
+  // Get signature display information.
+  // The active schema stores certificate validity as unix-epoch INTEGERS in
+  // certificate_not_before / certificate_not_after, and signature created_at
+  // is also a unix epoch integer. There is no separate signature_timestamp
+  // column - we use created_at instead.
   static formatSignatureForDisplay(signature: any): {
     signerName: string;
     signedAt: string;
@@ -496,10 +479,9 @@ export class CACSignatureManager {
     isValid: boolean;
   } {
     try {
-      // Parse certificate subject to get signer name
       const subject = this.parseCertificateSubject(signature.certificate_subject);
       const commonName = subject.CN || 'Unknown Signer';
-      
+
       // Format signer name (CAC format: LAST.FIRST.MIDDLE.ID)
       let signerName = commonName;
       const nameParts = commonName.split('.');
@@ -507,13 +489,17 @@ export class CACSignatureManager {
         signerName = `${nameParts[1]} ${nameParts[0]}`.toUpperCase();
       }
 
-      // Format signed date
-      const signedAt = new Date(signature.signature_timestamp).toLocaleString();
+      const signedAt = signature.created_at
+        ? new Date((signature.created_at as number) * 1000).toLocaleString()
+        : 'Unknown';
 
-      // Certificate info
-      const validTo = new Date(signature.certificate_valid_to);
-      const isExpired = validTo < new Date();
-      const certificateInfo = `Serial: ${signature.certificate_serial}, Expires: ${validTo.toLocaleDateString()}`;
+      const validTo = signature.certificate_not_after
+        ? new Date((signature.certificate_not_after as number) * 1000)
+        : null;
+      const isExpired = !!validTo && validTo < new Date();
+      const certificateInfo = validTo
+        ? `Serial: ${signature.certificate_serial}, Expires: ${validTo.toLocaleDateString()}`
+        : `Serial: ${signature.certificate_serial}`;
 
       return {
         signerName,
@@ -604,28 +590,30 @@ export class CACSignatureManager {
     `;
   }
 
-  // Export signature for verification
+  // Export signature for verification. Uses the active schema (user_id,
+  // signed_data, certificate_not_before/after as unix epochs).
   static exportSignatureData(signatureId: number): any {
     const db = getDb();
-    
+
     const signature = db.query(`
       SELECT cs.*, r.request_number, u.first_name, u.last_name, u.email
       FROM cac_signatures cs
       LEFT JOIN aft_requests r ON cs.request_id = r.id
-      LEFT JOIN users u ON cs.signer_id = u.id
+      LEFT JOIN users u ON cs.user_id = u.id
       WHERE cs.id = ?
     `).get(signatureId) as any;
 
-    if (!signature) {
-      return null;
-    }
+    if (!signature) return null;
+
+    let original: any = null;
+    try { original = JSON.parse(signature.signed_data); } catch {}
 
     return {
       signatureId: signature.id,
       requestId: signature.request_id,
       requestNumber: signature.request_number,
       signer: {
-        name: `${signature.first_name} ${signature.last_name}`,
+        name: `${signature.first_name || ''} ${signature.last_name || ''}`.trim(),
         email: signature.email
       },
       certificate: {
@@ -633,17 +621,16 @@ export class CACSignatureManager {
         subject: signature.certificate_subject,
         issuer: signature.certificate_issuer,
         serialNumber: signature.certificate_serial,
-        validFrom: signature.certificate_valid_from,
-        validTo: signature.certificate_valid_to,
-        data: signature.certificate_data
+        validFrom: new Date((signature.certificate_not_before as number) * 1000).toISOString(),
+        validTo: new Date((signature.certificate_not_after as number) * 1000).toISOString(),
+        data: original?.certificate?.certificateData || null
       },
       signature: {
         data: signature.signature_data,
-        hash: signature.signature_hash,
         algorithm: signature.signature_algorithm,
-        timestamp: signature.signature_timestamp
+        timestamp: original?.timestamp || null
       },
-      notes: signature.notes,
+      notes: original?.notes || null,
       createdAt: signature.created_at
     };
   }
