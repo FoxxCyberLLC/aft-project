@@ -77,35 +77,16 @@ const rateLimitStore = new Map<string, { attempts: number; lastAttempt: number; 
 // Session store - we'll implement database persistence
 const sessionStore = new Map<string, SecureSession>();
 
-// Initialize session table
-function initializeSessionStore() {
+// Initialize session store. The `sessions` table is created by the schema
+// migration in schema/001_init.sql; here we just rehydrate the in-memory
+// store from any rows still marked active.
+async function initializeSessionStore() {
   const db = getDb();
-  
-  // Create sessions table if it doesn't exist
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS sessions (
-      session_id TEXT PRIMARY KEY,
-      user_id INTEGER NOT NULL,
-      email TEXT NOT NULL,
-      primary_role TEXT NOT NULL,
-      active_role TEXT,
-      available_roles TEXT NOT NULL,
-      created_at INTEGER NOT NULL,
-      last_activity INTEGER NOT NULL,
-      ip_address TEXT,
-      user_agent TEXT,
-      csrf_token TEXT NOT NULL,
-      is_active BOOLEAN DEFAULT 1,
-      role_selected BOOLEAN DEFAULT 0,
-      FOREIGN KEY (user_id) REFERENCES users(id)
-    )
-  `);
-  
-  // Load existing sessions from database into memory store
-  const existingSessions = db.query(`
-    SELECT * FROM sessions WHERE is_active = 1
+
+  const existingSessions = await db.query(`
+    SELECT * FROM sessions WHERE is_active = TRUE
   `).all() as any[];
-  
+
   existingSessions.forEach(row => {
     const session: SecureSession = {
       sessionId: row.session_id,
@@ -113,9 +94,11 @@ function initializeSessionStore() {
       email: row.email,
       primaryRole: row.primary_role,
       activeRole: row.active_role,
-      availableRoles: JSON.parse(row.available_roles),
-      createdAt: row.created_at,
-      lastActivity: row.last_activity,
+      availableRoles: typeof row.available_roles === 'string'
+        ? JSON.parse(row.available_roles)
+        : row.available_roles,
+      createdAt: Number(row.created_at),
+      lastActivity: Number(row.last_activity),
       ipAddress: row.ip_address,
       userAgent: row.user_agent,
       csrfToken: row.csrf_token,
@@ -124,8 +107,8 @@ function initializeSessionStore() {
     };
     sessionStore.set(session.sessionId, session);
   });
-  
-  console.log(`🔄 Loaded ${existingSessions.length} existing sessions from database`);
+
+  console.log(`Loaded ${existingSessions.length} existing sessions from database`);
 }
 
 // Generate cryptographically secure random string
@@ -171,16 +154,16 @@ export async function createSecureSession(
   
   // Save to database
   const db = getDb();
-  db.query(`
+  await db.query(`
     INSERT INTO sessions (
-      session_id, user_id, email, primary_role, active_role, 
-      available_roles, created_at, last_activity, ip_address, 
+      session_id, user_id, email, primary_role, active_role,
+      available_roles, created_at, last_activity, ip_address,
       user_agent, csrf_token, is_active, role_selected
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     sessionId, userId, email, primaryRole, session.activeRole || null,
     JSON.stringify(availableRoles), now, now, ipAddress,
-    userAgent, csrfToken, 1, 0
+    userAgent, csrfToken, true, false
   );
   
   // Log session creation
@@ -216,9 +199,9 @@ export async function selectSessionRole(
   
   // Update database
   const db = getDb();
-  db.query(`
-    UPDATE sessions 
-    SET active_role = ?, role_selected = 1, last_activity = ? 
+  await db.query(`
+    UPDATE sessions
+    SET active_role = ?, role_selected = TRUE, last_activity = ?
     WHERE session_id = ?
   `).run(role, session.lastActivity, sessionId);
   
@@ -256,7 +239,7 @@ export async function switchSessionRole(
   
   // Update database
   const db = getDb();
-  db.query(`
+  await db.query(`
     UPDATE sessions 
     SET active_role = ?, last_activity = ? 
     WHERE session_id = ?
@@ -317,7 +300,7 @@ export async function validateSession(
 
   // Update database
   const db = getDb();
-  db.query(`
+  await db.query(`
     UPDATE sessions
     SET last_activity = ?
     WHERE session_id = ?
@@ -333,16 +316,16 @@ export async function destroySession(sessionId: string, reason: string = 'USER_L
   if (session) {
     session.isActive = false;
     sessionStore.delete(sessionId);
-    
+
     // Update database
     const db = getDb();
-    db.query(`
-      UPDATE sessions 
-      SET is_active = 0 
+    await db.query(`
+      UPDATE sessions
+      SET is_active = FALSE
       WHERE session_id = ?
     `).run(sessionId);
-    
-    await auditLog(session.userId, 'SESSION_DESTROYED', 
+
+    await auditLog(session.userId, 'SESSION_DESTROYED',
       `Session destroyed: ${reason}`, session.ipAddress);
   }
 }
@@ -445,48 +428,33 @@ export function validatePasswordPolicy(password: string): { valid: boolean; erro
   return { valid: errors.length === 0, errors };
 }
 
-// Audit logging
+// Audit logging. The security_audit_log table is created by the schema
+// migration in schema/001_init.sql.
 export async function auditLog(
-  userId: number | null, 
-  action: string, 
-  description: string, 
+  userId: number | null,
+  action: string,
+  description: string,
   ipAddress: string,
   additionalData?: any
 ): Promise<void> {
   const db = getDb();
-  
+
   try {
-    // Create audit log table if it doesn't exist
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS security_audit_log (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER,
-        action TEXT NOT NULL,
-        description TEXT NOT NULL,
-        ip_address TEXT,
-        user_agent TEXT,
-        additional_data TEXT,
-        timestamp INTEGER DEFAULT (unixepoch()),
-        FOREIGN KEY (user_id) REFERENCES users(id)
-      )
-    `);
-    
-    db.query(`
-      INSERT INTO security_audit_log 
+    await db.query(`
+      INSERT INTO security_audit_log
       (user_id, action, description, ip_address, additional_data)
       VALUES (?, ?, ?, ?, ?)
     `).run(
-      userId, 
-      action, 
-      description, 
-      ipAddress, 
+      userId,
+      action,
+      description,
+      ipAddress,
       additionalData ? JSON.stringify(additionalData) : null
     );
-    
+
     console.log(`[AUDIT] ${action}: ${description} (User: ${userId}, IP: ${ipAddress})`);
   } catch (error) {
     console.error('Failed to write audit log:', error);
-    // In production, this should be handled more robustly
   }
 }
 
@@ -548,47 +516,48 @@ export function applySecurityHeaders(response: Response): Response {
 }
 
 // Clean up expired sessions (should be run periodically)
-export function cleanupExpiredSessions(): number {
+export async function cleanupExpiredSessions(): Promise<number> {
   const now = Date.now();
   let cleanedCount = 0;
-  
+
   const db = getDb();
-  
-  // Clean up expired sessions from memory and database
+
   for (const [sessionId, session] of sessionStore.entries()) {
     if (now - session.lastActivity > SECURITY_CONFIG.SESSION_TIMEOUT ||
         now - session.createdAt > SECURITY_CONFIG.MAX_SESSION_DURATION) {
       sessionStore.delete(sessionId);
-      
-      // Mark as inactive in database
-      db.query(`
-        UPDATE sessions 
-        SET is_active = 0 
+
+      await db.query(`
+        UPDATE sessions
+        SET is_active = FALSE
         WHERE session_id = ?
       `).run(sessionId);
-      
+
       cleanedCount++;
     }
   }
-  
+
   return cleanedCount;
 }
 
 // Initialize security module
-export function initializeSecurity(): void {
-  console.log('🔒 Security module initialized');
-  console.log(`📋 Password policy: Min ${SECURITY_CONFIG.PASSWORD_MIN_LENGTH} chars, complexity required`);
-  console.log(`⏰ Session timeout: ${SECURITY_CONFIG.SESSION_TIMEOUT / 1000 / 60} minutes`);
-  console.log(`🚫 Max login attempts: ${SECURITY_CONFIG.MAX_LOGIN_ATTEMPTS}`);
-  
-  // Initialize session persistence
-  initializeSessionStore();
-  
+export async function initializeSecurity(): Promise<void> {
+  console.log('Security module initialized');
+  console.log(`Password policy: Min ${SECURITY_CONFIG.PASSWORD_MIN_LENGTH} chars, complexity required`);
+  console.log(`Session timeout: ${SECURITY_CONFIG.SESSION_TIMEOUT / 1000 / 60} minutes`);
+  console.log(`Max login attempts: ${SECURITY_CONFIG.MAX_LOGIN_ATTEMPTS}`);
+
+  await initializeSessionStore();
+
   // Set up periodic cleanup
-  setInterval(() => {
-    const cleaned = cleanupExpiredSessions();
-    if (cleaned > 0) {
-      console.log(`🧹 Cleaned up ${cleaned} expired sessions`);
+  setInterval(async () => {
+    try {
+      const cleaned = await cleanupExpiredSessions();
+      if (cleaned > 0) {
+        console.log(`Cleaned up ${cleaned} expired sessions`);
+      }
+    } catch (err) {
+      console.error('Failed to clean expired sessions:', err);
     }
-  }, 5 * 60 * 1000); // Every 5 minutes
+  }, 5 * 60 * 1000);
 }

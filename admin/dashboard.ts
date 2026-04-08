@@ -9,11 +9,11 @@ export class AdminDashboard {
     const db = getDb();
     
     // Get system statistics
-    const userCount = db.query("SELECT COUNT(*) as count FROM users WHERE is_active = 1").get() as any;
-    const requestCount = db.query("SELECT COUNT(*) as count FROM aft_requests").get() as any;
-    const recentLogins = db.query(`
+    const userCount = await db.query("SELECT COUNT(*) as count FROM users WHERE is_active = TRUE").get() as any;
+    const requestCount = await db.query("SELECT COUNT(*) as count FROM aft_requests").get() as any;
+    const recentLogins = await db.query(`
       SELECT COUNT(*) as count FROM security_audit_log 
-      WHERE action = 'LOGIN_SUCCESS' AND timestamp > (unixepoch() - 86400)
+      WHERE action = 'LOGIN_SUCCESS' AND timestamp > (EXTRACT(EPOCH FROM NOW())::BIGINT - 86400)
     `).get() as any;
 
     // Build admin cards

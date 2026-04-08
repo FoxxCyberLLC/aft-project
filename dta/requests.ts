@@ -11,8 +11,8 @@ export class DtaRequests {
     const db = getDb();
     
     // Get request statistics for assigned DTA
-    const totalRequests = db.query("SELECT COUNT(*) as count FROM aft_requests WHERE dta_id = ?").get(userId) as any;
-    const pendingRequests = db.query("SELECT COUNT(*) as count FROM aft_requests WHERE status NOT IN ('completed', 'rejected', 'cancelled') AND dta_id = ?").get(userId) as any;
+    const totalRequests = await db.query("SELECT COUNT(*) as count FROM aft_requests WHERE dta_id = ?").get(userId) as any;
+    const pendingRequests = await db.query("SELECT COUNT(*) as count FROM aft_requests WHERE status NOT IN ('completed', 'rejected', 'cancelled') AND dta_id = ?").get(userId) as any;
     
     // Get requests with timeline data - filtered by DTA assignment
     const requestsWithTimeline = RequestTrackingService.getRequestsWithTimeline({ 

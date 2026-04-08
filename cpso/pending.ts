@@ -9,7 +9,7 @@ export class PendingCPSOReviewsPage {
     const db = getDb();
     
     // Get all requests pending CPSO review
-    const pendingRequests = db.query(`
+    const pendingRequests = await db.query(`
       SELECT 
         r.*,
         u.email as requestor_email,

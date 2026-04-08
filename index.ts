@@ -1,5 +1,6 @@
 // AFT Server - Modular implementation
 import { initializeSecurity, applySecurityHeaders } from "./lib/security";
+import { waitForReady } from "./lib/database-bun";
 import { handleStaticFiles } from "./server/static-handler";
 import { handleAPI } from "./server/api/index";
 import {
@@ -16,8 +17,9 @@ import { handleDTARoutes } from "./server/routes/dta-routes";
 import { handleSMERoutes } from "./server/routes/sme-routes";
 import { handleCPSORoutes } from "./server/routes/cpso-routes";
 
-// Initialize security
-initializeSecurity();
+// Wait for the database schema to be ready, then initialize the security module.
+await waitForReady();
+await initializeSecurity();
 
 // Shared secret nginx must include in X-AFT-Proxy-Secret. When set, the Bun
 // server will refuse any request whose header value does not match. This
@@ -93,6 +95,15 @@ Bun.serve({
   hostname: '127.0.0.1', // Loopback only - nginx is the public entry point.
 
   async fetch(originalRequest: Request, server: any): Promise<Response> {
+    // Liveness probe - exempt from the proxy-secret check so it can be hit
+    // from inside the container by HEALTHCHECK without needing the secret.
+    {
+      const probeUrl = new URL(originalRequest.url);
+      if (probeUrl.pathname === '/healthz') {
+        return new Response('ok', { status: 200, headers: { 'Content-Type': 'text/plain' } });
+      }
+    }
+
     // Reject anything that didn't come from a trusted proxy when a secret is
     // configured. We still serve the request when no secret is configured, to
     // allow local development without nginx.

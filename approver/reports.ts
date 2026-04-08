@@ -10,32 +10,32 @@ export class ApproverReportsPage {
     
     // Get approval statistics
     const stats = {
-      total: db.query(`
+      total: await db.query(`
         SELECT COUNT(*) as count FROM aft_requests 
         WHERE approver_email = ?
       `).get(user.email) as any,
       
-      approved: db.query(`
+      approved: await db.query(`
         SELECT COUNT(*) as count FROM aft_requests 
         WHERE status = 'approved' AND approver_email = ?
       `).get(user.email) as any,
       
-      rejected: db.query(`
+      rejected: await db.query(`
         SELECT COUNT(*) as count FROM aft_requests 
         WHERE status = 'rejected' AND approver_email = ?
       `).get(user.email) as any,
       
-      avgProcessingTime: db.query(`
-        SELECT AVG(julianday(updated_at) - julianday(created_at)) * 24 as hours
-        FROM aft_requests 
+      avgProcessingTime: await db.query(`
+        SELECT AVG((updated_at - created_at) / 3600.0) as hours
+        FROM aft_requests
         WHERE status IN ('approved', 'rejected') AND approver_email = ?
       `).get(user.email) as any
     };
 
     // Get monthly breakdown
-    const monthlyData = db.query(`
-      SELECT 
-        strftime('%Y-%m', updated_at) as month,
+    const monthlyData = await db.query(`
+      SELECT
+        to_char(to_timestamp(updated_at), 'YYYY-MM') as month,
         COUNT(CASE WHEN status = 'approved' THEN 1 END) as approved,
         COUNT(CASE WHEN status = 'rejected' THEN 1 END) as rejected
       FROM aft_requests
@@ -46,7 +46,7 @@ export class ApproverReportsPage {
     `).all(user.email) as any[];
 
     // Get system breakdown
-    const systemData = db.query(`
+    const systemData = await db.query(`
       SELECT 
         source_system,
         dest_system,

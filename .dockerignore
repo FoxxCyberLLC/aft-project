@@ -1,0 +1,47 @@
+# Build artifacts and local state - never copy into the image.
+.git
+.gitignore
+.github
+.idea
+.vscode
+.DS_Store
+
+# Dependencies (we install fresh inside the container).
+node_modules
+
+# Local data directories
+data
+pgdata
+ssl
+
+# Local SQLite leftovers (project no longer uses SQLite).
+*.db
+*.db-wal
+*.db-shm
+
+# Logs
+*.log
+logs
+server.log
+
+# Local env files - never bake secrets into the image.
+.env
+.env.local
+.env.development.local
+.env.production.local
+.env.test.local
+
+# Build outputs
+dist
+out
+*.tgz
+coverage
+*.lcov
+
+# Misc
+*.tsbuildinfo
+.cache
+.eslintcache
+
+# Docker bookkeeping (already inside the docker dir we want)
+docker-compose.override.yml

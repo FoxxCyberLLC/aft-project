@@ -31,14 +31,14 @@ export async function handleApproverAPI(request: Request, path: string, ipAddres
     if (method === 'GET') {
       if (apiPath === 'pending-count') {
         // Only count requests pending ISSM approval, not CPSO
-        const result = db.query("SELECT COUNT(*) as count FROM aft_requests WHERE status IN ('pending_approver', 'submitted')").get() as any;
+        const result = await db.query("SELECT COUNT(*) as count FROM aft_requests WHERE status IN ('pending_approver', 'submitted')").get() as any;
         return new Response(JSON.stringify({ count: result?.count || 0 }), {
           headers: { 'Content-Type': 'application/json' }
         });
       }
       
       if (apiPath === 'export/approved') {
-        const requests = db.query(`
+        const requests = await db.query(`
           SELECT * FROM aft_requests 
           WHERE status = 'approved' AND approver_email = ?
           ORDER BY updated_at DESC
@@ -217,12 +217,12 @@ export async function handleApproverAPI(request: Request, path: string, ipAddres
         // Only allow approval if request is in the correct pending state for ISSM
         const allowedStatuses = ['pending_approver', 'submitted', 'pending_approval'];
         
-        const result = db.prepare(`
+        const result = await db.prepare(`
           UPDATE aft_requests 
           SET status = ?, 
               approver_email = ?,
               approver_id = (SELECT id FROM users WHERE email = ?),
-              updated_at = unixepoch(),
+              updated_at = EXTRACT(EPOCH FROM NOW())::BIGINT,
               approval_notes = ?,
               rejection_reason = NULL
           WHERE id = ? AND status IN (${allowedStatuses.map(() => '?').join(',')})
@@ -230,7 +230,7 @@ export async function handleApproverAPI(request: Request, path: string, ipAddres
         
         // Check if the update actually affected any rows (prevents double approval)
         if (result.changes === 0) {
-          const currentRequest = db.query('SELECT status FROM aft_requests WHERE id = ?').get(requestId) as any;
+          const currentRequest = await db.query('SELECT status FROM aft_requests WHERE id = ?').get(requestId) as any;
           let errorMessage = 'This request cannot be approved at this time.';
           
           if (currentRequest) {
@@ -262,7 +262,7 @@ export async function handleApproverAPI(request: Request, path: string, ipAddres
         }
         
         // Get request details for notification
-        const requestData = db.query(`
+        const requestData = await db.query(`
           SELECT request_number, requestor_email, transfer_type, classification
           FROM aft_requests WHERE id = ?
         `).get(requestId) as any;
@@ -270,9 +270,9 @@ export async function handleApproverAPI(request: Request, path: string, ipAddres
         // Add to history (ISSM approval)
         const historyAction = 'ISSM_APPROVED';
         const historyNotes = notes || 'Request approved by ISSM - Forwarded to CPSO';
-        db.prepare(`
+        await db.prepare(`
           INSERT INTO aft_request_history (request_id, action, user_email, notes, created_at)
-          VALUES (?, ?, ?, ?, unixepoch())
+          VALUES (?, ?, ?, ?, EXTRACT(EPOCH FROM NOW())::BIGINT)
         `).run(requestId, historyAction, session.email, historyNotes);
 
         // Notify CPSO approvers
@@ -331,12 +331,12 @@ export async function handleApproverAPI(request: Request, path: string, ipAddres
         // Only allow rejection if request is in the correct pending state for ISSM
         const allowedStatuses = ['pending_approver', 'submitted', 'pending_approval'];
         
-        const result = db.prepare(`
+        const result = await db.prepare(`
           UPDATE aft_requests 
           SET status = 'rejected',
               approver_email = ?,
               approver_id = (SELECT id FROM users WHERE email = ?),
-              updated_at = unixepoch(),
+              updated_at = EXTRACT(EPOCH FROM NOW())::BIGINT,
               rejection_reason = ?,
               approval_notes = ?
           WHERE id = ? AND status IN (${allowedStatuses.map(() => '?').join(',')})
@@ -344,7 +344,7 @@ export async function handleApproverAPI(request: Request, path: string, ipAddres
         
         // Check if the update actually affected any rows
         if (result.changes === 0) {
-          const currentRequest = db.query('SELECT status FROM aft_requests WHERE id = ?').get(requestId) as any;
+          const currentRequest = await db.query('SELECT status FROM aft_requests WHERE id = ?').get(requestId) as any;
           let errorMessage = 'This request cannot be rejected at this time.';
           
           if (currentRequest) {
@@ -376,15 +376,15 @@ export async function handleApproverAPI(request: Request, path: string, ipAddres
         }
         
         // Get request details for notification
-        const requestData = db.query(`
+        const requestData = await db.query(`
           SELECT request_number, requestor_email, transfer_type, classification
           FROM aft_requests WHERE id = ?
         `).get(requestId) as any;
 
         // Add to history
-        db.prepare(`
+        await db.prepare(`
           INSERT INTO aft_request_history (request_id, action, user_email, notes, created_at)
-          VALUES (?, 'REJECTED', ?, ?, unixepoch())
+          VALUES (?, 'REJECTED', ?, ?, EXTRACT(EPOCH FROM NOW())::BIGINT)
         `).run(requestId, session.email, `Reason: ${reason}. ${notes || ''}`);
 
         // Notify requestor of rejection
@@ -422,17 +422,17 @@ export async function handleApproverAPI(request: Request, path: string, ipAddres
         let dateFilter = '';
         switch(type) {
           case 'monthly':
-            dateFilter = `AND r.updated_at >= unixepoch('now', '-1 month')`;
+            dateFilter = `AND r.updated_at >= EXTRACT(EPOCH FROM NOW() - INTERVAL '1 month')::BIGINT`;
             break;
           case 'quarterly':
-            dateFilter = `AND r.updated_at >= unixepoch('now', '-3 months')`;
+            dateFilter = `AND r.updated_at >= EXTRACT(EPOCH FROM NOW() - INTERVAL '3 months')::BIGINT`;
             break;
           case 'annual':
-            dateFilter = `AND r.updated_at >= unixepoch('now', '-1 year')`;
+            dateFilter = `AND r.updated_at >= EXTRACT(EPOCH FROM NOW() - INTERVAL '1 year')::BIGINT`;
             break;
         }
         
-        const reportData = db.query(`
+        const reportData = await db.query(`
           SELECT 
             r.*,
             u.first_name || ' ' || u.last_name as requestor_name,

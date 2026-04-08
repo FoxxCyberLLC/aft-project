@@ -1,9 +1,28 @@
-// Native Bun SQLite implementation without external dependencies
-import { Database } from "bun:sqlite";
-import * as fs from "node:fs";
-import { runApproverMigrations } from "./database-migrations";
+// Postgres-backed database module for AFT.
+//
+// This module replaces the previous bun:sqlite implementation. It exposes a
+// thin wrapper around Bun's native Postgres client (`Bun.sql`) that mimics
+// the bun:sqlite chained API:
+//
+//   const row = await db.query("SELECT ... WHERE id = ?").get(id);
+//   const rows = await db.query("SELECT ...").all();
+//   const r   = await db.query("INSERT ... RETURNING id").run(a, b);
+//
+// The terminator methods (`get`, `all`, `run`) return Promises and MUST be
+// awaited. The wrapper auto-translates `?` placeholders to `$1, $2, ...` so
+// most existing call sites only need to add `await`.
+//
+// Connection string is taken from `DATABASE_URL`, e.g.
+//   postgres://aft:aft@127.0.0.1:5432/aft
 
-// User roles enum
+import { SQL } from "bun";
+import * as fs from "node:fs";
+import * as path from "node:path";
+
+// ---------------------------------------------------------------------------
+// Enums and helper types (unchanged from the SQLite version)
+// ---------------------------------------------------------------------------
+
 export const UserRole = {
   ADMIN: 'admin',
   REQUESTOR: 'requestor',
@@ -17,7 +36,6 @@ export const UserRole = {
 
 export type UserRoleType = typeof UserRole[keyof typeof UserRole];
 
-// AFT Status enum
 export const AFTStatus = {
   DRAFT: 'draft',
   SUBMITTED: 'submitted',
@@ -36,7 +54,6 @@ export const AFTStatus = {
   CANCELLED: 'cancelled'
 } as const;
 
-// AFT Status Labels for display
 export const AFT_STATUS_LABELS = {
   [AFTStatus.DRAFT]: 'Draft',
   [AFTStatus.SUBMITTED]: 'Submitted',
@@ -57,303 +74,246 @@ export const AFT_STATUS_LABELS = {
 
 export type AFTStatusType = typeof AFTStatus[keyof typeof AFTStatus];
 
-// Database initialization
-let db: Database;
+// ---------------------------------------------------------------------------
+// Postgres connection
+// ---------------------------------------------------------------------------
 
-export function getDb() {
-  if (!db) {
-    // Ensure data directory exists *before* opening the database. The
-    // previous implementation used a dynamic import, which made directory
-    // creation race the synchronous Database open and could cause a fresh
-    // checkout to crash on first boot.
-    try {
-      fs.mkdirSync('./data', { recursive: true });
-    } catch {
-      // Directory might already exist
+const DATABASE_URL =
+  process.env.DATABASE_URL || 'postgres://aft:aft@127.0.0.1:5432/aft';
+
+export const sql = new SQL(DATABASE_URL, {
+  max: 10,
+  idleTimeout: 30
+});
+
+// Convert bun:sqlite-style `?` placeholders to Postgres `$1, $2, ...`. We do
+// not attempt to parse SQL strings; the assumption is that `?` only appears
+// as a placeholder. None of the queries in this codebase use `?` inside
+// string literals or comments.
+function convertPlaceholders(text: string): string {
+  let n = 0;
+  return text.replace(/\?/g, () => `$${++n}`);
+}
+
+interface RunResult {
+  /** ID returned by `INSERT ... RETURNING id`, if present. */
+  lastInsertRowid: number | undefined;
+  /** Number of rows affected (or returned). */
+  changes: number;
+}
+
+class Query {
+  constructor(private text: string) {}
+
+  async get<T = any>(...params: any[]): Promise<T | undefined> {
+    const text = convertPlaceholders(this.text);
+    const result = await sql.unsafe(text, params);
+    return (result as any[])[0] as T | undefined;
+  }
+
+  async all<T = any>(...params: any[]): Promise<T[]> {
+    const text = convertPlaceholders(this.text);
+    const result = await sql.unsafe(text, params);
+    return result as unknown as T[];
+  }
+
+  async run(...params: any[]): Promise<RunResult> {
+    const text = convertPlaceholders(this.text);
+    const result = await sql.unsafe(text, params) as any;
+    const firstRow = Array.isArray(result) ? result[0] : undefined;
+    let lastInsertRowid: number | undefined;
+    if (firstRow && firstRow.id !== undefined && firstRow.id !== null) {
+      lastInsertRowid = Number(firstRow.id);
     }
+    const changes =
+      typeof result?.count === 'number' ? result.count
+      : Array.isArray(result) ? result.length
+      : 0;
+    return { lastInsertRowid, changes };
+  }
+}
 
-    db = new Database("./data/aft.db", { create: true });
-    db.exec("PRAGMA journal_mode = WAL");
-    db.exec("PRAGMA foreign_keys = ON");
+class TxQuery {
+  constructor(private text: string, private tx: any) {}
 
-    // Create tables synchronously so callers cannot hit the DB before the
-    // schema exists.
-    createTables();
-    runStartupMigrations();
-    initializeDatabase();
+  async get<T = any>(...params: any[]): Promise<T | undefined> {
+    const text = convertPlaceholders(this.text);
+    const result = await this.tx.unsafe(text, params);
+    return (result as any[])[0] as T | undefined;
+  }
+
+  async all<T = any>(...params: any[]): Promise<T[]> {
+    const text = convertPlaceholders(this.text);
+    const result = await this.tx.unsafe(text, params);
+    return result as unknown as T[];
+  }
+
+  async run(...params: any[]): Promise<RunResult> {
+    const text = convertPlaceholders(this.text);
+    const result = await this.tx.unsafe(text, params) as any;
+    const firstRow = Array.isArray(result) ? result[0] : undefined;
+    let lastInsertRowid: number | undefined;
+    if (firstRow && firstRow.id !== undefined && firstRow.id !== null) {
+      lastInsertRowid = Number(firstRow.id);
+    }
+    const changes =
+      typeof result?.count === 'number' ? result.count
+      : Array.isArray(result) ? result.length
+      : 0;
+    return { lastInsertRowid, changes };
+  }
+}
+
+/**
+ * A transaction-bound Db facade. All `query/exec` calls go through the same
+ * connection inside the active `sql.begin` block, so the entire callback is
+ * atomic and isolation guarantees apply.
+ */
+export class TxDb {
+  constructor(private tx: any) {}
+
+  query(text: string): TxQuery {
+    return new TxQuery(text, this.tx);
+  }
+
+  prepare(text: string): TxQuery {
+    return new TxQuery(text, this.tx);
+  }
+
+  async exec(text: string): Promise<void> {
+    await this.tx.unsafe(text);
+  }
+}
+
+class Db {
+  query(text: string): Query {
+    return new Query(text);
+  }
+
+  prepare(text: string): Query {
+    return new Query(text);
+  }
+
+  /**
+   * Execute one or more SQL statements with no parameters. Used for schema
+   * setup and maintenance.
+   */
+  async exec(text: string): Promise<void> {
+    await sql.unsafe(text);
+  }
+
+  /**
+   * Run an async callback inside a Postgres transaction. The callback
+   * receives a `TxDb` whose `query/exec` methods route through the
+   * transactional connection, so writes are properly atomic.
+   *
+   * Usage:
+   *   const id = await db.withTransaction(async (tx) => {
+   *     const r = await tx.query("INSERT ... RETURNING id").run(...);
+   *     await tx.query("UPDATE ...").run(...);
+   *     return r.lastInsertRowid;
+   *   });
+   */
+  async withTransaction<T>(fn: (tx: TxDb) => Promise<T>): Promise<T> {
+    return await sql.begin(async (tx) => {
+      const txDb = new TxDb(tx);
+      return await fn(txDb);
+    }) as T;
+  }
+
+  /**
+   * Backwards-compatible wrapper for code that used the bun:sqlite
+   * `db.transaction(fn)()` pattern. Prefer `withTransaction` for new code.
+   */
+  transaction<T>(fn: (...args: any[]) => T | Promise<T>) {
+    return async (...args: any[]) => {
+      return await sql.begin(async () => fn(...args));
+    };
+  }
+}
+
+const db = new Db();
+
+let initialized = false;
+let initPromise: Promise<void> | null = null;
+
+/**
+ * Returns the (singleton) database wrapper. The first call kicks off schema
+ * initialization in the background; the wrapper's methods are async so they
+ * naturally serialize after the first migration completes via `await
+ * waitForReady()` from anywhere that needs strict ordering.
+ */
+export function getDb(): Db {
+  if (!initialized) {
+    initialized = true;
+    initPromise = initializeSchema().catch(err => {
+      console.error('Failed to initialize schema:', err);
+      throw err;
+    });
   }
   return db;
 }
 
-// Apply schema migrations that are not handled in createTables(). Kept
-// synchronous and idempotent. Adds columns/tables added after the original
-// create script was written.
-function runStartupMigrations() {
-  // notification_log + notification_preferences (used by lib/email-service)
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS notification_log (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      request_id INTEGER,
-      recipient TEXT NOT NULL,
-      subject TEXT NOT NULL,
-      status TEXT NOT NULL CHECK(status IN ('sent','failed','pending')),
-      message_id TEXT,
-      error TEXT,
-      created_at INTEGER NOT NULL DEFAULT (unixepoch()),
-      FOREIGN KEY (request_id) REFERENCES aft_requests(id)
-    )
-  `);
-  db.exec(`CREATE INDEX IF NOT EXISTS idx_notification_log_request_id ON notification_log(request_id)`);
-  db.exec(`CREATE INDEX IF NOT EXISTS idx_notification_log_recipient ON notification_log(recipient)`);
-  db.exec(`CREATE INDEX IF NOT EXISTS idx_notification_log_status ON notification_log(status)`);
-  db.exec(`CREATE INDEX IF NOT EXISTS idx_notification_log_created_at ON notification_log(created_at)`);
-
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS notification_preferences (
-      user_id INTEGER PRIMARY KEY,
-      email_enabled INTEGER DEFAULT 1,
-      notify_on_assignment INTEGER DEFAULT 1,
-      notify_on_approval INTEGER DEFAULT 1,
-      notify_on_rejection INTEGER DEFAULT 1,
-      notify_on_completion INTEGER DEFAULT 1,
-      created_at INTEGER NOT NULL DEFAULT (unixepoch()),
-      updated_at INTEGER NOT NULL DEFAULT (unixepoch()),
-      FOREIGN KEY (user_id) REFERENCES users(id)
-    )
-  `);
-
-  // must_change_password flag - set to 1 when an admin is auto-seeded with a
-  // bootstrap password so the first interactive login forces a password reset.
-  try {
-    const cols = db.query("PRAGMA table_info(users)").all() as Array<{ name: string }>;
-    if (!cols.some(c => c.name === 'must_change_password')) {
-      db.exec("ALTER TABLE users ADD COLUMN must_change_password INTEGER NOT NULL DEFAULT 0");
-    }
-  } catch (e) {
-    console.error('Failed to add must_change_password column:', e);
+/**
+ * Await this once during application startup (e.g. before `Bun.serve`) to
+ * guarantee migrations and the bootstrap admin have been applied.
+ */
+export async function waitForReady(): Promise<void> {
+  if (!initialized) {
+    getDb();
   }
-
-  // Apply the rest of the migrations defined in database-migrations.ts.
-  // This is now a synchronous, statically-imported function call so the
-  // schema is fully up to date before getDb() returns.
-  try {
-    runApproverMigrations();
-  } catch (err) {
-    console.error('Failed to run startup migrations:', err);
-    throw err;
-  }
+  if (initPromise) await initPromise;
 }
 
-function createTables() {
-  // Users table
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS users (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      email TEXT UNIQUE NOT NULL,
-      password TEXT NOT NULL,
-      first_name TEXT NOT NULL,
-      last_name TEXT NOT NULL,
-      primary_role TEXT NOT NULL,
-      organization TEXT,
-      phone TEXT,
-      is_active BOOLEAN DEFAULT 1,
-      created_at INTEGER DEFAULT (unixepoch()),
-      updated_at INTEGER DEFAULT (unixepoch())
+// ---------------------------------------------------------------------------
+// Schema migrations
+// ---------------------------------------------------------------------------
+
+async function initializeSchema(): Promise<void> {
+  // Ensure schema_migrations table exists.
+  await sql.unsafe(`
+    CREATE TABLE IF NOT EXISTS schema_migrations (
+      version    TEXT PRIMARY KEY,
+      applied_at BIGINT NOT NULL DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT
     )
   `);
 
-  // User Roles junction table
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS user_roles (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      role TEXT NOT NULL,
-      is_active BOOLEAN DEFAULT 1,
-      assigned_by INTEGER REFERENCES users(id),
-      created_at INTEGER DEFAULT (unixepoch())
-    )
-  `);
+  const schemaDir = path.resolve('./schema');
+  if (fs.existsSync(schemaDir)) {
+    const files = fs.readdirSync(schemaDir).filter(f => f.endsWith('.sql')).sort();
+    for (const file of files) {
+      const version = file.replace(/\.sql$/, '');
+      const applied = await sql.unsafe(
+        `SELECT version FROM schema_migrations WHERE version = $1`,
+        [version]
+      ) as any[];
+      if (applied.length > 0) continue;
 
-  // Media Drives for Media Custodian Management
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS media_drives (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      serial_number TEXT UNIQUE NOT NULL,
-      media_control_number TEXT,
-      type TEXT NOT NULL,
-      model TEXT NOT NULL,
-      capacity TEXT NOT NULL,
-      location TEXT,
-      status TEXT DEFAULT 'available',
-      issued_to_user_id INTEGER REFERENCES users(id),
-      issued_at INTEGER,
-      returned_at INTEGER,
-      purpose TEXT,
-      last_used INTEGER,
-      created_at INTEGER DEFAULT (unixepoch()),
-      updated_at INTEGER DEFAULT (unixepoch())
-    )
-  `);
-
-  // Migration: add media_control_number to existing media_drives if missing
-  try {
-    const colCheck = db.query("PRAGMA table_info(media_drives)").all() as Array<{ name: string }>;
-    const hasMCN = colCheck.some(c => c.name === 'media_control_number');
-    if (!hasMCN) {
-      db.exec("ALTER TABLE media_drives ADD COLUMN media_control_number TEXT");
-      console.log("✓ Added media_control_number column to media_drives");
+      const content = fs.readFileSync(path.join(schemaDir, file), 'utf8');
+      await sql.begin(async (tx) => {
+        await tx.unsafe(content);
+        await tx.unsafe(
+          `INSERT INTO schema_migrations (version) VALUES ($1)`,
+          [version]
+        );
+      });
+      console.log(`Applied schema migration: ${version}`);
     }
-  } catch (e) {
-    console.error('Failed to migrate media_drives schema:', e);
+  } else {
+    console.warn('schema/ directory not found - skipping migrations');
   }
 
-  // The aft_requests migrations that used to live here ran BEFORE the
-  // CREATE TABLE below, which crashed on a fresh database. They are now
-  // performed by runStartupMigrations() (which calls into
-  // ./database-migrations) AFTER the CREATE TABLE statements complete.
-
-  // AFT Requests table
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS aft_requests (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      request_number TEXT UNIQUE NOT NULL,
-      requestor_id INTEGER NOT NULL REFERENCES users(id),
-      approver_id INTEGER REFERENCES users(id),
-      dta_id INTEGER REFERENCES users(id),
-      sme_id INTEGER REFERENCES users(id),
-      media_custodian_id INTEGER REFERENCES users(id),
-      tpi_required BOOLEAN DEFAULT 1,
-      status TEXT DEFAULT 'draft',
-      requestor_name TEXT NOT NULL,
-      requestor_org TEXT NOT NULL,
-      requestor_phone TEXT NOT NULL,
-      requestor_email TEXT NOT NULL,
-      transfer_purpose TEXT NOT NULL,
-      transfer_type TEXT NOT NULL,
-      classification TEXT NOT NULL,
-      caveat_info TEXT,
-      data_description TEXT NOT NULL,
-      source_system TEXT,
-      source_location TEXT,
-      source_contact TEXT,
-      source_phone TEXT,
-      source_email TEXT,
-      dest_system TEXT,
-      dest_location TEXT,
-      dest_contact TEXT,
-      dest_phone TEXT,
-      dest_email TEXT,
-      data_format TEXT,
-      data_size TEXT,
-      transfer_method TEXT,
-      encryption TEXT,
-      compression_required BOOLEAN,
-      files_list TEXT,
-      additional_file_list_attached BOOLEAN DEFAULT 0,
-      selected_drive_id INTEGER REFERENCES media_drives(id),
-      requested_start_date INTEGER,
-      requested_end_date INTEGER,
-      urgency_level TEXT,
-      actual_start_date INTEGER,
-      actual_end_date INTEGER,
-      transfer_notes TEXT,
-      transfer_data TEXT,
-      verification_type TEXT,
-      verification_results TEXT,
-      approval_date INTEGER,
-      approval_notes TEXT,
-      approval_data TEXT,
-      rejection_reason TEXT,
-      created_at INTEGER DEFAULT (unixepoch()),
-      updated_at INTEGER DEFAULT (unixepoch()),
-      -- Media Disposition fields (Section V)
-      disposition_optical_destroyed TEXT,
-      disposition_optical_retained TEXT,
-      disposition_ssd_sanitized TEXT,
-      disposition_custodian_name TEXT,
-      disposition_date INTEGER,
-      disposition_signature TEXT,
-      disposition_notes TEXT,
-      disposition_completed_at INTEGER,
-      additional_systems TEXT
-    )
-  `);
-
-  // Audit log table
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS aft_audit_log (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      request_id INTEGER REFERENCES aft_requests(id) ON DELETE CASCADE,
-      user_id INTEGER NOT NULL REFERENCES users(id),
-      action TEXT NOT NULL,
-      old_status TEXT,
-      new_status TEXT,
-      changes TEXT,
-      notes TEXT,
-      created_at INTEGER DEFAULT (unixepoch())
-    )
-  `);
-
-
-  // CAC Signatures
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS cac_signatures (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      request_id INTEGER NOT NULL REFERENCES aft_requests(id) ON DELETE CASCADE,
-      user_id INTEGER NOT NULL REFERENCES users(id),
-      step_type TEXT NOT NULL,
-      certificate_subject TEXT NOT NULL,
-      certificate_issuer TEXT NOT NULL,
-      certificate_serial TEXT NOT NULL,
-      certificate_thumbprint TEXT NOT NULL,
-      certificate_not_before INTEGER NOT NULL,
-      certificate_not_after INTEGER NOT NULL,
-      signature_data TEXT NOT NULL,
-      signed_data TEXT NOT NULL,
-      signature_algorithm TEXT DEFAULT 'RSA-SHA256',
-      signature_reason TEXT,
-      signature_location TEXT,
-      ip_address TEXT,
-      user_agent TEXT,
-      is_verified BOOLEAN DEFAULT 0,
-      verified_at INTEGER,
-      verification_notes TEXT,
-      created_at INTEGER DEFAULT (unixepoch())
-    )
-  `);
-
-  // CAC Trust Store
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS cac_trust_store (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      certificate_name TEXT NOT NULL,
-      certificate_data TEXT NOT NULL,
-      certificate_thumbprint TEXT UNIQUE NOT NULL,
-      issuer_dn TEXT NOT NULL,
-      subject_dn TEXT NOT NULL,
-      not_before INTEGER NOT NULL,
-      not_after INTEGER NOT NULL,
-      is_active BOOLEAN DEFAULT 1,
-      is_root_ca BOOLEAN DEFAULT 0,
-      created_at INTEGER DEFAULT (unixepoch())
-    )
-  `);
-
-  // System Settings table
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS system_settings (
-      key TEXT PRIMARY KEY NOT NULL,
-      value TEXT,
-      updated_at INTEGER NOT NULL DEFAULT (unixepoch())
-    )
-  `);
+  await initializeBootstrapAdmin();
 }
 
-// Hash password using Bun's built-in crypto
+// ---------------------------------------------------------------------------
+// Password helpers
+// ---------------------------------------------------------------------------
+
 async function hashPassword(password: string): Promise<string> {
   return await Bun.password.hash(password, {
     algorithm: "bcrypt",
-    cost: 12,
+    cost: 12
   });
 }
 
@@ -361,32 +321,27 @@ export async function verifyPassword(password: string, hash: string): Promise<bo
   return await Bun.password.verify(password, hash);
 }
 
-// Update a user's password hash and clear the must_change_password flag.
-// The caller must already have authenticated the user.
 export async function setUserPassword(userId: number, plainPassword: string): Promise<void> {
   const hash = await hashPassword(plainPassword);
-  getDb().query(`
+  await sql`
     UPDATE users
-    SET password = ?, must_change_password = 0, updated_at = unixepoch()
-    WHERE id = ?
-  `).run(hash, userId);
+    SET password = ${hash},
+        must_change_password = FALSE,
+        updated_at = EXTRACT(EPOCH FROM NOW())::BIGINT
+    WHERE id = ${userId}
+  `;
 }
 
-// Initialize database with a bootstrap admin user.
-//
-// To avoid shipping a hardcoded "admin123" password, the bootstrap password
-// must be supplied via the AFT_ADMIN_BOOTSTRAP_PASSWORD environment variable.
-// When that variable is set AND there is currently no admin in the database,
-// we create one with must_change_password=1 so the first login forces a
-// password reset. The bootstrap value is wiped from process.env immediately
-// after use.
-async function initializeDatabase() {
-  try {
-    const anyAdmin = db.query(
-      "SELECT 1 FROM users WHERE primary_role = 'admin' LIMIT 1"
-    ).get();
+// ---------------------------------------------------------------------------
+// Bootstrap admin
+// ---------------------------------------------------------------------------
 
-    if (anyAdmin) return;
+async function initializeBootstrapAdmin(): Promise<void> {
+  try {
+    const existing = await sql`
+      SELECT 1 FROM users WHERE primary_role = 'admin' LIMIT 1
+    ` as any[];
+    if (existing.length > 0) return;
 
     const bootstrap = process.env.AFT_ADMIN_BOOTSTRAP_PASSWORD || '';
     const bootstrapEmail = process.env.AFT_ADMIN_BOOTSTRAP_EMAIL || 'admin@aft.gov';
@@ -403,73 +358,68 @@ async function initializeDatabase() {
 
     const hashedPassword = await hashPassword(bootstrap);
 
-    const adminStmt = db.prepare(`
-      INSERT INTO users (email, password, first_name, last_name, primary_role, is_active, organization, phone, must_change_password)
-      VALUES (?, ?, ?, ?, ?, 1, 'System', 'N/A', 1)
-    `);
+    const inserted = await sql`
+      INSERT INTO users
+        (email, password, first_name, last_name, primary_role, is_active,
+         organization, phone, must_change_password)
+      VALUES
+        (${bootstrapEmail}, ${hashedPassword}, 'System', 'Administrator', 'admin',
+         TRUE, 'System', 'N/A', TRUE)
+      RETURNING id
+    ` as any[];
 
-    const result = adminStmt.run(
-      bootstrapEmail,
-      hashedPassword,
-      'System',
-      'Administrator',
-      UserRole.ADMIN
-    ) as any;
+    const adminId = inserted[0]?.id;
+    if (adminId === undefined) {
+      throw new Error('Failed to insert bootstrap admin user');
+    }
 
-    const adminId = result.lastInsertRowid as number;
-
-    db.prepare(`
+    await sql`
       INSERT INTO user_roles (user_id, role, is_active, assigned_by)
-      VALUES (?, ?, 1, ?)
-    `).run(adminId, UserRole.ADMIN, adminId);
+      VALUES (${adminId}, 'admin', TRUE, ${adminId})
+    `;
 
-    // Wipe the bootstrap password from the process environment so it does not
-    // leak via /proc/<pid>/environ or future child processes.
     delete process.env.AFT_ADMIN_BOOTSTRAP_PASSWORD;
 
     console.log(`Created bootstrap admin user (${bootstrapEmail}) - password change required at first login.`);
   } catch (error) {
-    console.error('Database initialization failed:', error);
+    console.error('Bootstrap admin initialization failed:', error);
     throw error;
   }
 }
 
-// Utility functions
+// ---------------------------------------------------------------------------
+// Misc helpers (unchanged in spirit, ported to Postgres)
+// ---------------------------------------------------------------------------
+
 export function generateRequestNumber(): string {
   const timestamp = Date.now().toString(36).toUpperCase();
   const random = Math.random().toString(36).substring(2, 6).toUpperCase();
   return `AFT-${timestamp}-${random}`;
 }
 
-// Get all active roles for a user
-export function getUserRoles(userId: number): Array<{ role: UserRoleType; isPrimary: boolean }> {
-  const db = getDb();
-  
-  // Get user's primary role
-  const user = db.query("SELECT primary_role FROM users WHERE id = ? AND is_active = 1").get(userId) as any;
-  if (!user) return [];
-  
-  // Get all active roles from user_roles table
-  let userRoles = db.query(`
-    SELECT role FROM user_roles 
-    WHERE user_id = ? AND is_active = 1
+export async function getUserRoles(userId: number): Promise<Array<{ role: UserRoleType; isPrimary: boolean }>> {
+  const userRow = await sql`
+    SELECT primary_role FROM users WHERE id = ${userId} AND is_active = TRUE
+  ` as any[];
+  if (userRow.length === 0) return [];
+  const user = userRow[0];
+
+  let userRoles = await sql`
+    SELECT role FROM user_roles
+    WHERE user_id = ${userId} AND is_active = TRUE
     ORDER BY created_at ASC
-  `).all(userId) as Array<{ role: UserRoleType }>;
-  
-  // If user is a Media Custodian, remove the requestor role if it exists
+  ` as Array<{ role: UserRoleType }>;
+
   if (user.primary_role === UserRole.MEDIA_CUSTODIAN) {
     userRoles = userRoles.filter(ur => ur.role !== UserRole.REQUESTOR);
   }
-  
-  // Map to include primary role flag
+
   const rolesWithFlags = userRoles.map(ur => ({
     role: ur.role,
     isPrimary: ur.role === user.primary_role
   }));
-  
-  // Ensure primary role is included if not in user_roles table
+
   if (!rolesWithFlags.some(r => r.isPrimary)) {
-    // If primary role is requestor but user is a Media Custodian, don't add it
     if (!(user.primary_role === UserRole.REQUESTOR && user.primary_role !== UserRole.MEDIA_CUSTODIAN)) {
       rolesWithFlags.unshift({
         role: user.primary_role,
@@ -477,41 +427,43 @@ export function getUserRoles(userId: number): Array<{ role: UserRoleType; isPrim
       });
     }
   }
-  
+
   return rolesWithFlags;
 }
 
+/**
+ * Postgres equivalent of pg_dump → file. Spawns the system `pg_dump` binary
+ * (bundled in the AFT container alongside Postgres). The DATABASE_URL is
+ * passed via env so credentials never appear on the command line.
+ */
 export async function backupDatabase(): Promise<string> {
-  const db = getDb();
   const backupDir = './data/backups';
-
-  // Ensure backup directory exists
-  const fs = await import('node:fs');
   if (!fs.existsSync(backupDir)) {
     fs.mkdirSync(backupDir, { recursive: true });
   }
 
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const backupFileName = `aft-backup-${timestamp}.db`;
+  const backupFileName = `aft-backup-${timestamp}.sql`;
   const backupPath = `${backupDir}/${backupFileName}`;
 
-  // Use the built-in backup method
-  await (db as any).backup(backupPath);
+  const proc = Bun.spawn(['pg_dump', '--format=plain', '--no-owner', '--no-privileges'], {
+    env: { ...process.env, PGURL: DATABASE_URL, DATABASE_URL },
+    stdout: Bun.file(backupPath).writer() as any,
+    stderr: 'pipe'
+  });
 
+  const exitCode = await proc.exited;
+  if (exitCode !== 0) {
+    const stderr = await new Response(proc.stderr).text();
+    throw new Error(`pg_dump failed (exit ${exitCode}): ${stderr}`);
+  }
   return backupPath;
 }
 
-export function runMaintenance() {
-  const db = getDb();
-  
-  // Rebuild the database file, repacking it into a minimal amount of disk space.
-  db.exec("VACUUM;");
-  
-  // Gathers statistics about tables and indices for the query planner.
-  db.exec("ANALYZE;");
+export async function runMaintenance(): Promise<void> {
+  await sql.unsafe('VACUUM (ANALYZE)');
 }
 
-// Get role display information
 export function getRoleDisplayName(role: UserRoleType): string {
   const roleNames = {
     [UserRole.ADMIN]: 'System Administrator',
@@ -526,7 +478,6 @@ export function getRoleDisplayName(role: UserRoleType): string {
   return roleNames[role] || role;
 }
 
-// Get role description
 export function getRoleDescription(role: UserRoleType): string {
   const roleDescriptions = {
     [UserRole.ADMIN]: 'Full system administration and user management',
@@ -541,35 +492,32 @@ export function getRoleDescription(role: UserRoleType): string {
   return roleDescriptions[role] || 'Role-specific access';
 }
 
-// System Settings functions
-export function getSystemSettings(): Record<string, string> {
-  const db = getDb();
-  const settingsList = db.query("SELECT key, value FROM system_settings").all() as { key: string, value: string }[];
-  
+export async function getSystemSettings(): Promise<Record<string, string>> {
+  const settingsList = await sql`SELECT key, value FROM system_settings` as Array<{ key: string; value: string }>;
   return settingsList.reduce((acc, setting) => {
     acc[setting.key] = setting.value;
     return acc;
   }, {} as Record<string, string>);
 }
 
-export function saveSystemSettings(settings: Record<string, string>) {
-  const db = getDb();
-  const stmt = db.prepare(`
-    INSERT INTO system_settings (key, value, updated_at)
-    VALUES (?, ?, unixepoch())
-    ON CONFLICT(key) DO UPDATE SET
-      value = excluded.value,
-      updated_at = unixepoch();
-  `);
-
-  db.transaction(() => {
+export async function saveSystemSettings(settings: Record<string, string>): Promise<void> {
+  await sql.begin(async (tx) => {
     for (const [key, value] of Object.entries(settings)) {
-      stmt.run(key, value);
+      await tx`
+        INSERT INTO system_settings (key, value, updated_at)
+        VALUES (${key}, ${value}, EXTRACT(EPOCH FROM NOW())::BIGINT)
+        ON CONFLICT (key) DO UPDATE
+          SET value = EXCLUDED.value,
+              updated_at = EXCLUDED.updated_at
+      `;
     }
-  })();
+  });
 }
 
+// ---------------------------------------------------------------------------
 // Type definitions
+// ---------------------------------------------------------------------------
+
 export type User = {
   id: number;
   email: string;

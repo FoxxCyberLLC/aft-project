@@ -87,64 +87,50 @@ export class CACServerAuth {
   static async getUserFromCertificate(certificate: CACClientCertificate): Promise<any> {
     const db = getDb();
 
-    this.ensureCertificateTable();
-
     const email = this.extractEmail(certificate.subject);
 
     let user: any = null;
     if (email) {
-      user = db.query(
-        `SELECT * FROM users WHERE email = ? AND is_active = 1`
+      user = await db.query(
+        `SELECT * FROM users WHERE email = ? AND is_active = TRUE`
       ).get(email);
     }
 
     if (!user && certificate.fingerprint) {
-      user = db.query(`
+      user = await db.query(`
         SELECT u.* FROM users u
         JOIN cac_certificates cc ON cc.user_id = u.id
-        WHERE cc.fingerprint = ? AND u.is_active = 1
+        WHERE cc.fingerprint = ? AND u.is_active = TRUE
       `).get(certificate.fingerprint);
     }
 
     if (user) {
       // Bind / refresh the certificate <-> user mapping for future lookups.
-      this.storeCertificate(user.id, certificate);
+      await this.storeCertificate(user.id, certificate);
     }
 
     return user;
   }
 
-  // Lazy-create the cac_certificates table on first use.
-  private static ensureCertificateTable(): void {
+  // Store CAC certificate information. The cac_certificates table is owned
+  // by the schema migration in schema/001_init.sql.
+  static async storeCertificate(userId: number, certificate: CACClientCertificate): Promise<void> {
     const db = getDb();
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS cac_certificates (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER NOT NULL,
-        subject TEXT NOT NULL,
-        issuer TEXT NOT NULL,
-        serial_number TEXT NOT NULL,
-        fingerprint TEXT NOT NULL UNIQUE,
-        valid_from INTEGER NOT NULL,
-        valid_to INTEGER NOT NULL,
-        pem_data TEXT,
-        created_at INTEGER DEFAULT (unixepoch()),
-        updated_at INTEGER DEFAULT (unixepoch()),
-        FOREIGN KEY (user_id) REFERENCES users(id)
-      )
-    `);
-  }
 
-  // Store CAC certificate information.
-  static storeCertificate(userId: number, certificate: CACClientCertificate): void {
-    const db = getDb();
-    this.ensureCertificateTable();
-
-    db.query(`
-      INSERT OR REPLACE INTO cac_certificates (
+    await db.query(`
+      INSERT INTO cac_certificates (
         user_id, subject, issuer, serial_number, fingerprint,
         valid_from, valid_to, pem_data, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, unixepoch())
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, EXTRACT(EPOCH FROM NOW())::BIGINT)
+      ON CONFLICT (fingerprint) DO UPDATE
+        SET user_id      = EXCLUDED.user_id,
+            subject      = EXCLUDED.subject,
+            issuer       = EXCLUDED.issuer,
+            serial_number = EXCLUDED.serial_number,
+            valid_from   = EXCLUDED.valid_from,
+            valid_to     = EXCLUDED.valid_to,
+            pem_data     = EXCLUDED.pem_data,
+            updated_at   = EXTRACT(EPOCH FROM NOW())::BIGINT
     `).run(
       userId,
       certificate.subject,

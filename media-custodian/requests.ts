@@ -14,8 +14,8 @@ export class MediaCustodianRequests {
     const db = getDb();
     
     // Get request statistics for all requests (media custodian sees all)
-    const totalRequests = db.query("SELECT COUNT(*) as count FROM aft_requests").get() as any;
-    const pendingRequests = db.query("SELECT COUNT(*) as count FROM aft_requests WHERE status NOT IN ('completed', 'rejected', 'cancelled')").get() as any;
+    const totalRequests = await db.query("SELECT COUNT(*) as count FROM aft_requests").get() as any;
+    const pendingRequests = await db.query("SELECT COUNT(*) as count FROM aft_requests WHERE status NOT IN ('completed', 'rejected', 'cancelled')").get() as any;
     
     // Get all requests with timeline data
     const requestsWithTimeline = RequestTrackingService.getRequestsWithTimeline({ limit: 100 });
@@ -212,7 +212,7 @@ export class MediaCustodianRequests {
     const db = getDb();
     
     // Get request details with all related information
-    const request = db.query(`
+    const request = await db.query(`
       SELECT r.*, 
              u.email as requestor_email, 
              u.first_name || ' ' || u.last_name as requestor_name,
@@ -295,7 +295,7 @@ export class MediaCustodianRequests {
     const db = getDb();
     
     // Get request details with drive information
-    const request = db.query(`
+    const request = await db.query(`
       SELECT r.*, 
              u.email as requestor_email, 
              u.first_name || ' ' || u.last_name as requestor_name,
@@ -341,7 +341,7 @@ export class MediaCustodianRequests {
     const timeline = RequestTrackingService.getRequestTimeline(requestId);
     
     // Get request history with comments
-    const history = db.query(`
+    const history = await db.query(`
       SELECT * FROM aft_request_history 
       WHERE request_id = ? 
       ORDER BY created_at DESC

@@ -11,8 +11,8 @@ export class CPSOAllRequests {
     const db = getDb();
 
     // Stats (optional but matches format)
-    const totalRequests = db.query("SELECT COUNT(*) as count FROM aft_requests").get() as any;
-    const pendingRequests = db.query("SELECT COUNT(*) as count FROM aft_requests WHERE status NOT IN ('completed', 'rejected', 'cancelled')").get() as any;
+    const totalRequests = await db.query("SELECT COUNT(*) as count FROM aft_requests").get() as any;
+    const pendingRequests = await db.query("SELECT COUNT(*) as count FROM aft_requests WHERE status NOT IN ('completed', 'rejected', 'cancelled')").get() as any;
 
     // Get requests with timeline data (same helper used by admin page)
     const requestsWithTimeline = RequestTrackingService.getRequestsWithTimeline({ limit: 50 });

@@ -30,23 +30,23 @@ export interface RequestTimelineData {
 export class RequestTrackingService {
   
   // Get complete timeline data for a request
-  static getRequestTimeline(requestId: number): RequestTimelineData | null {
+  static async getRequestTimeline(requestId: number): Promise<RequestTimelineData | null> {
     const db = getDb();
-    
+
     // Get request basic info including transfer_type for conditional flow
-    const request = db.query(`
-      SELECT id, status, created_at, updated_at, requestor_name, 
+    const request = await db.query(`
+      SELECT id, status, created_at, updated_at, requestor_name,
              approval_date, actual_start_date, actual_end_date, transfer_type
-      FROM aft_requests 
+      FROM aft_requests
       WHERE id = ?
     `).get(requestId) as any;
-    
+
     if (!request) return null;
-    
+
     // Get audit trail
-    const auditEntries = db.query(`
-      SELECT 
-        al.id, al.request_id, al.user_id, al.action, al.old_status, 
+    const auditEntries = await db.query(`
+      SELECT
+        al.id, al.request_id, al.user_id, al.action, al.old_status,
         al.new_status, al.changes, al.notes, al.created_at,
         u.first_name || ' ' || u.last_name as user_name,
         u.primary_role as user_role
@@ -294,7 +294,7 @@ export class RequestTrackingService {
   }
   
   // Add audit entry for request changes
-  static addAuditEntry(
+  static async addAuditEntry(
     requestId: number,
     userId: number,
     action: string,
@@ -302,48 +302,44 @@ export class RequestTrackingService {
     newStatus?: string,
     changes?: string,
     notes?: string
-  ): void {
+  ): Promise<void> {
     const db = getDb();
-    
-    db.query(`
+
+    await db.query(`
       INSERT INTO aft_audit_log (
         request_id, user_id, action, old_status, new_status, changes, notes
       ) VALUES (?, ?, ?, ?, ?, ?, ?)
     `).run(requestId, userId, action, oldStatus || null, newStatus || null, changes || null, notes || null);
-    
-    // Update request updated_at timestamp
-    db.query(`
-      UPDATE aft_requests 
-      SET updated_at = unixepoch() 
+
+    await db.query(`
+      UPDATE aft_requests
+      SET updated_at = EXTRACT(EPOCH FROM NOW())::BIGINT
       WHERE id = ?
     `).run(requestId);
   }
   
   // Update request status with audit trail
-  static updateRequestStatus(
+  static async updateRequestStatus(
     requestId: number,
     userId: number,
     newStatus: AFTStatusType,
     notes?: string
-  ): boolean {
+  ): Promise<boolean> {
     const db = getDb();
-    
+
     try {
-      // Get current status
-      const request = db.query('SELECT status FROM aft_requests WHERE id = ?').get(requestId) as any;
+      const request = await db.query('SELECT status FROM aft_requests WHERE id = ?').get(requestId) as any;
       if (!request) return false;
-      
+
       const oldStatus = request.status;
-      
-      // Update status
-      db.query(`
-        UPDATE aft_requests 
-        SET status = ?, updated_at = unixepoch() 
+
+      await db.query(`
+        UPDATE aft_requests
+        SET status = ?, updated_at = EXTRACT(EPOCH FROM NOW())::BIGINT
         WHERE id = ?
       `).run(newStatus, requestId);
-      
-      // Add audit entry
-      this.addAuditEntry(
+
+      await this.addAuditEntry(
         requestId,
         userId,
         'status_change',
@@ -352,7 +348,7 @@ export class RequestTrackingService {
         JSON.stringify({ from: oldStatus, to: newStatus }),
         notes
       );
-      
+
       return true;
     } catch (error) {
       console.error('Failed to update request status:', error);
@@ -361,7 +357,7 @@ export class RequestTrackingService {
   }
   
   // Get requests with timeline summary for table display
-  static getRequestsWithTimeline(
+  static async getRequestsWithTimeline(
     filters?: {
       status?: string;
       requestor_id?: number;
@@ -369,7 +365,7 @@ export class RequestTrackingService {
       limit?: number;
       offset?: number;
     }
-  ): Array<any> {
+  ): Promise<Array<any>> {
     const db = getDb();
     
     let query = `
@@ -418,7 +414,7 @@ export class RequestTrackingService {
       }
     }
     
-    const requests = db.query(query).all(...params) as any[];
+    const requests = await db.query(query).all(...params) as any[];
     
     // Add timeline progress for each request
     return requests.map(request => {

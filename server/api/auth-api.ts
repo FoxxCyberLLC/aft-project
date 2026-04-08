@@ -47,7 +47,7 @@ export async function handleAuthAPI(request: Request, path: string, ipAddress: s
         });
       }
 
-      const user = db.query("SELECT id FROM users WHERE email = ? AND is_active = 1").get(email);
+      const user = await db.query("SELECT id FROM users WHERE email = ? AND is_active = TRUE").get(email);
 
       return new Response(JSON.stringify({ exists: !!user }), {
         status: 200,
@@ -99,7 +99,7 @@ export async function handleAuthAPI(request: Request, path: string, ipAddress: s
       });
     }
 
-    const user = db.query("SELECT * FROM users WHERE email = ? AND is_active = 1").get(body.email) as any;
+    const user = await db.query("SELECT * FROM users WHERE email = ? AND is_active = TRUE").get(body.email) as any;
 
     if (!user) {
       recordFailedAttempt(ipAddress + ':' + body.email);
@@ -119,7 +119,7 @@ export async function handleAuthAPI(request: Request, path: string, ipAddress: s
       // Success - reset rate limit and get user roles
       resetRateLimit(ipAddress + ':' + body.email);
 
-      const userRoles = getUserRoles(user.id);
+      const userRoles = await getUserRoles(user.id);
       const availableRoles = userRoles.map(r => r.role);
 
       const session = await createSecureSession(
@@ -211,7 +211,7 @@ export async function handleAuthAPI(request: Request, path: string, ipAddress: s
     const currentPassword = body.currentPassword || '';
     const newPassword = body.newPassword || '';
 
-    const user = db.query("SELECT id, password FROM users WHERE id = ? AND is_active = 1").get(auth.userId) as any;
+    const user = await db.query("SELECT id, password FROM users WHERE id = ? AND is_active = TRUE").get(auth.userId) as any;
     if (!user) {
       return new Response(JSON.stringify({ success: false, message: 'User not found' }), {
         status: 404, headers: { 'Content-Type': 'application/json' }

@@ -7,7 +7,7 @@ export class DTAActiveTransfers {
     const db = getDb();
     
     // Get active transfers
-    const activeTransfers = db.query(`
+    const activeTransfers = await db.query(`
       SELECT 
         id, request_number, requestor_name, requestor_email,
         source_system, source_location, classification,

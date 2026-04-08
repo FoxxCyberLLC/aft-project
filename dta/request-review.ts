@@ -9,7 +9,7 @@ export class DTARequestReviewPage {
     const db = getDb();
     
     // Get request details with complete information
-    const request = db.query(`
+    const request = await db.query(`
       SELECT 
         r.*, 
         u.email as requestor_email,
@@ -35,7 +35,7 @@ export class DTARequestReviewPage {
     }
 
     // Get request history
-    const history = db.query(`
+    const history = await db.query(`
       SELECT * FROM aft_request_history 
       WHERE request_id = ? 
       ORDER BY created_at DESC

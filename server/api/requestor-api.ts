@@ -16,13 +16,13 @@ export async function handleRequestorAPI(request: Request, path: string, ipAddre
     const authResult = await RoleMiddleware.checkAuth(request, ipAddress);
     if (authResult.response) return authResult.response;
     try {
-      const dtas = db.query(`
+      const dtas = await db.query(`
         SELECT DISTINCT u.id, u.email, u.first_name, u.last_name,
           CASE WHEN md.id IS NOT NULL THEN 1 ELSE 0 END as has_drive
         FROM users u
-        JOIN user_roles ur ON ur.user_id = u.id AND ur.is_active = 1
+        JOIN user_roles ur ON ur.user_id = u.id AND ur.is_active = TRUE
         LEFT JOIN media_drives md ON md.issued_to_user_id = u.id AND md.status = 'issued'
-        WHERE u.is_active = 1 AND ur.role = ?
+        WHERE u.is_active = TRUE AND ur.role = ?
         ORDER BY u.last_name, u.first_name
       `).all(UserRole.DTA) as any[];
       return new Response(JSON.stringify(dtas), { headers: { 'Content-Type': 'application/json' } });
@@ -43,7 +43,7 @@ export async function handleRequestorAPI(request: Request, path: string, ipAddre
       if (!dtaId) {
         return new Response(JSON.stringify({ error: 'Invalid DTA ID' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
       }
-      const drive = db.query(`
+      const drive = await db.query(`
         SELECT id, serial_number, media_control_number, type, model, capacity, status, issued_at
         FROM media_drives
         WHERE issued_to_user_id = ? AND status = 'issued'
@@ -91,11 +91,11 @@ export async function handleRequestorAPI(request: Request, path: string, ipAddre
       }
 
       // Helper to ensure uniqueness of request_number
-      const ensureUniqueRequestNumber = (desired: string, excludeId?: number): string => {
+      const ensureUniqueRequestNumber = async (desired: string, excludeId?: number): Promise<string> => {
         let candidate = desired;
         let attempt = 0;
         while (true) {
-          const existing = db.query("SELECT id FROM aft_requests WHERE request_number = ? LIMIT 1").get(candidate) as any;
+          const existing = await db.query("SELECT id FROM aft_requests WHERE request_number = ? LIMIT 1").get(candidate) as any;
           if (!existing || (excludeId && existing.id === excludeId)) {
             return candidate;
           }
@@ -116,7 +116,7 @@ export async function handleRequestorAPI(request: Request, path: string, ipAddre
         requestId = parseInt(requestData.draft_id);
         
         // Check if request is rejected - prevent editing
-        const existingRequest = db.query(`
+        const existingRequest = await db.query(`
           SELECT status FROM aft_requests WHERE id = ? AND requestor_id = ?
         `).get(requestId, authResult.session.userId) as any;
         
@@ -131,12 +131,12 @@ export async function handleRequestorAPI(request: Request, path: string, ipAddre
         }
         
         // If request_number collides with another record, make it unique (excluding this draft id)
-        requestData.media_control_number = ensureUniqueRequestNumber(requestData.media_control_number, requestId);
+        requestData.media_control_number = await ensureUniqueRequestNumber(requestData.media_control_number, requestId);
         
         // Get the drive assigned to the selected DTA
         let selectedDriveId = null;
         if (requestData.dta_id) {
-          const dtaDrive = db.query(`
+          const dtaDrive = await db.query(`
             SELECT id FROM media_drives 
             WHERE issued_to_user_id = ? AND status = 'issued'
             ORDER BY issued_at DESC LIMIT 1
@@ -144,7 +144,7 @@ export async function handleRequestorAPI(request: Request, path: string, ipAddre
           selectedDriveId = dtaDrive?.id || null;
         }
         
-        db.query(`
+        await db.query(`
           UPDATE aft_requests SET
             request_number = ?,
             status = 'draft',
@@ -168,7 +168,7 @@ export async function handleRequestorAPI(request: Request, path: string, ipAddre
             compression_required = ?,
             encryption = ?,
             transfer_data = ?,
-            updated_at = unixepoch()
+            updated_at = EXTRACT(EPOCH FROM NOW())::BIGINT
           WHERE id = ? AND requestor_id = ?
         `).run(
           requestData.media_control_number,
@@ -188,8 +188,8 @@ export async function handleRequestorAPI(request: Request, path: string, ipAddre
           requestData.dest_location || '',
           requestData.destination_poc || '',
           requestData.files || '[]',
-          requestData.additional_file_list_attached ? 1 : 0,
-          requestData.media_encrypted ? 1 : 0,
+          requestData.additional_file_list_attached ? true : false,
+          requestData.media_encrypted ? true : false,
           requestData.media_encrypted ? 'Yes' : 'No',
           transferDataJson,
           requestId,
@@ -198,12 +198,12 @@ export async function handleRequestorAPI(request: Request, path: string, ipAddre
       } else {
         // Create new draft
         // Ensure unique request number
-        requestData.media_control_number = ensureUniqueRequestNumber(requestData.media_control_number);
+        requestData.media_control_number = await ensureUniqueRequestNumber(requestData.media_control_number);
         
         // Get the drive assigned to the selected DTA
         let selectedDriveId = null;
         if (requestData.dta_id) {
-          const dtaDrive = db.query(`
+          const dtaDrive = await db.query(`
             SELECT id FROM media_drives 
             WHERE issued_to_user_id = ? AND status = 'issued'
             ORDER BY issued_at DESC LIMIT 1
@@ -211,13 +211,13 @@ export async function handleRequestorAPI(request: Request, path: string, ipAddre
           selectedDriveId = dtaDrive?.id || null;
         }
         
-        const result = db.query(`
+        const result = await db.query(`
           INSERT INTO aft_requests (
             request_number, status, requestor_id, requestor_name, requestor_org, requestor_phone, requestor_email,
             transfer_purpose, transfer_type, classification, data_description, source_system, source_location,
             dta_id, selected_drive_id, dest_system, dest_location, dest_contact, files_list, additional_file_list_attached,
             compression_required, encryption, transfer_data, created_at, updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, unixepoch(), unixepoch())
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, EXTRACT(EPOCH FROM NOW())::BIGINT, EXTRACT(EPOCH FROM NOW())::BIGINT)
         `).run(
           requestData.media_control_number,
           'draft',
@@ -238,8 +238,8 @@ export async function handleRequestorAPI(request: Request, path: string, ipAddre
           requestData.dest_location || '',
           requestData.destination_poc || '',
           requestData.files || '[]',
-          requestData.additional_file_list_attached ? 1 : 0,
-          requestData.media_encrypted ? 1 : 0,
+          requestData.additional_file_list_attached ? true : false,
+          requestData.media_encrypted ? true : false,
           requestData.media_encrypted ? 'Yes' : 'No',
           transferDataJson
         ) as any;
@@ -249,7 +249,7 @@ export async function handleRequestorAPI(request: Request, path: string, ipAddre
 
       // Send notification if DTA was selected
       if (requestData.dta_id) {
-        const dtaUser = db.query(`
+        const dtaUser = await db.query(`
           SELECT email, first_name, last_name
           FROM users
           WHERE id = ?
@@ -322,7 +322,7 @@ export async function handleRequestorAPI(request: Request, path: string, ipAddre
       }
       
       // Verify the request belongs to this user and is in a submittable status
-      const existingRequest = db.query(`
+      const existingRequest = await db.query(`
         SELECT id, status, request_number, transfer_type FROM aft_requests 
         WHERE id = ? AND requestor_id = ?
       `).get(requestId, authResult.session.userId) as any;
@@ -442,11 +442,11 @@ export async function handleRequestorAPI(request: Request, path: string, ipAddre
         }
 
         // Store manual signature record
-        db.query(`
+        await db.query(`
           INSERT INTO manual_signatures (
             request_id, signer_id, signer_email, signature_text,
             certification_statement, signature_timestamp, ip_address, created_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, unixepoch())
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, EXTRACT(EPOCH FROM NOW())::BIGINT)
         `).run(
           requestId,
           authResult.session.userId,
@@ -459,13 +459,13 @@ export async function handleRequestorAPI(request: Request, path: string, ipAddre
       }
 
       // Update request status
-      db.query(`
+      await db.query(`
         UPDATE aft_requests SET
           status = ?,
           rejection_reason = NULL,
-          updated_at = unixepoch(),
+          updated_at = EXTRACT(EPOCH FROM NOW())::BIGINT,
           signature_method = ?,
-          submitted_at = unixepoch()
+          submitted_at = EXTRACT(EPOCH FROM NOW())::BIGINT
         WHERE id = ?
       `).run(nextStatus, signatureMethod, requestId);
 
@@ -486,9 +486,9 @@ export async function handleRequestorAPI(request: Request, path: string, ipAddre
         : 'Request submitted with manual signature';
       
       try {
-        db.query(`
+        await db.query(`
           INSERT INTO aft_request_history (request_id, action, user_email, notes, created_at)
-          VALUES (?, 'SUBMITTED', ?, ?, unixepoch())
+          VALUES (?, 'SUBMITTED', ?, ?, EXTRACT(EPOCH FROM NOW())::BIGINT)
         `).run(requestId, authResult.session.email, historyNote);
       } catch {}
 

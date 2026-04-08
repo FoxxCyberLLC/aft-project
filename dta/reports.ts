@@ -10,18 +10,18 @@ export class DTAReports {
     
     // Get DTA-specific report data
     const transferStats = {
-      total: db.query("SELECT COUNT(*) as count FROM aft_requests WHERE status IN ('active_transfer', 'completed', 'disposed')").get() as any,
-      active: db.query("SELECT COUNT(*) as count FROM aft_requests WHERE status = 'active_transfer'").get() as any,
-      completed: db.query("SELECT COUNT(*) as count FROM aft_requests WHERE status = 'completed'").get() as any
+      total: await db.query("SELECT COUNT(*) as count FROM aft_requests WHERE status IN ('active_transfer', 'completed', 'disposed')").get() as any,
+      active: await db.query("SELECT COUNT(*) as count FROM aft_requests WHERE status = 'active_transfer'").get() as any,
+      completed: await db.query("SELECT COUNT(*) as count FROM aft_requests WHERE status = 'completed'").get() as any
     };
 
     const performanceStats = {
-      avgTransferTime: db.query(`
+      avgTransferTime: await db.query(`
         SELECT AVG(actual_end_date - actual_start_date) as avg_time 
         FROM aft_requests 
         WHERE actual_start_date IS NOT NULL AND actual_end_date IS NOT NULL
       `).get() as any,
-      successRate: db.query(`
+      successRate: await db.query(`
         SELECT 
           ROUND((COUNT(CASE WHEN status = 'completed' THEN 1 END) * 100.0 / COUNT(*)), 1) as success_rate
         FROM aft_requests 
@@ -30,14 +30,14 @@ export class DTAReports {
     };
 
     const securityStats = {
-      threatsDetected: db.query(`
+      threatsDetected: await db.query(`
         SELECT SUM(COALESCE(origination_threats_found, 0) + COALESCE(destination_threats_found, 0)) as total_threats
         FROM aft_requests
-        WHERE origination_scan_performed = 1 OR destination_scan_performed = 1
+        WHERE origination_scan_performed = TRUE OR destination_scan_performed = TRUE
       `).get() as any,
-      scansPerformed: db.query(`
+      scansPerformed: await db.query(`
         SELECT COUNT(*) as count FROM aft_requests 
-        WHERE origination_scan_performed = 1 OR destination_scan_performed = 1
+        WHERE origination_scan_performed = TRUE OR destination_scan_performed = TRUE
       `).get() as any
     };
 

@@ -9,7 +9,7 @@ export class CPSOApprovedRequestsPage {
     const db = getDb();
     
     // Get all requests approved by this CPSO (status is 'pending_dta' after CPSO approval)
-    const approvedRequests = db.query(`
+    const approvedRequests = await db.query(`
       SELECT
         r.*,
         u.email as requestor_email,

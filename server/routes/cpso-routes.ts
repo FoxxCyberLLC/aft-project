@@ -25,7 +25,7 @@ export async function handleCPSORoutes(request: Request, path: string, ipAddress
   
   // Get user details from database
   const db = getDb();
-  const userDetails = db.query("SELECT first_name, last_name FROM users WHERE id = ?").get(authResult.session.userId) as any;
+  const userDetails = await db.query("SELECT first_name, last_name FROM users WHERE id = ?").get(authResult.session.userId) as any;
   
   const user = { 
     id: authResult.session.userId,

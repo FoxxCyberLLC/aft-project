@@ -10,13 +10,13 @@ export class AdminUsers {
     const db = getDb();
     
     // Get all users with their role information
-    const users = db.query(`
+    const users = await db.query(`
       SELECT 
         u.*,
         COUNT(ur.id) as role_count,
         GROUP_CONCAT(ur.role) as roles
       FROM users u
-      LEFT JOIN user_roles ur ON u.id = ur.user_id AND ur.is_active = 1
+      LEFT JOIN user_roles ur ON u.id = ur.user_id AND ur.is_active = TRUE
       GROUP BY u.id
       ORDER BY u.created_at DESC
     `).all() as any[];

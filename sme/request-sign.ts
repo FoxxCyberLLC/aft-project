@@ -11,7 +11,7 @@ export class SMERequestSignPage {
     const db = getDb();
     
     // Get comprehensive request details including DTA data
-    const request = db.query(`
+    const request = await db.query(`
       SELECT 
         r.*, 
         u.email as requestor_email,
@@ -35,7 +35,7 @@ export class SMERequestSignPage {
     }
 
     // Get request history
-    const history = db.query(`
+    const history = await db.query(`
       SELECT * FROM aft_request_history 
       WHERE request_id = ? 
       ORDER BY created_at DESC

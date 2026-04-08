@@ -36,7 +36,7 @@ export async function handleRoleSelectionPage(request: Request, ipAddress: strin
   }
   
   // Get user details
-  const user = db.query("SELECT first_name, last_name FROM users WHERE id = ?").get(auth.userId) as any;
+  const user = await db.query("SELECT first_name, last_name FROM users WHERE id = ?").get(auth.userId) as any;
   const userName = user ? `${user.first_name} ${user.last_name}` : auth.email;
   
   // Map available roles to UserRole objects

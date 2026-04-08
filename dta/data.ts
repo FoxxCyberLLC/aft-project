@@ -8,9 +8,9 @@ export class DTADataManagement {
     const db = getDb();
     
     // Get actual DTA transfer history and scan data for this specific DTA
-    const transferHistory = this.getTransferHistory(db, userId);
-    const scanStatistics = this.getScanStatistics(db, userId);
-    const recentTransfers = this.getRecentDTATransfers(db, userId);
+    const transferHistory = await this.getTransferHistory(db, userId);
+    const scanStatistics = await this.getScanStatistics(db, userId);
+    const recentTransfers = await this.getRecentDTATransfers(db, userId);
 
     // Build Section 4 tracking cards
     const transferHistoryCard = Templates.adminCard({
@@ -87,7 +87,7 @@ export class DTADataManagement {
     );
   }
 
-  private static getTransferHistory(db: any, userId?: number) {
+  private static async getTransferHistory(db: any, userId?: number) {
     // Get actual DTA transfer statistics with file and data size accumulation
     const baseQuery = userId ?
       `SELECT
@@ -105,7 +105,7 @@ export class DTADataManagement {
       FROM aft_requests
       WHERE status IN ('active_transfer', 'pending_sme_signature', 'pending_media_custodian', 'completed', 'disposed')`;
 
-    const stats = userId ? db.query(baseQuery).get(userId) : db.query(baseQuery).get() as any;
+    const stats = userId ? await db.query(baseQuery).get(userId) : await db.query(baseQuery).get() as any;
 
     return {
       totalTransfers: stats?.total_transfers || 0,
@@ -115,25 +115,25 @@ export class DTADataManagement {
     };
   }
 
-  private static getScanStatistics(db: any, userId?: number) {
+  private static async getScanStatistics(db: any, userId?: number) {
     // Get actual anti-virus scan statistics from Section 4 data
     const baseQuery = userId ?
       `SELECT
-        COUNT(CASE WHEN origination_scan_performed = 1 THEN 1 END) as origination_scans,
-        COUNT(CASE WHEN destination_scan_performed = 1 THEN 1 END) as destination_scans,
+        COUNT(CASE WHEN origination_scan_performed = TRUE THEN 1 END) as origination_scans,
+        COUNT(CASE WHEN destination_scan_performed = TRUE THEN 1 END) as destination_scans,
         SUM(COALESCE(origination_threats_found, 0) + COALESCE(destination_threats_found, 0)) as total_threats,
         SUM(COALESCE(origination_files_scanned, 0) + COALESCE(destination_files_scanned, 0)) as total_files_scanned
       FROM aft_requests
       WHERE dta_id = ? AND status IN ('active_transfer', 'pending_sme_signature', 'pending_media_custodian', 'completed', 'disposed')` :
       `SELECT
-        COUNT(CASE WHEN origination_scan_performed = 1 THEN 1 END) as origination_scans,
-        COUNT(CASE WHEN destination_scan_performed = 1 THEN 1 END) as destination_scans,
+        COUNT(CASE WHEN origination_scan_performed = TRUE THEN 1 END) as origination_scans,
+        COUNT(CASE WHEN destination_scan_performed = TRUE THEN 1 END) as destination_scans,
         SUM(COALESCE(origination_threats_found, 0) + COALESCE(destination_threats_found, 0)) as total_threats,
         SUM(COALESCE(origination_files_scanned, 0) + COALESCE(destination_files_scanned, 0)) as total_files_scanned
       FROM aft_requests
       WHERE status IN ('active_transfer', 'pending_sme_signature', 'pending_media_custodian', 'completed', 'disposed')`;
 
-    const scanStats = userId ? db.query(baseQuery).get(userId) : db.query(baseQuery).get() as any;
+    const scanStats = userId ? await db.query(baseQuery).get(userId) : await db.query(baseQuery).get() as any;
 
     return {
       totalScans: (scanStats?.origination_scans || 0) + (scanStats?.destination_scans || 0),
@@ -144,7 +144,7 @@ export class DTADataManagement {
     };
   }
 
-  private static getRecentDTATransfers(db: any, userId?: number) {
+  private static async getRecentDTATransfers(db: any, userId?: number) {
     // Get recent transfers that DTA has handled
     const baseQuery = userId ?
       `SELECT
@@ -192,7 +192,7 @@ export class DTADataManagement {
       ORDER BY r.updated_at DESC
       LIMIT 20`;
 
-    return userId ? db.query(baseQuery).all(userId) : db.query(baseQuery).all() as any[];
+    return userId ? await db.query(baseQuery).all(userId) : await db.query(baseQuery).all() as any[];
   }
 
   private static buildTransferTrackingTable(transfers: any[]): string {

@@ -88,7 +88,7 @@ class EmailService {
 
       this.db.query(`
         INSERT INTO notification_log (recipient, subject, status, message_id, created_at)
-        VALUES (?, ?, 'sent', ?, unixepoch())
+        VALUES (?, ?, 'sent', ?, EXTRACT(EPOCH FROM NOW())::BIGINT)
       `).run(to, subject, result.messageId);
 
       return true;
@@ -97,7 +97,7 @@ class EmailService {
 
       this.db.query(`
         INSERT INTO notification_log (recipient, subject, status, error, created_at)
-        VALUES (?, ?, 'failed', ?, unixepoch())
+        VALUES (?, ?, 'failed', ?, EXTRACT(EPOCH FROM NOW())::BIGINT)
       `).run(to, subject, String(error));
 
       return false;
@@ -346,11 +346,11 @@ export async function getNextApproverEmails(status: string): Promise<string[]> {
   const role = roleMap[status];
   if (!role) return [];
 
-  const users = db.query(`
+  const users = await db.query(`
     SELECT DISTINCT u.email
     FROM users u
     JOIN user_roles ur ON ur.user_id = u.id
-    WHERE ur.role = ? AND ur.is_active = 1 AND u.is_active = 1
+    WHERE ur.role = ? AND ur.is_active = TRUE AND u.is_active = TRUE
   `).all(role) as any[];
 
   return users.map(u => u.email);

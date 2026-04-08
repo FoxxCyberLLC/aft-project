@@ -9,7 +9,7 @@ export class PendingApprovalsPage {
     const db = getDb();
     
     // Get requests pending approval by ISSM (approver role)
-    const pendingRequests = db.query(`
+    const pendingRequests = await db.query(`
       SELECT 
         r.*,
         u.email as requestor_email,

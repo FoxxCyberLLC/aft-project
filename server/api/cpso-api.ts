@@ -29,14 +29,14 @@ export async function handleCPSOAPI(request: Request, path: string, ipAddress: s
     // GET endpoints
     if (method === 'GET') {
       if (apiPath === 'pending-count') {
-        const result = db.query("SELECT COUNT(*) as count FROM aft_requests WHERE status = 'pending_cpso'").get() as any;
+        const result = await db.query("SELECT COUNT(*) as count FROM aft_requests WHERE status = 'pending_cpso'").get() as any;
         return new Response(JSON.stringify({ count: result?.count || 0 }), {
           headers: { 'Content-Type': 'application/json' }
         });
       }
       
       if (apiPath === 'export/approved') {
-        const requests = db.query(`
+        const requests = await db.query(`
           SELECT * FROM aft_requests 
           WHERE status = 'approved' AND approver_email = ?
           ORDER BY updated_at DESC
@@ -211,19 +211,19 @@ export async function handleCPSOAPI(request: Request, path: string, ipAddress: s
 
         // Update request status to approved (final approval), but only if it
         // is currently pending_cpso. Verify the row count to detect races.
-        const result = db.prepare(`
+        const result = await db.prepare(`
           UPDATE aft_requests
           SET status = 'approved',
               approver_email = ?,
               approver_id = (SELECT id FROM users WHERE email = ?),
-              updated_at = unixepoch(),
+              updated_at = EXTRACT(EPOCH FROM NOW())::BIGINT,
               approval_notes = ?,
               rejection_reason = NULL
           WHERE id = ? AND status = 'pending_cpso'
         `).run(session.email, session.email, notes || null, requestId);
 
         if (result.changes === 0) {
-          const current = db.query('SELECT status FROM aft_requests WHERE id = ?').get(requestId) as any;
+          const current = await db.query('SELECT status FROM aft_requests WHERE id = ?').get(requestId) as any;
           const errorMessage = current
             ? `This request is in "${current.status}" status and cannot be approved by CPSO.`
             : 'Request not found.';
@@ -234,9 +234,9 @@ export async function handleCPSOAPI(request: Request, path: string, ipAddress: s
         }
 
         // Add to history
-        db.prepare(`
+        await db.prepare(`
           INSERT INTO aft_request_history (request_id, action, user_email, notes, created_at)
-          VALUES (?, 'CPSO_APPROVED', ?, ?, unixepoch())
+          VALUES (?, 'CPSO_APPROVED', ?, ?, EXTRACT(EPOCH FROM NOW())::BIGINT)
         `).run(requestId, session.email, notes || 'Request approved by CPSO - Final approval');
 
         // Log the action
@@ -269,19 +269,19 @@ export async function handleCPSOAPI(request: Request, path: string, ipAddress: s
           });
         }
 
-        const result = db.prepare(`
+        const result = await db.prepare(`
           UPDATE aft_requests
           SET status = 'rejected',
               approver_email = ?,
               approver_id = (SELECT id FROM users WHERE email = ?),
-              updated_at = unixepoch(),
+              updated_at = EXTRACT(EPOCH FROM NOW())::BIGINT,
               rejection_reason = ?,
               approval_notes = ?
           WHERE id = ? AND status = 'pending_cpso'
         `).run(session.email, session.email, reason, notes || null, requestId);
 
         if (result.changes === 0) {
-          const current = db.query('SELECT status FROM aft_requests WHERE id = ?').get(requestId) as any;
+          const current = await db.query('SELECT status FROM aft_requests WHERE id = ?').get(requestId) as any;
           const errorMessage = current
             ? `This request is in "${current.status}" status and cannot be rejected by CPSO.`
             : 'Request not found.';
@@ -292,9 +292,9 @@ export async function handleCPSOAPI(request: Request, path: string, ipAddress: s
         }
 
         // Add to history
-        db.prepare(`
+        await db.prepare(`
           INSERT INTO aft_request_history (request_id, action, user_email, notes, created_at)
-          VALUES (?, 'CPSO_REJECTED', ?, ?, unixepoch())
+          VALUES (?, 'CPSO_REJECTED', ?, ?, EXTRACT(EPOCH FROM NOW())::BIGINT)
         `).run(requestId, session.email, `Reason: ${reason}. ${notes || ''}`);
 
         // Log the action
@@ -315,18 +315,18 @@ export async function handleCPSOAPI(request: Request, path: string, ipAddress: s
       if (apiPath === 'reports/generate') {
         const { type }: { type: 'monthly' | 'quarterly' | 'annual' } = body;
 
-        // r.updated_at is stored as unixepoch (seconds), so use unixepoch()
+        // r.updated_at is stored as unixepoch (seconds), so use EXTRACT(EPOCH FROM NOW())::BIGINT
         // arithmetic instead of comparing against date() text.
         let dateFilter = '';
         switch(type) {
           case 'monthly':
-            dateFilter = `AND r.updated_at >= unixepoch('now', '-1 month')`;
+            dateFilter = `AND r.updated_at >= EXTRACT(EPOCH FROM NOW() - INTERVAL '1 month')::BIGINT`;
             break;
           case 'quarterly':
-            dateFilter = `AND r.updated_at >= unixepoch('now', '-3 months')`;
+            dateFilter = `AND r.updated_at >= EXTRACT(EPOCH FROM NOW() - INTERVAL '3 months')::BIGINT`;
             break;
           case 'annual':
-            dateFilter = `AND r.updated_at >= unixepoch('now', '-1 year')`;
+            dateFilter = `AND r.updated_at >= EXTRACT(EPOCH FROM NOW() - INTERVAL '1 year')::BIGINT`;
             break;
         }
         
@@ -335,7 +335,7 @@ export async function handleCPSOAPI(request: Request, path: string, ipAddress: s
         // approval through the shared approver_email column when status moved
         // out of pending_cpso, and the action timestamp lives in updated_at
         // (and in aft_request_history for audit). Filter on those.
-        const reportData = db.query(`
+        const reportData = await db.query(`
           SELECT
             r.*,
             u.first_name || ' ' || u.last_name as requestor_name,

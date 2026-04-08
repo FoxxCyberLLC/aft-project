@@ -8,23 +8,23 @@ export class ApproverDashboard {
     const db = getDb();
 
     // Approver-centric metrics
-    const pendingCount = db.query(`
+    const pendingCount = await db.query(`
       SELECT COUNT(*) as count FROM aft_requests 
       WHERE status NOT IN ('approved','rejected','completed','cancelled','draft')
     `).get() as any;
 
-    const approved7d = db.query(`
+    const approved7d = await db.query(`
       SELECT COUNT(*) as count FROM aft_requests 
-      WHERE status = 'approved' AND updated_at >= (unixepoch() - 7*24*60*60)
+      WHERE status = 'approved' AND updated_at >= (EXTRACT(EPOCH FROM NOW())::BIGINT - 7*24*60*60)
     `).get() as any;
 
-    const rejected7d = db.query(`
+    const rejected7d = await db.query(`
       SELECT COUNT(*) as count FROM aft_requests 
-      WHERE status = 'rejected' AND updated_at >= (unixepoch() - 7*24*60*60)
+      WHERE status = 'rejected' AND updated_at >= (EXTRACT(EPOCH FROM NOW())::BIGINT - 7*24*60*60)
     `).get() as any;
 
     // Pending queue
-    const pendingQueue = db.query(`
+    const pendingQueue = await db.query(`
       SELECT r.id, r.request_number, r.requestor_id, r.transfer_type, r.classification, r.status, r.created_at, r.updated_at,
              u.first_name || ' ' || u.last_name as requestor_name,
              u.email as requestor_email
@@ -36,7 +36,7 @@ export class ApproverDashboard {
     `).all() as any[];
 
     // Recently approved
-    const recentApproved = db.query(`
+    const recentApproved = await db.query(`
       SELECT r.id, r.request_number, r.transfer_type, r.classification, r.updated_at
       FROM aft_requests r
       WHERE r.status = 'approved'

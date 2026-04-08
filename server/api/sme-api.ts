@@ -50,7 +50,7 @@ export async function handleSMEAPI(request: Request, path: string, ipAddress: st
 
 async function getRequestDetails(requestId: number): Promise<Response> {
   const db = getDb();
-  const requestData = db.query("SELECT * FROM aft_requests WHERE id = ?").get(requestId);
+  const requestData = await db.query("SELECT * FROM aft_requests WHERE id = ?").get(requestId);
 
   if (!requestData) {
     return new Response(JSON.stringify({ success: false, error: 'Request not found' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
@@ -66,7 +66,7 @@ async function signRequest(requestId: number, smeEmail: string, smeUserId: numbe
     const body = await request.json() as { notes?: string };
     const { notes } = body;
 
-    const requestData = db.query("SELECT * FROM aft_requests WHERE id = ?").get(requestId) as any;
+    const requestData = await db.query("SELECT * FROM aft_requests WHERE id = ?").get(requestId) as any;
 
     if (!requestData) {
       return new Response(JSON.stringify({ success: false, error: 'Request not found' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
@@ -76,20 +76,20 @@ async function signRequest(requestId: number, smeEmail: string, smeUserId: numbe
       return new Response(JSON.stringify({ success: false, error: `Request is not pending SME signature. Current status: ${requestData.status}` }), { status: 400, headers: { 'Content-Type': 'application/json' } });
     }
 
-    db.transaction(() => {
+    await db.transaction(() => {
       // Update request status to forward to media custodian
       db.run(`
         UPDATE aft_requests 
         SET status = 'pending_media_custodian', 
-            sme_signature_date = unixepoch(),
-            updated_at = unixepoch() 
+            sme_signature_date = EXTRACT(EPOCH FROM NOW())::BIGINT,
+            updated_at = EXTRACT(EPOCH FROM NOW())::BIGINT 
         WHERE id = ?
       `, [requestId]);
 
       // Add to request history
       db.run(`
         INSERT INTO aft_request_history (request_id, action, user_email, notes, created_at)
-        VALUES (?, 'SME_SIGNED', ?, ?, unixepoch())
+        VALUES (?, 'SME_SIGNED', ?, ?, EXTRACT(EPOCH FROM NOW())::BIGINT)
       `, [requestId, smeEmail, `SME signature provided. Two-Person Integrity check completed. ${notes || ''}`]);
 
       RequestTrackingService.addAuditEntry(
@@ -124,7 +124,7 @@ async function signRequestWithCAC(requestId: number, smeEmail: string, smeUserId
     };
     const { signature, certificate, timestamp, algorithm, notes } = body;
 
-    const requestData = db.query("SELECT * FROM aft_requests WHERE id = ?").get(requestId) as any;
+    const requestData = await db.query("SELECT * FROM aft_requests WHERE id = ?").get(requestId) as any;
 
     if (!requestData) {
       return new Response(JSON.stringify({ success: false, error: 'Request not found' }), { status: 404, headers: { 'Content-Type': 'application/json' } });

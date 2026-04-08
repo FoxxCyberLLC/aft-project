@@ -8,12 +8,12 @@ export class MediaCustodianDashboard {
     const db = getDb();
     
     // Get media custodian's statistics
-    const allRequests = db.query("SELECT COUNT(*) as count FROM aft_requests").get() as any;
-    const pendingRequests = db.query(`
+    const allRequests = await db.query("SELECT COUNT(*) as count FROM aft_requests").get() as any;
+    const pendingRequests = await db.query(`
       SELECT COUNT(*) as count FROM aft_requests 
       WHERE status IN ('submitted', 'pending_dao', 'pending_approver', 'pending_cpso')
     `).get() as any;
-    const recentRequests = db.query(`
+    const recentRequests = await db.query(`
       SELECT * FROM aft_requests 
       ORDER BY created_at DESC 
       LIMIT 5
