@@ -1,6 +1,7 @@
 // Admin User Management Interface
 import { ComponentBuilder } from "../components/ui/server-components";
 import { getDb, UserRole, type UserRoleType, getUserRoles, getRoleDisplayName } from "../lib/database-bun";
+import { escapeHtml } from "../lib/formatters";
 import { AdminNavigation, type AdminUser } from "./admin-nav";
 
 export class AdminUsers {
@@ -9,13 +10,13 @@ export class AdminUsers {
     const db = getDb();
     
     // Get all users with their role information
-    const users = db.query(`
+    const users = await db.query(`
       SELECT 
         u.*,
         COUNT(ur.id) as role_count,
         GROUP_CONCAT(ur.role) as roles
       FROM users u
-      LEFT JOIN user_roles ur ON u.id = ur.user_id AND ur.is_active = 1
+      LEFT JOIN user_roles ur ON u.id = ur.user_id AND ur.is_active = TRUE
       GROUP BY u.id
       ORDER BY u.created_at DESC
     `).all() as any[];
@@ -33,15 +34,17 @@ export class AdminUsers {
       created_at: dbUser.created_at
     }));
 
-    // Define table columns
+    // Define table columns. Every database value below is escaped via
+    // escapeHtml because users can choose their own first/last name, email,
+    // organization, etc - those values must not be trusted as raw HTML.
     const columns = [
       {
         key: 'name',
         label: 'User',
         render: (value: any, row: any) => `
           <div>
-            <div class="font-medium text-[var(--foreground)]">${row.name}</div>
-            <div class="text-sm text-[var(--muted-foreground)]">${row.email}</div>
+            <div class="font-medium text-[var(--foreground)]">${escapeHtml(row.name)}</div>
+            <div class="text-sm text-[var(--muted-foreground)]">${escapeHtml(row.email)}</div>
           </div>
         `
       },
@@ -50,8 +53,8 @@ export class AdminUsers {
         label: 'Organization',
         render: (value: any, row: any) => `
           <div>
-            <div class="text-sm">${row.organization}</div>
-            <div class="text-xs text-[var(--muted-foreground)]">${row.phone}</div>
+            <div class="text-sm">${escapeHtml(row.organization)}</div>
+            <div class="text-xs text-[var(--muted-foreground)]">${escapeHtml(row.phone)}</div>
           </div>
         `
       },
@@ -60,8 +63,8 @@ export class AdminUsers {
         label: 'Primary Role',
         render: (value: any, row: any) => `
           <div>
-            <div class="text-sm font-medium text-[var(--primary)]">${getRoleDisplayName(row.primary_role)}</div>
-            <div class="text-xs text-[var(--muted-foreground)]">+${row.role_count - 1} additional</div>
+            <div class="text-sm font-medium text-[var(--primary)]">${escapeHtml(getRoleDisplayName(row.primary_role))}</div>
+            <div class="text-xs text-[var(--muted-foreground)]">+${Math.max(0, (row.role_count || 1) - 1)} additional</div>
           </div>
         `
       },

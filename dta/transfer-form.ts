@@ -11,7 +11,7 @@ export class DTATransferForm {
     const db = getDb();
     
     // Get request details
-    const request = db.query(`
+    const request = await db.query(`
       SELECT 
         id, request_number, requestor_name, requestor_email,
         source_system, source_location, dest_system, dest_location,
@@ -29,11 +29,11 @@ export class DTATransferForm {
     }
 
     // Get available SME users
-    const smeUsers = db.query(`
+    const smeUsers = await db.query(`
       SELECT DISTINCT u.id, u.email, u.first_name, u.last_name
       FROM users u
       JOIN user_roles ur ON u.id = ur.user_id
-      WHERE ur.role = 'sme' AND u.is_active = 1
+      WHERE ur.role = 'sme' AND u.is_active = TRUE
       ORDER BY u.last_name, u.first_name
     `).all() as any[];
 

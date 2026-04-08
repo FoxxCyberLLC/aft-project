@@ -10,7 +10,7 @@ export class RequestorRequests {
     const db = getDb();
     
     // Get user's requests
-    const userRequests = db.query(`
+    const userRequests = await db.query(`
       SELECT r.*, u.email as approver_email
       FROM aft_requests r
       LEFT JOIN users u ON r.approver_id = u.id

@@ -78,82 +78,59 @@ export class CACServerAuth {
     return now >= certificate.validFrom && now <= certificate.validTo;
   }
 
-  // Get or create user from CAC certificate
+  // Get or create user from CAC certificate.
+  //
+  // The users table does NOT have a dedicated dod_id column. We match by
+  // email (extracted from the certificate) and, as a fallback, by the
+  // fingerprint stored in the cac_certificates table. We refuse to auto-
+  // create users from a CAC alone - admins must provision the account first.
   static async getUserFromCertificate(certificate: CACClientCertificate): Promise<any> {
     const db = getDb();
-    
-    const dodId = this.extractDODID(certificate.subject);
-    const email = this.extractEmail(certificate.subject);
-    const subject = this.parseSubject(certificate.subject);
-    const commonName = subject.CN || '';
 
-    // Try to find existing user by DOD ID first, then by certificate fingerprint
-    let user = null;
-    
-    if (dodId) {
-      user = db.query(`
-        SELECT * FROM users WHERE dod_id = ? OR email = ?
-      `).get(dodId, email) as any;
+    const email = this.extractEmail(certificate.subject);
+
+    let user: any = null;
+    if (email) {
+      user = await db.query(
+        `SELECT * FROM users WHERE email = ? AND is_active = TRUE`
+      ).get(email);
     }
 
     if (!user && certificate.fingerprint) {
-      user = db.query(`
+      user = await db.query(`
         SELECT u.* FROM users u
         JOIN cac_certificates cc ON cc.user_id = u.id
-        WHERE cc.fingerprint = ?
-      `).get(certificate.fingerprint) as any;
+        WHERE cc.fingerprint = ? AND u.is_active = TRUE
+      `).get(certificate.fingerprint);
     }
 
-    // Create new user if not found
-    if (!user && dodId && email) {
-      const nameParts = commonName.split('.');
-      const lastName = nameParts[0] || 'Unknown';
-      const firstName = nameParts[1] || 'Unknown';
-
-      const userId = db.query(`
-        INSERT INTO users (
-          email, first_name, last_name, is_active, dod_id, 
-          created_at, updated_at
-        ) VALUES (?, ?, ?, 1, ?, unixepoch(), unixepoch())
-      `).run(email, firstName, lastName, dodId).lastInsertRowid as number;
-
-      user = db.query(`SELECT * FROM users WHERE id = ?`).get(userId) as any;
-
-      // Store certificate information
-      this.storeCertificate(userId, certificate);
+    if (user) {
+      // Bind / refresh the certificate <-> user mapping for future lookups.
+      await this.storeCertificate(user.id, certificate);
     }
 
     return user;
   }
 
-  // Store CAC certificate information
-  static storeCertificate(userId: number, certificate: CACClientCertificate): void {
+  // Store CAC certificate information. The cac_certificates table is owned
+  // by the schema migration in schema/001_init.sql.
+  static async storeCertificate(userId: number, certificate: CACClientCertificate): Promise<void> {
     const db = getDb();
 
-    // Create CAC certificates table if not exists
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS cac_certificates (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER NOT NULL,
-        subject TEXT NOT NULL,
-        issuer TEXT NOT NULL,
-        serial_number TEXT NOT NULL,
-        fingerprint TEXT NOT NULL UNIQUE,
-        valid_from INTEGER NOT NULL,
-        valid_to INTEGER NOT NULL,
-        pem_data TEXT,
-        created_at INTEGER DEFAULT (unixepoch()),
-        updated_at INTEGER DEFAULT (unixepoch()),
-        FOREIGN KEY (user_id) REFERENCES users(id)
-      )
-    `);
-
-    // Insert or update certificate
-    db.query(`
-      INSERT OR REPLACE INTO cac_certificates (
+    await db.query(`
+      INSERT INTO cac_certificates (
         user_id, subject, issuer, serial_number, fingerprint,
         valid_from, valid_to, pem_data, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, unixepoch())
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, EXTRACT(EPOCH FROM NOW())::BIGINT)
+      ON CONFLICT (fingerprint) DO UPDATE
+        SET user_id      = EXCLUDED.user_id,
+            subject      = EXCLUDED.subject,
+            issuer       = EXCLUDED.issuer,
+            serial_number = EXCLUDED.serial_number,
+            valid_from   = EXCLUDED.valid_from,
+            valid_to     = EXCLUDED.valid_to,
+            pem_data     = EXCLUDED.pem_data,
+            updated_at   = EXTRACT(EPOCH FROM NOW())::BIGINT
     `).run(
       userId,
       certificate.subject,

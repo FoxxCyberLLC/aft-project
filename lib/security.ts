@@ -18,9 +18,26 @@ export const SECURITY_CONFIG = {
   LOCKOUT_DURATION: 15 * 60 * 1000, // 15 minutes
   
   // Security headers
+  //
+  // CSP notes:
+  // - Inline <script> blocks have been retained ('unsafe-inline') because most
+  //   role pages still ship one large inline script per page. Migrate them to
+  //   external files served from /lib/ (see static-handler) and remove
+  //   'unsafe-inline' once that work is done.
+  // - 'unsafe-inline' for styles is required by Tailwind utility classes set
+  //   via `style="..."` in some templates.
+  // - The Tailwind CDN was removed; the project ships its own globals.css.
   SECURITY_HEADERS: {
     'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
-    'Content-Security-Policy': "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com",
+    'Content-Security-Policy':
+      "default-src 'self'; " +
+      "style-src 'self' 'unsafe-inline'; " +
+      "script-src 'self' 'unsafe-inline'; " +
+      "img-src 'self' data:; " +
+      "connect-src 'self'; " +
+      "frame-ancestors 'none'; " +
+      "base-uri 'self'; " +
+      "form-action 'self'",
     'X-Frame-Options': 'DENY',
     'X-Content-Type-Options': 'nosniff',
     'Referrer-Policy': 'strict-origin-when-cross-origin',
@@ -60,35 +77,16 @@ const rateLimitStore = new Map<string, { attempts: number; lastAttempt: number; 
 // Session store - we'll implement database persistence
 const sessionStore = new Map<string, SecureSession>();
 
-// Initialize session table
-function initializeSessionStore() {
+// Initialize session store. The `sessions` table is created by the schema
+// migration in schema/001_init.sql; here we just rehydrate the in-memory
+// store from any rows still marked active.
+async function initializeSessionStore() {
   const db = getDb();
-  
-  // Create sessions table if it doesn't exist
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS sessions (
-      session_id TEXT PRIMARY KEY,
-      user_id INTEGER NOT NULL,
-      email TEXT NOT NULL,
-      primary_role TEXT NOT NULL,
-      active_role TEXT,
-      available_roles TEXT NOT NULL,
-      created_at INTEGER NOT NULL,
-      last_activity INTEGER NOT NULL,
-      ip_address TEXT,
-      user_agent TEXT,
-      csrf_token TEXT NOT NULL,
-      is_active BOOLEAN DEFAULT 1,
-      role_selected BOOLEAN DEFAULT 0,
-      FOREIGN KEY (user_id) REFERENCES users(id)
-    )
-  `);
-  
-  // Load existing sessions from database into memory store
-  const existingSessions = db.query(`
-    SELECT * FROM sessions WHERE is_active = 1
+
+  const existingSessions = await db.query(`
+    SELECT * FROM sessions WHERE is_active = TRUE
   `).all() as any[];
-  
+
   existingSessions.forEach(row => {
     const session: SecureSession = {
       sessionId: row.session_id,
@@ -96,9 +94,11 @@ function initializeSessionStore() {
       email: row.email,
       primaryRole: row.primary_role,
       activeRole: row.active_role,
-      availableRoles: JSON.parse(row.available_roles),
-      createdAt: row.created_at,
-      lastActivity: row.last_activity,
+      availableRoles: typeof row.available_roles === 'string'
+        ? JSON.parse(row.available_roles)
+        : row.available_roles,
+      createdAt: Number(row.created_at),
+      lastActivity: Number(row.last_activity),
       ipAddress: row.ip_address,
       userAgent: row.user_agent,
       csrfToken: row.csrf_token,
@@ -107,8 +107,8 @@ function initializeSessionStore() {
     };
     sessionStore.set(session.sessionId, session);
   });
-  
-  console.log(`🔄 Loaded ${existingSessions.length} existing sessions from database`);
+
+  console.log(`Loaded ${existingSessions.length} existing sessions from database`);
 }
 
 // Generate cryptographically secure random string
@@ -116,30 +116,6 @@ export function generateSecureToken(length: number = 32): string {
   const bytes = new Uint8Array(length);
   crypto.getRandomValues(bytes);
   return Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
-}
-
-// Encrypt session data (in production, use proper key management)
-export async function encryptSessionData(data: any): Promise<string> {
-  // For demonstration - in production use proper encryption with managed keys
-  const encoder = new TextEncoder();
-  const dataBytes = encoder.encode(JSON.stringify(data));
-  
-  // Generate a random key (in production, use proper key derivation)
-  const key = await crypto.subtle.generateKey(
-    { name: 'AES-GCM', length: 256 },
-    true,
-    ['encrypt', 'decrypt']
-  );
-  
-  const iv = crypto.getRandomValues(new Uint8Array(12));
-  const encrypted = await crypto.subtle.encrypt(
-    { name: 'AES-GCM', iv },
-    key,
-    dataBytes
-  );
-  
-  // In production, securely store the key and return just the encrypted data + IV
-  return btoa(String.fromCharCode(...new Uint8Array(encrypted)));
 }
 
 // Create secure session
@@ -178,16 +154,16 @@ export async function createSecureSession(
   
   // Save to database
   const db = getDb();
-  db.query(`
+  await db.query(`
     INSERT INTO sessions (
-      session_id, user_id, email, primary_role, active_role, 
-      available_roles, created_at, last_activity, ip_address, 
+      session_id, user_id, email, primary_role, active_role,
+      available_roles, created_at, last_activity, ip_address,
       user_agent, csrf_token, is_active, role_selected
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     sessionId, userId, email, primaryRole, session.activeRole || null,
     JSON.stringify(availableRoles), now, now, ipAddress,
-    userAgent, csrfToken, 1, 0
+    userAgent, csrfToken, true, false
   );
   
   // Log session creation
@@ -223,9 +199,9 @@ export async function selectSessionRole(
   
   // Update database
   const db = getDb();
-  db.query(`
-    UPDATE sessions 
-    SET active_role = ?, role_selected = 1, last_activity = ? 
+  await db.query(`
+    UPDATE sessions
+    SET active_role = ?, role_selected = TRUE, last_activity = ?
     WHERE session_id = ?
   `).run(role, session.lastActivity, sessionId);
   
@@ -263,7 +239,7 @@ export async function switchSessionRole(
   
   // Update database
   const db = getDb();
-  db.query(`
+  await db.query(`
     UPDATE sessions 
     SET active_role = ?, last_activity = ? 
     WHERE session_id = ?
@@ -277,56 +253,59 @@ export async function switchSessionRole(
 
 // Validate session
 export async function validateSession(
-  sessionId: string, 
-  ipAddress: string, 
+  sessionId: string,
+  ipAddress: string,
   userAgent: string
 ): Promise<SecureSession | null> {
   const session = sessionStore.get(sessionId);
-  
+
   if (!session || !session.isActive) {
     return null;
   }
-  
+
   const now = Date.now();
-  
+
   // Check session timeout
   if (now - session.lastActivity > SECURITY_CONFIG.SESSION_TIMEOUT) {
     await destroySession(sessionId, 'SESSION_TIMEOUT');
     return null;
   }
-  
+
   // Check max session duration
   if (now - session.createdAt > SECURITY_CONFIG.MAX_SESSION_DURATION) {
     await destroySession(sessionId, 'MAX_DURATION_EXCEEDED');
     return null;
   }
-  
-  // Verify IP and User Agent (optional - can be made configurable)
+
+  // Bind sessions to the originating IP. A mismatch is treated as session
+  // theft and the session is destroyed.
   if (session.ipAddress !== ipAddress) {
-    await auditLog(session.userId, 'SUSPICIOUS_IP_CHANGE', 
-      `IP changed from ${session.ipAddress} to ${ipAddress}`, ipAddress);
-    // In high-security mode, you might want to invalidate the session here
+    await auditLog(session.userId, 'SESSION_IP_MISMATCH',
+      `IP changed from ${session.ipAddress} to ${ipAddress}; destroying session`, ipAddress);
+    await destroySession(sessionId, 'IP_MISMATCH');
+    return null;
   }
-  
-  // Optional: Verify User Agent for additional security
+
+  // Bind sessions to the originating user-agent. A change is suspicious; we
+  // log it but do not destroy the session by default to avoid breaking
+  // clients that legitimately update their UA mid-session.
   if (session.userAgent !== userAgent) {
-    await auditLog(session.userId, 'SUSPICIOUS_USER_AGENT_CHANGE', 
+    await auditLog(session.userId, 'SUSPICIOUS_USER_AGENT_CHANGE',
       `User agent changed for session`, ipAddress);
-    // Could invalidate session for stricter security if needed
   }
-  
+
   // Update last activity
   session.lastActivity = now;
   sessionStore.set(sessionId, session);
-  
+
   // Update database
   const db = getDb();
-  db.query(`
-    UPDATE sessions 
-    SET last_activity = ? 
+  await db.query(`
+    UPDATE sessions
+    SET last_activity = ?
     WHERE session_id = ?
   `).run(now, sessionId);
-  
+
   return session;
 }
 
@@ -337,16 +316,16 @@ export async function destroySession(sessionId: string, reason: string = 'USER_L
   if (session) {
     session.isActive = false;
     sessionStore.delete(sessionId);
-    
+
     // Update database
     const db = getDb();
-    db.query(`
-      UPDATE sessions 
-      SET is_active = 0 
+    await db.query(`
+      UPDATE sessions
+      SET is_active = FALSE
       WHERE session_id = ?
     `).run(sessionId);
-    
-    await auditLog(session.userId, 'SESSION_DESTROYED', 
+
+    await auditLog(session.userId, 'SESSION_DESTROYED',
       `Session destroyed: ${reason}`, session.ipAddress);
   }
 }
@@ -449,63 +428,76 @@ export function validatePasswordPolicy(password: string): { valid: boolean; erro
   return { valid: errors.length === 0, errors };
 }
 
-// Audit logging
+// Audit logging. The security_audit_log table is created by the schema
+// migration in schema/001_init.sql.
 export async function auditLog(
-  userId: number | null, 
-  action: string, 
-  description: string, 
+  userId: number | null,
+  action: string,
+  description: string,
   ipAddress: string,
   additionalData?: any
 ): Promise<void> {
   const db = getDb();
-  
+
   try {
-    // Create audit log table if it doesn't exist
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS security_audit_log (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER,
-        action TEXT NOT NULL,
-        description TEXT NOT NULL,
-        ip_address TEXT,
-        user_agent TEXT,
-        additional_data TEXT,
-        timestamp INTEGER DEFAULT (unixepoch()),
-        FOREIGN KEY (user_id) REFERENCES users(id)
-      )
-    `);
-    
-    db.query(`
-      INSERT INTO security_audit_log 
+    await db.query(`
+      INSERT INTO security_audit_log
       (user_id, action, description, ip_address, additional_data)
       VALUES (?, ?, ?, ?, ?)
     `).run(
-      userId, 
-      action, 
-      description, 
-      ipAddress, 
+      userId,
+      action,
+      description,
+      ipAddress,
       additionalData ? JSON.stringify(additionalData) : null
     );
-    
+
     console.log(`[AUDIT] ${action}: ${description} (User: ${userId}, IP: ${ipAddress})`);
   } catch (error) {
     console.error('Failed to write audit log:', error);
-    // In production, this should be handled more robustly
   }
 }
 
 // Generate secure cookie options
+//
+// Cookies are always Secure unless AFT_ALLOW_INSECURE_COOKIES=1 is set in the
+// environment. The previous behaviour relied on NODE_ENV (which defaults to
+// undefined and therefore disabled the Secure flag); the new default is safe
+// and explicit.
 export function getSecureCookieOptions(maxAge?: number) {
-  // Detect if we're in development (localhost) or production
-  const isProduction = process.env.NODE_ENV === 'production';
-  
+  const allowInsecure = process.env.AFT_ALLOW_INSECURE_COOKIES === '1';
   return {
     httpOnly: true,
-    secure: isProduction, // Only require HTTPS in production
+    secure: !allowInsecure,
     sameSite: 'strict' as const,
-    maxAge: maxAge || SECURITY_CONFIG.MAX_SESSION_DURATION / 1000, // Use max duration, not timeout
+    maxAge: maxAge || SECURITY_CONFIG.MAX_SESSION_DURATION / 1000,
     path: '/'
   };
+}
+
+function cookieSecureFlag(): string {
+  return process.env.AFT_ALLOW_INSECURE_COOKIES === '1' ? '' : ' Secure;';
+}
+
+// Build the HttpOnly session cookie. Never readable from JavaScript.
+export function buildSessionCookie(sessionId: string): string {
+  const opts = getSecureCookieOptions();
+  return `session=${sessionId}; HttpOnly;${cookieSecureFlag()} SameSite=Strict; Path=/; Max-Age=${opts.maxAge}`;
+}
+
+// Build the CSRF cookie. NOT HttpOnly so client JS can read it and echo it
+// back via the X-CSRF-Token header (the double-submit cookie pattern).
+export function buildCsrfCookie(csrfToken: string): string {
+  const opts = getSecureCookieOptions();
+  return `csrf=${csrfToken};${cookieSecureFlag()} SameSite=Strict; Path=/; Max-Age=${opts.maxAge}`;
+}
+
+// Build a cookie header string that clears both cookies on logout.
+export function buildClearAuthCookies(): string[] {
+  return [
+    `session=; HttpOnly;${cookieSecureFlag()} SameSite=Strict; Path=/; Max-Age=0`,
+    `csrf=;${cookieSecureFlag()} SameSite=Strict; Path=/; Max-Age=0`
+  ];
 }
 
 // Apply security headers to response
@@ -524,47 +516,48 @@ export function applySecurityHeaders(response: Response): Response {
 }
 
 // Clean up expired sessions (should be run periodically)
-export function cleanupExpiredSessions(): number {
+export async function cleanupExpiredSessions(): Promise<number> {
   const now = Date.now();
   let cleanedCount = 0;
-  
+
   const db = getDb();
-  
-  // Clean up expired sessions from memory and database
+
   for (const [sessionId, session] of sessionStore.entries()) {
     if (now - session.lastActivity > SECURITY_CONFIG.SESSION_TIMEOUT ||
         now - session.createdAt > SECURITY_CONFIG.MAX_SESSION_DURATION) {
       sessionStore.delete(sessionId);
-      
-      // Mark as inactive in database
-      db.query(`
-        UPDATE sessions 
-        SET is_active = 0 
+
+      await db.query(`
+        UPDATE sessions
+        SET is_active = FALSE
         WHERE session_id = ?
       `).run(sessionId);
-      
+
       cleanedCount++;
     }
   }
-  
+
   return cleanedCount;
 }
 
 // Initialize security module
-export function initializeSecurity(): void {
-  console.log('🔒 Security module initialized');
-  console.log(`📋 Password policy: Min ${SECURITY_CONFIG.PASSWORD_MIN_LENGTH} chars, complexity required`);
-  console.log(`⏰ Session timeout: ${SECURITY_CONFIG.SESSION_TIMEOUT / 1000 / 60} minutes`);
-  console.log(`🚫 Max login attempts: ${SECURITY_CONFIG.MAX_LOGIN_ATTEMPTS}`);
-  
-  // Initialize session persistence
-  initializeSessionStore();
-  
+export async function initializeSecurity(): Promise<void> {
+  console.log('Security module initialized');
+  console.log(`Password policy: Min ${SECURITY_CONFIG.PASSWORD_MIN_LENGTH} chars, complexity required`);
+  console.log(`Session timeout: ${SECURITY_CONFIG.SESSION_TIMEOUT / 1000 / 60} minutes`);
+  console.log(`Max login attempts: ${SECURITY_CONFIG.MAX_LOGIN_ATTEMPTS}`);
+
+  await initializeSessionStore();
+
   // Set up periodic cleanup
-  setInterval(() => {
-    const cleaned = cleanupExpiredSessions();
-    if (cleaned > 0) {
-      console.log(`🧹 Cleaned up ${cleaned} expired sessions`);
+  setInterval(async () => {
+    try {
+      const cleaned = await cleanupExpiredSessions();
+      if (cleaned > 0) {
+        console.log(`Cleaned up ${cleaned} expired sessions`);
+      }
+    } catch (err) {
+      console.error('Failed to clean expired sessions:', err);
     }
-  }, 5 * 60 * 1000); // Every 5 minutes
+  }, 5 * 60 * 1000);
 }

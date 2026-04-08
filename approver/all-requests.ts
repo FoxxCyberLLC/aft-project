@@ -11,19 +11,19 @@ export class ApproverAllRequests {
     const db = getDb();
 
     // Stats (optional but matches format)
-    const totalRequests = db.query("SELECT COUNT(*) as count FROM aft_requests").get() as any;
-    const pendingRequests = db.query("SELECT COUNT(*) as count FROM aft_requests WHERE status NOT IN ('completed', 'rejected', 'cancelled')").get() as any;
+    const totalRequests = await db.query("SELECT COUNT(*) as count FROM aft_requests").get() as any;
+    const pendingRequests = await db.query("SELECT COUNT(*) as count FROM aft_requests WHERE status NOT IN ('completed', 'rejected', 'cancelled')").get() as any;
 
     // Get requests with timeline data and additional details
-    const requestsWithTimeline = RequestTrackingService.getRequestsWithTimeline({ limit: 50 });
+    const requestsWithTimeline = await RequestTrackingService.getRequestsWithTimeline({ limit: 50 });
 
     // Enhance with DTA and drive information
-    const tableData = requestsWithTimeline.map((request: any) => {
+    const tableData = await Promise.all(requestsWithTimeline.map(async (request: any) => {
       // Get DTA information
       let dtaInfo = null;
       if (request.dta_id) {
-        dtaInfo = db.query(`
-          SELECT u.first_name, u.last_name, u.email 
+        dtaInfo = await db.query(`
+          SELECT u.first_name, u.last_name, u.email
           FROM users u WHERE u.id = ?
         `).get(request.dta_id) as any;
       }
@@ -31,8 +31,8 @@ export class ApproverAllRequests {
       // Get drive information
       let driveInfo = null;
       if (request.selected_drive_id) {
-        driveInfo = db.query(`
-          SELECT serial_number, media_control_number, type, model, status 
+        driveInfo = await db.query(`
+          SELECT serial_number, media_control_number, type, model, status
           FROM media_drives WHERE id = ?
         `).get(request.selected_drive_id) as any;
       }
@@ -54,7 +54,7 @@ export class ApproverAllRequests {
         source_system: request.source_system,
         dest_system: request.dest_system
       };
-    });
+    }));
 
     const columns = [
       {

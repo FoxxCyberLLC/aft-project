@@ -5,6 +5,7 @@ import { UserRole } from "../../lib/database-bun";
 import { auditLog } from "../../lib/security";
 import { CACSignatureManager, type CACSignatureData } from "../../lib/cac-signature";
 import { emailService, getNextApproverEmails } from "../../lib/email-service";
+import { escapeHtml, escapeCsv } from "../../lib/formatters";
 
 export async function handleApproverAPI(request: Request, path: string, ipAddress: string): Promise<Response> {
   // Check authentication and APPROVER role (ISSM only)
@@ -14,6 +15,9 @@ export async function handleApproverAPI(request: Request, path: string, ipAddres
   if (activeRole !== UserRole.APPROVER) {
     return RoleMiddleware.accessDenied(`This API requires APPROVER (ISSM) role. Your current role is ${activeRole?.toUpperCase()}.`);
   }
+  // CSRF protection for unsafe methods
+  const csrfFail = RoleMiddleware.verifyCsrf(request, authResult.session);
+  if (csrfFail) return csrfFail;
 
   const db = getDb();
   const method = request.method;
@@ -27,14 +31,14 @@ export async function handleApproverAPI(request: Request, path: string, ipAddres
     if (method === 'GET') {
       if (apiPath === 'pending-count') {
         // Only count requests pending ISSM approval, not CPSO
-        const result = db.query("SELECT COUNT(*) as count FROM aft_requests WHERE status IN ('pending_approver', 'submitted')").get() as any;
+        const result = await db.query("SELECT COUNT(*) as count FROM aft_requests WHERE status IN ('pending_approver', 'submitted')").get() as any;
         return new Response(JSON.stringify({ count: result?.count || 0 }), {
           headers: { 'Content-Type': 'application/json' }
         });
       }
       
       if (apiPath === 'export/approved') {
-        const requests = db.query(`
+        const requests = await db.query(`
           SELECT * FROM aft_requests 
           WHERE status = 'approved' AND approver_email = ?
           ORDER BY updated_at DESC
@@ -187,10 +191,10 @@ export async function handleApproverAPI(request: Request, path: string, ipAddres
           'REQUEST_APPROVED_CAC',
           `Approved request #${requestId} with CAC signature`,
           ipAddress,
-          'info'
+          { requestId }
         );
-        
-        return new Response(JSON.stringify({ 
+
+        return new Response(JSON.stringify({
           success: true, 
           message: 'Request approved with CAC signature' 
         }), {
@@ -213,12 +217,12 @@ export async function handleApproverAPI(request: Request, path: string, ipAddres
         // Only allow approval if request is in the correct pending state for ISSM
         const allowedStatuses = ['pending_approver', 'submitted', 'pending_approval'];
         
-        const result = db.prepare(`
+        const result = await db.prepare(`
           UPDATE aft_requests 
           SET status = ?, 
               approver_email = ?,
               approver_id = (SELECT id FROM users WHERE email = ?),
-              updated_at = unixepoch(),
+              updated_at = EXTRACT(EPOCH FROM NOW())::BIGINT,
               approval_notes = ?,
               rejection_reason = NULL
           WHERE id = ? AND status IN (${allowedStatuses.map(() => '?').join(',')})
@@ -226,7 +230,7 @@ export async function handleApproverAPI(request: Request, path: string, ipAddres
         
         // Check if the update actually affected any rows (prevents double approval)
         if (result.changes === 0) {
-          const currentRequest = db.query('SELECT status FROM aft_requests WHERE id = ?').get(requestId) as any;
+          const currentRequest = await db.query('SELECT status FROM aft_requests WHERE id = ?').get(requestId) as any;
           let errorMessage = 'This request cannot be approved at this time.';
           
           if (currentRequest) {
@@ -258,7 +262,7 @@ export async function handleApproverAPI(request: Request, path: string, ipAddres
         }
         
         // Get request details for notification
-        const requestData = db.query(`
+        const requestData = await db.query(`
           SELECT request_number, requestor_email, transfer_type, classification
           FROM aft_requests WHERE id = ?
         `).get(requestId) as any;
@@ -266,9 +270,9 @@ export async function handleApproverAPI(request: Request, path: string, ipAddres
         // Add to history (ISSM approval)
         const historyAction = 'ISSM_APPROVED';
         const historyNotes = notes || 'Request approved by ISSM - Forwarded to CPSO';
-        db.prepare(`
+        await db.prepare(`
           INSERT INTO aft_request_history (request_id, action, user_email, notes, created_at)
-          VALUES (?, ?, ?, ?, unixepoch())
+          VALUES (?, ?, ?, ?, EXTRACT(EPOCH FROM NOW())::BIGINT)
         `).run(requestId, historyAction, session.email, historyNotes);
 
         // Notify CPSO approvers
@@ -299,9 +303,9 @@ export async function handleApproverAPI(request: Request, path: string, ipAddres
           'REQUEST_APPROVED',
           `Approved request #${requestId}`,
           ipAddress,
-          'info'
+          { requestId }
         );
-        
+
         return new Response(JSON.stringify({ success: true }), {
           headers: { 'Content-Type': 'application/json' }
         });
@@ -327,12 +331,12 @@ export async function handleApproverAPI(request: Request, path: string, ipAddres
         // Only allow rejection if request is in the correct pending state for ISSM
         const allowedStatuses = ['pending_approver', 'submitted', 'pending_approval'];
         
-        const result = db.prepare(`
+        const result = await db.prepare(`
           UPDATE aft_requests 
           SET status = 'rejected',
               approver_email = ?,
               approver_id = (SELECT id FROM users WHERE email = ?),
-              updated_at = unixepoch(),
+              updated_at = EXTRACT(EPOCH FROM NOW())::BIGINT,
               rejection_reason = ?,
               approval_notes = ?
           WHERE id = ? AND status IN (${allowedStatuses.map(() => '?').join(',')})
@@ -340,7 +344,7 @@ export async function handleApproverAPI(request: Request, path: string, ipAddres
         
         // Check if the update actually affected any rows
         if (result.changes === 0) {
-          const currentRequest = db.query('SELECT status FROM aft_requests WHERE id = ?').get(requestId) as any;
+          const currentRequest = await db.query('SELECT status FROM aft_requests WHERE id = ?').get(requestId) as any;
           let errorMessage = 'This request cannot be rejected at this time.';
           
           if (currentRequest) {
@@ -372,15 +376,15 @@ export async function handleApproverAPI(request: Request, path: string, ipAddres
         }
         
         // Get request details for notification
-        const requestData = db.query(`
+        const requestData = await db.query(`
           SELECT request_number, requestor_email, transfer_type, classification
           FROM aft_requests WHERE id = ?
         `).get(requestId) as any;
 
         // Add to history
-        db.prepare(`
+        await db.prepare(`
           INSERT INTO aft_request_history (request_id, action, user_email, notes, created_at)
-          VALUES (?, 'REJECTED', ?, ?, unixepoch())
+          VALUES (?, 'REJECTED', ?, ?, EXTRACT(EPOCH FROM NOW())::BIGINT)
         `).run(requestId, session.email, `Reason: ${reason}. ${notes || ''}`);
 
         // Notify requestor of rejection
@@ -402,9 +406,9 @@ export async function handleApproverAPI(request: Request, path: string, ipAddres
           'REQUEST_REJECTED',
           `Rejected request #${requestId}: ${reason}`,
           ipAddress,
-          'info'
+          { requestId, reason }
         );
-        
+
         return new Response(JSON.stringify({ success: true }), {
           headers: { 'Content-Type': 'application/json' }
         });
@@ -413,23 +417,22 @@ export async function handleApproverAPI(request: Request, path: string, ipAddres
       // Generate reports
       if (apiPath === 'reports/generate') {
         const { type }: { type: 'monthly' | 'quarterly' | 'annual' } = body;
-        
+
+        // r.updated_at is unixepoch (seconds); compare as unix epoch.
         let dateFilter = '';
-        const now = new Date();
-        
         switch(type) {
           case 'monthly':
-            dateFilter = `AND updated_at >= date('now', '-1 month')`;
+            dateFilter = `AND r.updated_at >= EXTRACT(EPOCH FROM NOW() - INTERVAL '1 month')::BIGINT`;
             break;
           case 'quarterly':
-            dateFilter = `AND updated_at >= date('now', '-3 months')`;
+            dateFilter = `AND r.updated_at >= EXTRACT(EPOCH FROM NOW() - INTERVAL '3 months')::BIGINT`;
             break;
           case 'annual':
-            dateFilter = `AND updated_at >= date('now', '-1 year')`;
+            dateFilter = `AND r.updated_at >= EXTRACT(EPOCH FROM NOW() - INTERVAL '1 year')::BIGINT`;
             break;
         }
         
-        const reportData = db.query(`
+        const reportData = await db.query(`
           SELECT 
             r.*,
             u.first_name || ' ' || u.last_name as requestor_name,
@@ -478,16 +481,16 @@ function generateCSV(requests: any[]): string {
   const rows = requests.map(r => [
     r.id,
     r.source_system,
-    r.destination_system,
+    r.dest_system,
     r.classification || 'UNCLASSIFIED',
     r.requestor_email,
-    new Date(r.updated_at).toLocaleDateString(),
+    r.updated_at ? new Date(r.updated_at * 1000).toLocaleDateString() : '',
     r.status
   ]);
-  
+
   return [
-    headers.join(','),
-    ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+    headers.map(escapeCsv).join(','),
+    ...rows.map(row => row.map(escapeCsv).join(','))
   ].join('\n');
 }
 
@@ -503,12 +506,12 @@ function generatePrintableReport(requests: any[], type: string, approverEmail: s
 
   const tableRows = requests.map(r => `
     <tr>
-        <td>${r.id}</td>
-        <td>${new Date(r.created_at).toLocaleDateString()}</td>
-        <td>${new Date(r.updated_at).toLocaleDateString()}</td>
-        <td>${r.status}</td>
-        <td>${r.source_system} -> ${r.destination_system}</td>
-        <td>${r.requestor_name || r.requestor_email}</td>
+        <td>${escapeHtml(r.id)}</td>
+        <td>${escapeHtml(r.created_at ? new Date(r.created_at * 1000).toLocaleDateString() : '')}</td>
+        <td>${escapeHtml(r.updated_at ? new Date(r.updated_at * 1000).toLocaleDateString() : '')}</td>
+        <td>${escapeHtml(r.status)}</td>
+        <td>${escapeHtml(r.source_system)} -&gt; ${escapeHtml(r.dest_system)}</td>
+        <td>${escapeHtml(r.requestor_name || r.requestor_email)}</td>
     </tr>
   `).join('');
 
@@ -542,9 +545,9 @@ function generatePrintableReport(requests: any[], type: string, approverEmail: s
     </head>
     <body>
         <div class="header">
-            <h1>${reportTitle}</h1>
-            <p><strong>Approver:</strong> ${approverEmail}</p>
-            <p><strong>Generated on:</strong> ${generatedDate}</p>
+            <h1>${escapeHtml(reportTitle)}</h1>
+            <p><strong>Approver:</strong> ${escapeHtml(approverEmail)}</p>
+            <p><strong>Generated on:</strong> ${escapeHtml(generatedDate)}</p>
         </div>
 
         <h2>Summary</h2>

@@ -10,32 +10,32 @@ export class MediaCustodianReports {
     
     // Get media custodian-specific report data
     const mediaStats = {
-      totalRequests: db.query("SELECT COUNT(*) as count FROM aft_requests WHERE status IN ('pending_media_custody', 'media_transfer_active', 'media_transfer_complete')").get() as any,
-      pendingCustody: db.query("SELECT COUNT(*) as count FROM aft_requests WHERE status = 'pending_media_custody'").get() as any,
-      activeTransfers: db.query("SELECT COUNT(*) as count FROM aft_requests WHERE status = 'media_transfer_active'").get() as any,
-      completed: db.query("SELECT COUNT(*) as count FROM aft_requests WHERE status = 'media_transfer_complete'").get() as any
+      totalRequests: await db.query("SELECT COUNT(*) as count FROM aft_requests WHERE status IN ('pending_media_custody', 'media_transfer_active', 'media_transfer_complete')").get() as any,
+      pendingCustody: await db.query("SELECT COUNT(*) as count FROM aft_requests WHERE status = 'pending_media_custody'").get() as any,
+      activeTransfers: await db.query("SELECT COUNT(*) as count FROM aft_requests WHERE status = 'media_transfer_active'").get() as any,
+      completed: await db.query("SELECT COUNT(*) as count FROM aft_requests WHERE status = 'media_transfer_complete'").get() as any
     };
 
     const driveStats = {
-      totalDrives: db.query("SELECT COUNT(*) as count FROM media_drives").get() as any,
-      availableDrives: db.query("SELECT COUNT(*) as count FROM media_drives WHERE status = 'available'").get() as any,
-      issuedDrives: db.query("SELECT COUNT(*) as count FROM media_drives WHERE status = 'issued'").get() as any,
-      disposedDrives: db.query("SELECT COUNT(*) as count FROM media_drives WHERE status = 'disposed'").get() as any
+      totalDrives: await db.query("SELECT COUNT(*) as count FROM media_drives").get() as any,
+      availableDrives: await db.query("SELECT COUNT(*) as count FROM media_drives WHERE status = 'available'").get() as any,
+      issuedDrives: await db.query("SELECT COUNT(*) as count FROM media_drives WHERE status = 'issued'").get() as any,
+      disposedDrives: await db.query("SELECT COUNT(*) as count FROM media_drives WHERE status = 'disposed'").get() as any
     };
 
     const securityStats = {
-      threatsDetected: db.query(`
+      threatsDetected: await db.query(`
         SELECT SUM(COALESCE(origination_threats_found, 0) + COALESCE(destination_threats_found, 0)) as total_threats
         FROM aft_requests
-        WHERE origination_scan_performed = 1 OR destination_scan_performed = 1
+        WHERE origination_scan_performed = TRUE OR destination_scan_performed = TRUE
       `).get() as any,
-      scansPerformed: db.query(`
+      scansPerformed: await db.query(`
         SELECT COUNT(*) as count FROM aft_requests 
-        WHERE origination_scan_performed = 1 OR destination_scan_performed = 1
+        WHERE origination_scan_performed = TRUE OR destination_scan_performed = TRUE
       `).get() as any,
-      cleanTransfers: db.query(`
+      cleanTransfers: await db.query(`
         SELECT COUNT(*) as count FROM aft_requests 
-        WHERE (origination_scan_performed = 1 OR destination_scan_performed = 1)
+        WHERE (origination_scan_performed = TRUE OR destination_scan_performed = TRUE)
         AND COALESCE(origination_threats_found, 0) = 0 
         AND COALESCE(destination_threats_found, 0) = 0
       `).get() as any

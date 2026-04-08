@@ -1,5 +1,6 @@
 import { SMTPClient } from './smtp-client';
 import { getDb } from './database-bun';
+import { escapeHtml } from './formatters';
 
 interface EmailConfig {
   host: string;
@@ -87,7 +88,7 @@ class EmailService {
 
       this.db.query(`
         INSERT INTO notification_log (recipient, subject, status, message_id, created_at)
-        VALUES (?, ?, 'sent', ?, unixepoch())
+        VALUES (?, ?, 'sent', ?, EXTRACT(EPOCH FROM NOW())::BIGINT)
       `).run(to, subject, result.messageId);
 
       return true;
@@ -96,7 +97,7 @@ class EmailService {
 
       this.db.query(`
         INSERT INTO notification_log (recipient, subject, status, error, created_at)
-        VALUES (?, ?, 'failed', ?, unixepoch())
+        VALUES (?, ?, 'failed', ?, EXTRACT(EPOCH FROM NOW())::BIGINT)
       `).run(to, subject, String(error));
 
       return false;
@@ -113,19 +114,19 @@ class EmailService {
         <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
           <tr>
             <td style="padding: 8px; border: 1px solid #ddd; background: #f5f5f5;"><strong>Request Number:</strong></td>
-            <td style="padding: 8px; border: 1px solid #ddd;">${data.requestNumber}</td>
+            <td style="padding: 8px; border: 1px solid #ddd;">${escapeHtml(data.requestNumber)}</td>
           </tr>
           <tr>
             <td style="padding: 8px; border: 1px solid #ddd; background: #f5f5f5;"><strong>Requestor:</strong></td>
-            <td style="padding: 8px; border: 1px solid #ddd;">${data.requestorName}</td>
+            <td style="padding: 8px; border: 1px solid #ddd;">${escapeHtml(data.requestorName)}</td>
           </tr>
           <tr>
             <td style="padding: 8px; border: 1px solid #ddd; background: #f5f5f5;"><strong>Transfer Type:</strong></td>
-            <td style="padding: 8px; border: 1px solid #ddd;">${data.transferType}</td>
+            <td style="padding: 8px; border: 1px solid #ddd;">${escapeHtml(data.transferType)}</td>
           </tr>
           <tr>
             <td style="padding: 8px; border: 1px solid #ddd; background: #f5f5f5;"><strong>Classification:</strong></td>
-            <td style="padding: 8px; border: 1px solid #ddd;">${data.classification}</td>
+            <td style="padding: 8px; border: 1px solid #ddd;">${escapeHtml(data.classification)}</td>
           </tr>
         </table>
 
@@ -156,35 +157,35 @@ class EmailService {
 
     const html = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: #333;">AFT Request - ${roleName} Required</h2>
+        <h2 style="color: #333;">AFT Request - ${escapeHtml(roleName)} Required</h2>
         <p>A new AFT request requires your attention:</p>
 
         <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
           <tr>
             <td style="padding: 8px; border: 1px solid #ddd; background: #f5f5f5;"><strong>Request Number:</strong></td>
-            <td style="padding: 8px; border: 1px solid #ddd;">${data.requestNumber}</td>
+            <td style="padding: 8px; border: 1px solid #ddd;">${escapeHtml(data.requestNumber)}</td>
           </tr>
           <tr>
             <td style="padding: 8px; border: 1px solid #ddd; background: #f5f5f5;"><strong>Requestor:</strong></td>
-            <td style="padding: 8px; border: 1px solid #ddd;">${data.requestorName}</td>
+            <td style="padding: 8px; border: 1px solid #ddd;">${escapeHtml(data.requestorName)}</td>
           </tr>
           <tr>
             <td style="padding: 8px; border: 1px solid #ddd; background: #f5f5f5;"><strong>Transfer Type:</strong></td>
-            <td style="padding: 8px; border: 1px solid #ddd;">${data.transferType}</td>
+            <td style="padding: 8px; border: 1px solid #ddd;">${escapeHtml(data.transferType)}</td>
           </tr>
           <tr>
             <td style="padding: 8px; border: 1px solid #ddd; background: #f5f5f5;"><strong>Classification:</strong></td>
-            <td style="padding: 8px; border: 1px solid #ddd;">${data.classification}</td>
+            <td style="padding: 8px; border: 1px solid #ddd;">${escapeHtml(data.classification)}</td>
           </tr>
           ${data.dtaName ? `
           <tr>
             <td style="padding: 8px; border: 1px solid #ddd; background: #f5f5f5;"><strong>Assigned DTA:</strong></td>
-            <td style="padding: 8px; border: 1px solid #ddd;">${data.dtaName}</td>
+            <td style="padding: 8px; border: 1px solid #ddd;">${escapeHtml(data.dtaName)}</td>
           </tr>
           ` : ''}
         </table>
 
-        ${data.notes ? `<p><strong>Previous Approver Notes:</strong><br>${data.notes}</p>` : ''}
+        ${data.notes ? `<p><strong>Previous Approver Notes:</strong><br>${escapeHtml(data.notes)}</p>` : ''}
 
         <p><strong>Action Required:</strong> Please log into the AFT system to review and ${status.includes('signature') ? 'sign' : 'approve'} this request.</p>
 
@@ -208,21 +209,21 @@ class EmailService {
         <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
           <tr>
             <td style="padding: 8px; border: 1px solid #ddd; background: #f5f5f5;"><strong>Request Number:</strong></td>
-            <td style="padding: 8px; border: 1px solid #ddd;">${data.requestNumber}</td>
+            <td style="padding: 8px; border: 1px solid #ddd;">${escapeHtml(data.requestNumber)}</td>
           </tr>
           <tr>
             <td style="padding: 8px; border: 1px solid #ddd; background: #f5f5f5;"><strong>Current Status:</strong></td>
-            <td style="padding: 8px; border: 1px solid #ddd;">Approved by ${data.nextApprover}</td>
+            <td style="padding: 8px; border: 1px solid #ddd;">Approved by ${escapeHtml(data.nextApprover || '')}</td>
           </tr>
           ${data.dtaName ? `
           <tr>
             <td style="padding: 8px; border: 1px solid #ddd; background: #f5f5f5;"><strong>Assigned DTA:</strong></td>
-            <td style="padding: 8px; border: 1px solid #ddd;">${data.dtaName}</td>
+            <td style="padding: 8px; border: 1px solid #ddd;">${escapeHtml(data.dtaName)}</td>
           </tr>
           ` : ''}
         </table>
 
-        ${data.notes ? `<p><strong>Approver Notes:</strong><br>${data.notes}</p>` : ''}
+        ${data.notes ? `<p><strong>Approver Notes:</strong><br>${escapeHtml(data.notes)}</p>` : ''}
 
         <p>You will receive additional notifications as your request progresses through the approval process.</p>
 
@@ -246,19 +247,19 @@ class EmailService {
         <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
           <tr>
             <td style="padding: 8px; border: 1px solid #ddd; background: #f5f5f5;"><strong>Request Number:</strong></td>
-            <td style="padding: 8px; border: 1px solid #ddd;">${data.requestNumber}</td>
+            <td style="padding: 8px; border: 1px solid #ddd;">${escapeHtml(data.requestNumber)}</td>
           </tr>
           <tr>
             <td style="padding: 8px; border: 1px solid #ddd; background: #f5f5f5;"><strong>Rejected By:</strong></td>
-            <td style="padding: 8px; border: 1px solid #ddd;">${data.nextApprover}</td>
+            <td style="padding: 8px; border: 1px solid #ddd;">${escapeHtml(data.nextApprover || '')}</td>
           </tr>
           <tr>
             <td style="padding: 8px; border: 1px solid #ddd; background: #f5f5f5;"><strong>Reason:</strong></td>
-            <td style="padding: 8px; border: 1px solid #ddd;">${data.rejectionReason || 'No reason provided'}</td>
+            <td style="padding: 8px; border: 1px solid #ddd;">${escapeHtml(data.rejectionReason || 'No reason provided')}</td>
           </tr>
         </table>
 
-        ${data.notes ? `<p><strong>Additional Notes:</strong><br>${data.notes}</p>` : ''}
+        ${data.notes ? `<p><strong>Additional Notes:</strong><br>${escapeHtml(data.notes)}</p>` : ''}
 
         <p><strong>Next Steps:</strong> Please review the rejection reason and submit a new request with the necessary corrections.</p>
 
@@ -282,19 +283,19 @@ class EmailService {
         <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
           <tr>
             <td style="padding: 8px; border: 1px solid #ddd; background: #f5f5f5;"><strong>Request Number:</strong></td>
-            <td style="padding: 8px; border: 1px solid #ddd;">${data.requestNumber}</td>
+            <td style="padding: 8px; border: 1px solid #ddd;">${escapeHtml(data.requestNumber)}</td>
           </tr>
           <tr>
             <td style="padding: 8px; border: 1px solid #ddd; background: #f5f5f5;"><strong>Transfer Type:</strong></td>
-            <td style="padding: 8px; border: 1px solid #ddd;">${data.transferType}</td>
+            <td style="padding: 8px; border: 1px solid #ddd;">${escapeHtml(data.transferType)}</td>
           </tr>
           <tr>
             <td style="padding: 8px; border: 1px solid #ddd; background: #f5f5f5;"><strong>DTA:</strong></td>
-            <td style="padding: 8px; border: 1px solid #ddd;">${data.dtaName || 'N/A'}</td>
+            <td style="padding: 8px; border: 1px solid #ddd;">${escapeHtml(data.dtaName || 'N/A')}</td>
           </tr>
         </table>
 
-        ${data.notes ? `<p><strong>Completion Notes:</strong><br>${data.notes}</p>` : ''}
+        ${data.notes ? `<p><strong>Completion Notes:</strong><br>${escapeHtml(data.notes)}</p>` : ''}
 
         <p>All required signatures have been obtained and the transfer has been completed successfully.</p>
 
@@ -332,21 +333,24 @@ export const emailService = new EmailService();
 export async function getNextApproverEmails(status: string): Promise<string[]> {
   const db = getDb();
 
+  // user_roles.role is stored lowercase (matching the UserRole constants).
   const roleMap: Record<string, string> = {
-    'pending_dao': 'DAO',
-    'pending_approver': 'APPROVER',
-    'pending_cpso': 'CPSO',
-    'pending_media_custodian': 'MEDIA_CUSTODIAN'
+    'pending_dao': 'dao',
+    'pending_approver': 'approver',
+    'pending_cpso': 'cpso',
+    'pending_dta': 'dta',
+    'pending_sme_signature': 'sme',
+    'pending_media_custodian': 'media_custodian'
   };
 
   const role = roleMap[status];
   if (!role) return [];
 
-  const users = db.query(`
+  const users = await db.query(`
     SELECT DISTINCT u.email
     FROM users u
     JOIN user_roles ur ON ur.user_id = u.id
-    WHERE ur.role = ? AND ur.is_active = 1 AND u.is_active = 1
+    WHERE ur.role = ? AND ur.is_active = TRUE AND u.is_active = TRUE
   `).all(role) as any[];
 
   return users.map(u => u.email);

@@ -7,17 +7,17 @@ export class SMEDashboard {
   static async render(user: SMEUser, userId: number): Promise<string> {
     const db = getDb();
 
-    const pendingSignatures = db.query(`
+    const pendingSignatures = await db.query(`
       SELECT COUNT(*) as count FROM aft_requests 
       WHERE status = 'pending_sme_signature'
     `).get() as any;
 
-    const signedHistory = db.query(`
+    const signedHistory = await db.query(`
       SELECT COUNT(*) as count FROM aft_request_history
       WHERE user_email = ? AND action = 'sme_signed'
     `).get(user.email) as any;
 
-    const recentActivity = db.query(`
+    const recentActivity = await db.query(`
       SELECT * FROM aft_requests
       WHERE status = 'pending_sme_signature' OR (status = 'completed' AND id IN (SELECT request_id FROM aft_request_history WHERE user_email = ? AND action = 'sme_signed'))
       ORDER BY updated_at DESC
@@ -140,7 +140,7 @@ export class SMEDashboard {
   static async renderSignatureQueue(user: SMEUser, userId: number): Promise<string> {
     const db = getDb();
 
-    const pendingRequests = db.query(`
+    const pendingRequests = await db.query(`
       SELECT r.*, u.email as requestor_email
       FROM aft_requests r
       LEFT JOIN users u ON r.requestor_id = u.id

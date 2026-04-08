@@ -1,24 +1,41 @@
 // Authentication API routes
-import { getDb, verifyPassword, getUserRoles } from "../../lib/database-bun";
-import { 
-  createSecureSession, 
-  checkRateLimit, 
-  recordFailedAttempt, 
+import { getDb, verifyPassword, getUserRoles, setUserPassword } from "../../lib/database-bun";
+import {
+  createSecureSession,
+  checkRateLimit,
+  recordFailedAttempt,
   resetRateLimit,
   auditLog,
   getSecureCookieOptions,
+  buildSessionCookie,
+  buildCsrfCookie,
   selectSessionRole,
-  switchSessionRole
+  switchSessionRole,
+  validatePasswordPolicy
 } from "../../lib/security";
 import { checkAuth } from "../utils";
+import { RoleMiddleware } from "../../middleware/role-middleware";
 
 const db = getDb();
 
+const GENERIC_LOGIN_ERROR = 'Invalid email or password';
+
 export async function handleAuthAPI(request: Request, path: string, ipAddress: string): Promise<Response | null> {
   const method = request.method;
-  
-  // Email validation API
+
+  // Email validation API - intentionally requires authentication so it cannot
+  // be used to enumerate accounts.
   if (path === '/api/check-email' && method === 'POST') {
+    const auth = await checkAuth(request, ipAddress);
+    if (!auth) {
+      return new Response(JSON.stringify({ error: 'Not authenticated' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+    const csrfFail = RoleMiddleware.verifyCsrf(request, auth);
+    if (csrfFail) return csrfFail;
+
     try {
       const body = await request.json() as { email: string };
       const email = body.email;
@@ -30,8 +47,8 @@ export async function handleAuthAPI(request: Request, path: string, ipAddress: s
         });
       }
 
-      const user = db.query("SELECT id FROM users WHERE email = ? AND is_active = 1").get(email);
-      
+      const user = await db.query("SELECT id FROM users WHERE email = ? AND is_active = TRUE").get(email);
+
       return new Response(JSON.stringify({ exists: !!user }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' }
@@ -44,13 +61,16 @@ export async function handleAuthAPI(request: Request, path: string, ipAddress: s
       });
     }
   }
-  
+
   // Login API
   if (path === '/api/login' && method === 'POST') {
     const body = await request.json() as { email: string; password: string };
     const userAgent = request.headers.get('user-agent') || 'unknown';
-    
-    // Extract CAC certificate info from Apache headers if present
+
+    // Extract CAC certificate info forwarded by the trusted reverse proxy.
+    // index.ts strips these headers when the request did not come from a
+    // trusted proxy or when nginx did not successfully verify the cert, so
+    // their presence here is meaningful.
     const cacCertificate = {
       subject: request.headers.get('X-Client-Cert-Subject') || '',
       issuer: request.headers.get('X-Client-Cert-Issuer') || '',
@@ -60,85 +80,84 @@ export async function handleAuthAPI(request: Request, path: string, ipAddress: s
       validTo: request.headers.get('X-Client-Cert-Not-After') || '',
       pemData: request.headers.get('X-Client-Cert-PEM') || ''
     };
-    
-    // Check if we have a valid CAC certificate
     const hasCAC = cacCertificate.subject && cacCertificate.issuer;
-    
+
     // Check rate limiting
     const rateCheck = checkRateLimit(ipAddress + ':' + body.email);
     if (!rateCheck.allowed) {
-      await auditLog(null, 'LOGIN_RATE_LIMITED', 
+      await auditLog(null, 'LOGIN_RATE_LIMITED',
         `Rate limit exceeded for ${body.email}`, ipAddress);
-      
+
       const lockoutMinutes = Math.ceil((rateCheck.lockedUntil! - Date.now()) / 1000 / 60);
-      return new Response(JSON.stringify({ 
-        success: false, 
+      return new Response(JSON.stringify({
+        success: false,
         message: `Too many failed attempts. Try again in ${lockoutMinutes} minutes.`,
-        lockedUntil: rateCheck.lockedUntil 
+        lockedUntil: rateCheck.lockedUntil
       }), {
         status: 429,
         headers: { 'Content-Type': 'application/json' }
       });
     }
-    
-    const user = db.query("SELECT * FROM users WHERE email = ? AND is_active = 1").get(body.email) as any;
+
+    const user = await db.query("SELECT * FROM users WHERE email = ? AND is_active = TRUE").get(body.email) as any;
 
     if (!user) {
       recordFailedAttempt(ipAddress + ':' + body.email);
       await auditLog(null, 'LOGIN_FAILED_NO_USER',
         `Failed login attempt for non-existent user ${body.email}`, ipAddress);
 
-      return new Response(JSON.stringify({ 
-        success: false, 
-        message: 'No account with that email',
-        remainingAttempts: rateCheck.remainingAttempts - 1
+      return new Response(JSON.stringify({
+        success: false,
+        message: GENERIC_LOGIN_ERROR
       }), {
         status: 401,
         headers: { 'Content-Type': 'application/json' }
       });
     }
-    
+
     if (await verifyPassword(body.password, user.password)) {
       // Success - reset rate limit and get user roles
       resetRateLimit(ipAddress + ':' + body.email);
-      
-      const userRoles = getUserRoles(user.id);
+
+      const userRoles = await getUserRoles(user.id);
       const availableRoles = userRoles.map(r => r.role);
-      
+
       const session = await createSecureSession(
-        user.id, 
-        user.email, 
+        user.id,
+        user.email,
         user.primary_role,
         availableRoles,
-        ipAddress, 
+        ipAddress,
         userAgent,
         hasCAC ? cacCertificate : undefined
       );
-      
-      await auditLog(user.id, 'LOGIN_SUCCESS', 
+
+      await auditLog(user.id, 'LOGIN_SUCCESS',
         `Successful login for ${user.email}`, ipAddress);
-      
-      const cookieOptions = getSecureCookieOptions();
-      return new Response(JSON.stringify({ 
+
+      // Set both the session cookie (HttpOnly) and a CSRF cookie that is
+      // readable by client JavaScript so it can echo the value back in the
+      // X-CSRF-Token header. The actual session secret stays HttpOnly.
+      const headers = new Headers({ 'Content-Type': 'application/json' });
+      headers.append('Set-Cookie', buildSessionCookie(session.sessionId));
+      headers.append('Set-Cookie', buildCsrfCookie(session.csrfToken));
+
+      return new Response(JSON.stringify({
         success: true,
-        needsRoleSelection: availableRoles.length > 1
-      }), {
-        headers: {
-          'Content-Type': 'application/json',
-          'Set-Cookie': `session=${session.sessionId}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=${cookieOptions.maxAge}`
-        }
-      });
+        needsRoleSelection: availableRoles.length > 1,
+        csrfToken: session.csrfToken,
+        passwordChangeRequired: !!user.must_change_password
+      }), { headers });
     }
-    
-    // Failed login - incorrect password
+
+    // Failed login - incorrect password (same generic message as missing user)
     recordFailedAttempt(ipAddress + ':' + body.email);
-    await auditLog(user.id, 'LOGIN_FAILED_BAD_PASS', 
+    await auditLog(user.id, 'LOGIN_FAILED_BAD_PASS',
       `Failed login attempt for ${body.email} (incorrect password)`, ipAddress);
-    
-    return new Response(JSON.stringify({ 
-      success: false, 
-      message: 'Invalid credentials',
-      remainingAttempts: rateCheck.remainingAttempts - 1
+
+    return new Response(JSON.stringify({
+      success: false,
+      message: GENERIC_LOGIN_ERROR
     }), {
       status: 401,
       headers: { 'Content-Type': 'application/json' }
@@ -149,12 +168,14 @@ export async function handleAuthAPI(request: Request, path: string, ipAddress: s
   if (path === '/api/select-role' && method === 'POST') {
     const auth = await checkAuth(request, ipAddress);
     if (!auth) {
-      return new Response(JSON.stringify({ error: 'Not authenticated' }), { 
+      return new Response(JSON.stringify({ error: 'Not authenticated' }), {
         status: 401,
         headers: { 'Content-Type': 'application/json' }
       });
     }
-    
+    const csrfFail = RoleMiddleware.verifyCsrf(request, auth);
+    if (csrfFail) return csrfFail;
+
     const body = await request.json() as { role: string };
     
     const success = await selectSessionRole(auth.sessionId, body.role, ipAddress);
@@ -174,16 +195,69 @@ export async function handleAuthAPI(request: Request, path: string, ipAddress: s
     }
   }
   
-  // Role switch API
-  if (path === '/api/switch-role' && method === 'POST') {
+  // Change own password
+  if (path === '/api/change-password' && method === 'POST') {
     const auth = await checkAuth(request, ipAddress);
-    if (!auth || !auth.roleSelected) {
-      return new Response(JSON.stringify({ error: 'Not authenticated or no role selected' }), { 
+    if (!auth) {
+      return new Response(JSON.stringify({ error: 'Not authenticated' }), {
         status: 401,
         headers: { 'Content-Type': 'application/json' }
       });
     }
-    
+    const csrfFail = RoleMiddleware.verifyCsrf(request, auth);
+    if (csrfFail) return csrfFail;
+
+    const body = await request.json() as { currentPassword?: string; newPassword?: string };
+    const currentPassword = body.currentPassword || '';
+    const newPassword = body.newPassword || '';
+
+    const user = await db.query("SELECT id, password FROM users WHERE id = ? AND is_active = TRUE").get(auth.userId) as any;
+    if (!user) {
+      return new Response(JSON.stringify({ success: false, message: 'User not found' }), {
+        status: 404, headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    if (!(await verifyPassword(currentPassword, user.password))) {
+      await auditLog(auth.userId, 'PASSWORD_CHANGE_FAILED', 'Current password incorrect', ipAddress);
+      return new Response(JSON.stringify({ success: false, message: 'Current password is incorrect' }), {
+        status: 401, headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    const policy = validatePasswordPolicy(newPassword);
+    if (!policy.valid) {
+      return new Response(JSON.stringify({ success: false, message: 'Password does not meet policy', errors: policy.errors }), {
+        status: 400, headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    if (newPassword === currentPassword) {
+      return new Response(JSON.stringify({ success: false, message: 'New password must differ from current password' }), {
+        status: 400, headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    await setUserPassword(auth.userId, newPassword);
+    await auditLog(auth.userId, 'PASSWORD_CHANGED', 'User changed their password', ipAddress);
+
+    return new Response(JSON.stringify({ success: true }), {
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+
+  // Role switch API
+  if (path === '/api/switch-role' && method === 'POST') {
+    const auth = await checkAuth(request, ipAddress);
+    if (!auth || !auth.roleSelected) {
+      return new Response(JSON.stringify({ error: 'Not authenticated or no role selected' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+    const csrfFail = RoleMiddleware.verifyCsrf(request, auth);
+    if (csrfFail) return csrfFail;
+
     const body = await request.json() as { role: string };
     
     const success = await switchSessionRole(auth.sessionId, body.role, ipAddress);

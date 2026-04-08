@@ -7,10 +7,10 @@ export class MediaCustodianAPI {
   // Get all users for assignment dropdowns
   static async getAllUsers(): Promise<any[]> {
     const db = getDb();
-    return db.query(`
-      SELECT id, email, first_name, last_name, role 
-      FROM users 
-      WHERE active = 1 
+    return await db.query(`
+      SELECT id, email, first_name, last_name, primary_role
+      FROM users
+      WHERE is_active = TRUE
       ORDER BY last_name, first_name
     `).all() as any[];
   }
@@ -18,11 +18,11 @@ export class MediaCustodianAPI {
   // Get only DTAs for drive assignment
   static async getDTAUsers(): Promise<any[]> {
     const db = getDb();
-    return db.query(`
+    return await db.query(`
       SELECT DISTINCT u.id, u.email, u.first_name, u.last_name
       FROM users u
-      JOIN user_roles ur ON ur.user_id = u.id AND ur.is_active = 1
-      WHERE u.is_active = 1 AND ur.role = 'dta'
+      JOIN user_roles ur ON ur.user_id = u.id AND ur.is_active = TRUE
+      WHERE u.is_active = TRUE AND ur.role = 'dta'
       ORDER BY u.last_name, u.first_name
     `).all() as any[];
   }
@@ -30,7 +30,7 @@ export class MediaCustodianAPI {
   // Media Drive CRUD Operations
   static async getAllMediaDrives(): Promise<any[]> {
     const db = getDb();
-    return db.query(`
+    return await db.query(`
       SELECT md.*, u.email as issued_to_email, u.first_name, u.last_name
       FROM media_drives md
       LEFT JOIN users u ON md.issued_to_user_id = u.id
@@ -40,7 +40,7 @@ export class MediaCustodianAPI {
 
   static async getMediaDriveById(id: number): Promise<any | null> {
     const db = getDb();
-    const row = db.query(`
+    const row = await db.query(`
       SELECT md.*, u.email as issued_to_email, u.first_name, u.last_name
       FROM media_drives md
       LEFT JOIN users u ON md.issued_to_user_id = u.id
@@ -51,7 +51,7 @@ export class MediaCustodianAPI {
 
   static async createMediaDrive(driveData: any): Promise<any> {
     const db = getDb();
-    const result = db.query(`
+    const result = await db.query(`
       INSERT INTO media_drives (serial_number, media_control_number, type, model, capacity, location, status)
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `).run(
@@ -101,10 +101,10 @@ export class MediaCustodianAPI {
       values.push(driveData.status);
     }
     
-    fields.push('updated_at = unixepoch()');
+    fields.push('updated_at = EXTRACT(EPOCH FROM NOW())::BIGINT');
     values.push(id);
     
-    const result = db.query(`
+    const result = await db.query(`
       UPDATE media_drives 
       SET ${fields.join(', ')}
       WHERE id = ?
@@ -115,7 +115,7 @@ export class MediaCustodianAPI {
 
   static async deleteMediaDrive(id: number): Promise<boolean> {
     const db = getDb();
-    const result = db.query('DELETE FROM media_drives WHERE id = ?').run(id);
+    const result = await db.query('DELETE FROM media_drives WHERE id = ?').run(id);
     return result.changes > 0;
   }
 
@@ -123,10 +123,10 @@ export class MediaCustodianAPI {
     const db = getDb();
     
     // 1. Check if user is a DTA
-    const user = db.query(`
+    const user = await db.query(`
       SELECT u.id, u.email, ur.role
       FROM users u
-      JOIN user_roles ur ON ur.user_id = u.id AND ur.is_active = 1
+      JOIN user_roles ur ON ur.user_id = u.id AND ur.is_active = TRUE
       WHERE u.id = ? AND ur.role = 'dta'
     `).get(userId) as any;
     
@@ -135,7 +135,7 @@ export class MediaCustodianAPI {
     }
     
     // 2. Check if DTA already has a drive issued
-    const existingDrive = db.query(`
+    const existingDrive = await db.query(`
       SELECT id, media_control_number, type
       FROM media_drives
       WHERE issued_to_user_id = ? AND status = 'issued'
@@ -149,9 +149,9 @@ export class MediaCustodianAPI {
     }
     
     // 3. Issue the drive
-    const result = db.query(`
+    const result = await db.query(`
       UPDATE media_drives 
-      SET issued_to_user_id = ?, issued_at = unixepoch(), purpose = ?, status = 'issued', last_used = unixepoch(), updated_at = unixepoch()
+      SET issued_to_user_id = ?, issued_at = EXTRACT(EPOCH FROM NOW())::BIGINT, purpose = ?, status = 'issued', last_used = EXTRACT(EPOCH FROM NOW())::BIGINT, updated_at = EXTRACT(EPOCH FROM NOW())::BIGINT
       WHERE id = ? AND status = 'available'
     `).run(userId, purpose, driveId);
     
@@ -166,7 +166,7 @@ export class MediaCustodianAPI {
     const db = getDb();
     
     // Check if drive has any active AFT requests
-    const activeRequest = db.query(`
+    const activeRequest = await db.query(`
       SELECT ar.id, ar.status, ar.request_number
       FROM aft_requests ar 
       WHERE ar.selected_drive_id = ? 
@@ -181,9 +181,9 @@ export class MediaCustodianAPI {
       };
     }
     
-    const result = db.query(`
+    const result = await db.query(`
       UPDATE media_drives 
-      SET issued_to_user_id = NULL, returned_at = unixepoch(), status = 'available', last_used = unixepoch(), updated_at = unixepoch()
+      SET issued_to_user_id = NULL, returned_at = EXTRACT(EPOCH FROM NOW())::BIGINT, status = 'available', last_used = EXTRACT(EPOCH FROM NOW())::BIGINT, updated_at = EXTRACT(EPOCH FROM NOW())::BIGINT
       WHERE id = ?
     `).run(driveId);
     
@@ -246,7 +246,7 @@ export class MediaCustodianAPI {
       params.push(parseInt(query.limit));
     }
     
-    return db.query(sql).all(...params) as any[];
+    return await db.query(sql).all(...params) as any[];
   }
 
   // Get request statistics for reports page
@@ -254,19 +254,19 @@ export class MediaCustodianAPI {
     const db = getDb();
     
     // Get total requests count
-    const totalResult = db.query('SELECT COUNT(*) as count FROM aft_requests').get() as any;
+    const totalResult = await db.query('SELECT COUNT(*) as count FROM aft_requests').get() as any;
     const total = totalResult?.count || 0;
     
     // Get pending requests count
-    const pendingResult = db.query("SELECT COUNT(*) as count FROM aft_requests WHERE status NOT IN ('completed', 'rejected', 'cancelled')").get() as any;
+    const pendingResult = await db.query("SELECT COUNT(*) as count FROM aft_requests WHERE status NOT IN ('completed', 'rejected', 'cancelled')").get() as any;
     const pending = pendingResult?.count || 0;
     
     // Get completed requests count
-    const completedResult = db.query("SELECT COUNT(*) as count FROM aft_requests WHERE status = 'completed'").get() as any;
+    const completedResult = await db.query("SELECT COUNT(*) as count FROM aft_requests WHERE status = 'completed'").get() as any;
     const completed = completedResult?.count || 0;
     
     // Get recent activity (last 30 days)
-    const recentResult = db.query("SELECT COUNT(*) as count FROM aft_requests WHERE created_at >= unixepoch() - 2592000").get() as any;
+    const recentResult = await db.query("SELECT COUNT(*) as count FROM aft_requests WHERE created_at >= EXTRACT(EPOCH FROM NOW())::BIGINT - 2592000").get() as any;
     const recentActivity = recentResult?.count || 0;
     
     return {
@@ -309,25 +309,25 @@ export class MediaCustodianAPI {
     const db = getDb();
     
     // Get drive counts by status
-    const statusCounts = db.query(`
+    const statusCounts = await db.query(`
       SELECT status, COUNT(*) as count
       FROM media_drives
       GROUP BY status
     `).all() as any[];
 
     // Get drive counts by type
-    const typeCounts = db.query(`
+    const typeCounts = await db.query(`
       SELECT type, COUNT(*) as count
       FROM media_drives
       GROUP BY type
     `).all() as any[];
 
     // Get recently issued drives
-    const recentlyIssued = db.query(`
+    const recentlyIssued = await db.query(`
       SELECT md.*, u.email, u.first_name, u.last_name
       FROM media_drives md
       LEFT JOIN users u ON md.issued_to_user_id = u.id
-      WHERE md.issued_at >= unixepoch() - 604800
+      WHERE md.issued_at >= EXTRACT(EPOCH FROM NOW())::BIGINT - 604800
       ORDER BY md.issued_at DESC
       LIMIT 10
     `).all() as any[];
@@ -349,14 +349,14 @@ export class MediaCustodianAPI {
     const db = getDb();
     
     // Get request counts by status
-    const statusCounts = db.query(`
+    const statusCounts = await db.query(`
       SELECT status, COUNT(*) as count
       FROM aft_requests
       GROUP BY status
     `).all() as any[];
 
     // Get recent requests
-    const recentRequests = db.query(`
+    const recentRequests = await db.query(`
       SELECT ar.*, u.first_name || ' ' || u.last_name as requestor_name
       FROM aft_requests ar
       LEFT JOIN users u ON ar.requestor_id = u.id
@@ -365,12 +365,12 @@ export class MediaCustodianAPI {
     `).all() as any[];
 
     // Get monthly request trends (last 6 months)
-    const monthlyTrends = db.query(`
-      SELECT 
-        strftime('%Y-%m', datetime(created_at, 'unixepoch')) as month,
+    const monthlyTrends = await db.query(`
+      SELECT
+        to_char(to_timestamp(created_at), 'YYYY-MM') as month,
         COUNT(*) as count
       FROM aft_requests
-      WHERE created_at >= unixepoch() - 15552000
+      WHERE created_at >= EXTRACT(EPOCH FROM NOW())::BIGINT - 15552000
       GROUP BY month
       ORDER BY month DESC
     `).all() as any[];
@@ -392,7 +392,7 @@ export class MediaCustodianAPI {
     const db = getDb();
     
     // Get utilization statistics
-    const utilization = db.query(`
+    const utilization = await db.query(`
       SELECT 
         COUNT(*) as total_drives,
         SUM(CASE WHEN status = 'issued' THEN 1 ELSE 0 END) as issued_drives,
@@ -402,7 +402,7 @@ export class MediaCustodianAPI {
     `).get() as any;
 
     // Get top users by drive usage
-    const topUsers = db.query(`
+    const topUsers = await db.query(`
       SELECT 
         u.first_name || ' ' || u.last_name as user_name,
         u.email,
@@ -435,8 +435,8 @@ export class MediaCustodianAPI {
     const db = getDb();
     
     // Get user request activity
-    const userActivity = db.query(`
-      SELECT 
+    const userActivity = await db.query(`
+      SELECT
         u.first_name || ' ' || u.last_name as user_name,
         u.email,
         COUNT(ar.id) as total_requests,
@@ -444,7 +444,7 @@ export class MediaCustodianAPI {
         MAX(ar.created_at) as last_request_date
       FROM users u
       LEFT JOIN aft_requests ar ON u.id = ar.requestor_id
-      WHERE u.role = 'requestor' AND u.active = 1
+      WHERE u.primary_role = 'requestor' AND u.is_active = TRUE
       GROUP BY u.id
       ORDER BY total_requests DESC
       LIMIT 20
@@ -474,7 +474,7 @@ export class MediaCustodianAPI {
     
     try {
       // Get current request
-      const request = db.query('SELECT * FROM aft_requests WHERE id = ?').get(requestId) as any;
+      const request = await db.query('SELECT * FROM aft_requests WHERE id = ?').get(requestId) as any;
       if (!request) {
         return { success: false, message: 'Request not found' };
       }
@@ -540,7 +540,7 @@ export class MediaCustodianAPI {
           Math.floor(new Date(dispositionData.dispositionDate).getTime() / 1000) : 
           Math.floor(Date.now() / 1000);
 
-        db.query(`
+        await db.query(`
           UPDATE aft_requests 
           SET disposition_optical_destroyed = ?,
               disposition_optical_retained = ?,
@@ -550,7 +550,7 @@ export class MediaCustodianAPI {
               disposition_signature = ?,
               disposition_notes = ?,
               disposition_completed_at = ?,
-              updated_at = unixepoch()
+              updated_at = EXTRACT(EPOCH FROM NOW())::BIGINT
           WHERE id = ?
         `).run(
           dispositionData.opticalDestroyed || 'na',
@@ -594,372 +594,4 @@ export class MediaCustodianAPI {
       };
     }
   }
-}
-
-// API Handler Function
-export async function handleMediaCustodianAPI(request: Request, path: string, ipAddress: string): Promise<Response | null> {
-  const apiPath = path.startsWith('/media-custodian') ? path.substring('/media-custodian'.length) : path;
-  // Media Drives API endpoints
-  if (apiPath === '/api/drives' && request.method === 'GET') {
-    try {
-      const drives = await MediaCustodianAPI.getAllMediaDrives();
-      return new Response(JSON.stringify(drives), {
-        headers: { 'Content-Type': 'application/json' }
-      });
-    } catch (error) {
-      return new Response(JSON.stringify({ error: 'Failed to fetch drives' }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-  }
-
-  if (apiPath === '/api/drives' && request.method === 'POST') {
-    try {
-      const driveData = await request.json();
-      const newDrive = await MediaCustodianAPI.createMediaDrive(driveData as any);
-      return new Response(JSON.stringify({ success: true, drive: newDrive }), {
-        status: 201,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    } catch (error) {
-      return new Response(JSON.stringify({ error: 'Failed to create drive' }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-  }
-
-  if (apiPath.startsWith('/api/drives/') && request.method === 'GET') {
-    try {
-      const pathParts = apiPath.split('/');
-      if (pathParts.length < 4 || !pathParts[3]) return null;
-      const driveId = parseInt(pathParts[3]);
-      const drive = await MediaCustodianAPI.getMediaDriveById(driveId);
-      if (drive) {
-        return new Response(JSON.stringify(drive), {
-          headers: { 'Content-Type': 'application/json' }
-        });
-      } else {
-        return new Response(JSON.stringify({ error: 'Drive not found' }), {
-          status: 404,
-          headers: { 'Content-Type': 'application/json' }
-        });
-      }
-    } catch (error) {
-      return new Response(JSON.stringify({ error: 'Failed to fetch drive' }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-  }
-
-  if (apiPath.startsWith('/api/drives/') && request.method === 'PUT') {
-    try {
-      const pathParts = apiPath.split('/');
-      if (pathParts.length < 4 || !pathParts[3]) return null;
-      const driveId = parseInt(pathParts[3]);
-      const driveData = await request.json();
-      const success = await MediaCustodianAPI.updateMediaDrive(driveId, driveData as any);
-      
-      if (success) {
-        return new Response(JSON.stringify({ success: true }), {
-          headers: { 'Content-Type': 'application/json' }
-        });
-      } else {
-        return new Response(JSON.stringify({ error: 'Drive not found' }), {
-          status: 404,
-          headers: { 'Content-Type': 'application/json' }
-        });
-      }
-    } catch (error) {
-      return new Response(JSON.stringify({ error: 'Failed to update drive' }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-  }
-
-  if (apiPath.startsWith('/api/drives/') && request.method === 'DELETE') {
-    try {
-      const pathParts = apiPath.split('/');
-      if (pathParts.length < 4 || !pathParts[3]) return null;
-      const driveId = parseInt(pathParts[3]);
-      const success = await MediaCustodianAPI.deleteMediaDrive(driveId);
-      
-      if (success) {
-        return new Response(JSON.stringify({ success: true }), {
-          headers: { 'Content-Type': 'application/json' }
-        });
-      } else {
-        return new Response(JSON.stringify({ error: 'Drive not found' }), {
-          status: 404,
-          headers: { 'Content-Type': 'application/json' }
-        });
-      }
-    } catch (error) {
-      return new Response(JSON.stringify({ error: 'Failed to delete drive' }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-  }
-
-  if (apiPath.startsWith('/api/drives/') && apiPath.endsWith('/issue') && request.method === 'POST') {
-    try {
-      const pathParts = apiPath.split('/');
-      if (pathParts.length < 4 || !pathParts[3]) return null;
-      const driveId = parseInt(pathParts[3]);
-      const requestBody = await request.json() as any;
-      const userId = parseInt((requestBody.userId ?? requestBody.user_id) as string);
-      const result = await MediaCustodianAPI.issueDrive(driveId, userId, requestBody.purpose);
-      
-      if (result.success) {
-        return new Response(JSON.stringify({ success: true, message: result.message }), {
-          headers: { 'Content-Type': 'application/json' }
-        });
-      } else {
-        return new Response(JSON.stringify({ success: false, error: result.message }), {
-          status: 400,
-          headers: { 'Content-Type': 'application/json' }
-        });
-      }
-    } catch (error) {
-      return new Response(JSON.stringify({ error: 'Failed to issue drive' }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-  }
-
-  if (apiPath.startsWith('/api/drives/') && apiPath.endsWith('/return') && request.method === 'POST') {
-    try {
-      const pathParts = apiPath.split('/');
-      if (pathParts.length < 4 || !pathParts[3]) return null;
-      const driveId = parseInt(pathParts[3]);
-      const result = await MediaCustodianAPI.returnDrive(driveId);
-      
-      return new Response(JSON.stringify(result), {
-        status: result.success ? 200 : 400,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    } catch (error) {
-      return new Response(JSON.stringify({ success: false, message: 'Failed to return drive' }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-  }
-
-  if (apiPath === '/api/users' && request.method === 'GET') {
-    try {
-      const users = await MediaCustodianAPI.getAllUsers();
-      return new Response(JSON.stringify(users), {
-        headers: { 'Content-Type': 'application/json' }
-      });
-    } catch (error) {
-      return new Response(JSON.stringify({ error: 'Failed to fetch users' }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-  }
-
-  // AFT Request processing endpoints
-  if (apiPath === '/api/requests' && request.method === 'GET') {
-    try {
-      const url = new URL(request.url);
-      const query = Object.fromEntries(url.searchParams);
-      const requests = await MediaCustodianAPI.getAllRequests(query);
-      return new Response(JSON.stringify(requests), {
-        headers: { 'Content-Type': 'application/json' }
-      });
-    } catch (error) {
-      return new Response(JSON.stringify({ error: 'Failed to fetch requests' }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-  }
-
-  // Process request with CAC signature
-  if (apiPath.startsWith('/api/dispose-cac/') && request.method === 'POST') {
-    const urlParts = apiPath.split('/');
-    const requestId = parseInt(urlParts[3] || '');
-    
-    if (!requestId || isNaN(requestId)) {
-      return new Response(JSON.stringify({ error: 'Invalid request ID' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-    
-    try {
-      const body = await request.json() as any;
-      const { signature, certificate, timestamp, algorithm, custodianName, dispositionDate, 
-              opticalDestroyed, opticalRetained, ssdSanitized, notes } = body;
-      
-      // TODO: Implement CAC signature for media disposition
-      // For now, just process as regular disposition
-      const result = await MediaCustodianAPI.processRequest(
-        requestId,
-        'dispose',
-        1, // TODO: Get actual user ID from auth
-        notes,
-        {
-          custodianName,
-          dispositionDate,
-          digitalSignature: custodianName, // Use custodian name as signature for now
-          opticalDestroyed,
-          opticalRetained,
-          ssdSanitized,
-          notes
-        }
-      );
-      
-      return new Response(JSON.stringify(result), {
-        status: result.success ? 200 : 400,
-        headers: { 'Content-Type': 'application/json' }
-      });
-      
-    } catch (error) {
-      console.error('Error processing CAC disposition:', error);
-      return new Response(JSON.stringify({ error: 'Failed to process disposition with CAC' }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-  }
-  
-  if (apiPath.startsWith('/api/requests/') && apiPath.includes('/process') && request.method === 'POST') {
-    try {
-      const pathParts = apiPath.split('/');
-      if (pathParts.length < 4 || !pathParts[3]) return null;
-      const requestId = parseInt(pathParts[3]);
-      const requestBody = await request.json() as any;
-      
-      const result = await MediaCustodianAPI.processRequest(
-        requestId,
-        requestBody.action,
-        requestBody.userId,
-        requestBody.notes,
-        requestBody // Pass the entire request body as disposition data
-      );
-      
-      return new Response(JSON.stringify(result), {
-        status: result.success ? 200 : 400,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    } catch (error) {
-      return new Response(JSON.stringify({ error: 'Failed to process request' }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-  }
-
-  // Check if drive can be returned (AFT request completed)
-  if (apiPath.startsWith('/api/drives/') && apiPath.endsWith('/can-return') && request.method === 'GET') {
-    try {
-      const pathParts = apiPath.split('/');
-      if (pathParts.length < 4 || !pathParts[3]) return null;
-      const driveId = parseInt(pathParts[3]);
-      
-      const db = getDb();
-      // Check if drive has any active AFT requests
-      const activeRequest = db.query(`
-        SELECT ar.id, ar.status 
-        FROM aft_requests ar 
-        WHERE ar.selected_drive_id = ? 
-        AND ar.status NOT IN ('completed', 'disposed', 'rejected', 'cancelled')
-        LIMIT 1
-      `).get(driveId) as any;
-      
-      const canReturn = !activeRequest;
-      const message = activeRequest 
-        ? `Drive is associated with active AFT request #${activeRequest.id} (${activeRequest.status})`
-        : 'Drive can be returned';
-      
-      return new Response(JSON.stringify({ 
-        canReturn, 
-        message,
-        activeRequest: activeRequest || null 
-      }), {
-        headers: { 'Content-Type': 'application/json' }
-      });
-    } catch (error) {
-      return new Response(JSON.stringify({ error: 'Failed to check drive return status' }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-  }
-
-  // Return drive from AFT request
-  if (apiPath === '/api/return-drive' && request.method === 'POST') {
-    try {
-      const requestBody = await request.json() as any;
-      const { driveId, requestId, userId } = requestBody;
-      
-      if (!driveId || !requestId || !userId) {
-        return new Response(JSON.stringify({ 
-          success: false, 
-          message: 'Missing required parameters: driveId, requestId, userId' 
-        }), {
-          status: 400,
-          headers: { 'Content-Type': 'application/json' }
-        });
-      }
-      
-      const db = getDb();
-      
-      // Verify the request is completed or disposed
-      const aftRequest = db.query(`
-        SELECT id, status, request_number 
-        FROM aft_requests 
-        WHERE id = ? AND status IN ('completed', 'disposed')
-      `).get(requestId) as any;
-      
-      if (!aftRequest) {
-        return new Response(JSON.stringify({ 
-          success: false, 
-          message: 'Request not found or not in completed/disposed status' 
-        }), {
-          status: 400,
-          headers: { 'Content-Type': 'application/json' }
-        });
-      }
-      
-      // Return the drive
-      const result = await MediaCustodianAPI.returnDrive(driveId);
-      
-      if (result.success) {
-        // Add audit entry for the drive return
-        RequestTrackingService.addAuditEntry(
-          requestId,
-          userId,
-          'drive_returned',
-          undefined,
-          undefined,
-          JSON.stringify({ driveId, action: 'return_to_inventory' }),
-          'Drive returned to inventory by media custodian'
-        );
-      }
-      
-      return new Response(JSON.stringify(result), {
-        status: result.success ? 200 : 400,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    } catch (error) {
-      return new Response(JSON.stringify({ 
-        success: false, 
-        message: 'Failed to return drive to inventory' 
-      }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-  }
-
-  return null;
 }

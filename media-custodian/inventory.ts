@@ -8,7 +8,7 @@ export class MediaCustodianInventory {
     const db = getDb();
     
     // Get all media drives from database
-    const drives = db.query(`
+    const drives = await db.query(`
       SELECT md.*, u.email as issued_to_email, u.first_name, u.last_name
       FROM media_drives md
       LEFT JOIN users u ON md.issued_to_user_id = u.id
@@ -16,11 +16,11 @@ export class MediaCustodianInventory {
     `).all() as any[];
 
     // Get only DTAs for drive assignment dropdown
-    const users = db.query(`
+    const users = await db.query(`
       SELECT DISTINCT u.id, u.email, u.first_name, u.last_name
       FROM users u
-      JOIN user_roles ur ON ur.user_id = u.id AND ur.is_active = 1
-      WHERE u.is_active = 1 AND ur.role = 'dta'
+      JOIN user_roles ur ON ur.user_id = u.id AND ur.is_active = TRUE
+      WHERE u.is_active = TRUE AND ur.role = 'dta'
       ORDER BY u.last_name, u.first_name
     `).all() as any[];
 

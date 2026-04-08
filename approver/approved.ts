@@ -9,7 +9,7 @@ export class ApprovedRequestsPage {
     const db = getDb();
     
     // Get all requests approved by this approver (regardless of current status)
-    const approvedRequests = db.query(`
+    const approvedRequests = await db.query(`
       SELECT 
         r.*,
         u.email as requestor_email,

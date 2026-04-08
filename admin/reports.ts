@@ -10,23 +10,23 @@ export class AdminReports {
     
     // Get report data
     const userStats = {
-      total: db.query("SELECT COUNT(*) as count FROM users").get() as any,
-      active: db.query("SELECT COUNT(*) as count FROM users WHERE is_active = 1").get() as any,
-      inactive: db.query("SELECT COUNT(*) as count FROM users WHERE is_active = 0").get() as any
+      total: await db.query("SELECT COUNT(*) as count FROM users").get() as any,
+      active: await db.query("SELECT COUNT(*) as count FROM users WHERE is_active = TRUE").get() as any,
+      inactive: await db.query("SELECT COUNT(*) as count FROM users WHERE is_active = FALSE").get() as any
     };
 
     const requestStats = {
-      total: db.query("SELECT COUNT(*) as count FROM aft_requests").get() as any,
-      pending: db.query("SELECT COUNT(*) as count FROM aft_requests WHERE status NOT IN ('completed', 'rejected', 'cancelled')").get() as any,
-      completed: db.query("SELECT COUNT(*) as count FROM aft_requests WHERE status = 'completed'").get() as any
+      total: await db.query("SELECT COUNT(*) as count FROM aft_requests").get() as any,
+      pending: await db.query("SELECT COUNT(*) as count FROM aft_requests WHERE status NOT IN ('completed', 'rejected', 'cancelled')").get() as any,
+      completed: await db.query("SELECT COUNT(*) as count FROM aft_requests WHERE status = 'completed'").get() as any
     };
 
     const securityStats = {
-      totalLogins: db.query("SELECT COUNT(*) as count FROM security_audit_log WHERE action = 'LOGIN_SUCCESS'").get() as any,
-      failedLogins: db.query("SELECT COUNT(*) as count FROM security_audit_log WHERE action = 'LOGIN_FAILED'").get() as any,
-      todayLogins: db.query(`
+      totalLogins: await db.query("SELECT COUNT(*) as count FROM security_audit_log WHERE action = 'LOGIN_SUCCESS'").get() as any,
+      failedLogins: await db.query("SELECT COUNT(*) as count FROM security_audit_log WHERE action = 'LOGIN_FAILED'").get() as any,
+      todayLogins: await db.query(`
         SELECT COUNT(*) as count FROM security_audit_log 
-        WHERE action = 'LOGIN_SUCCESS' AND timestamp > (unixepoch() - 86400)
+        WHERE action = 'LOGIN_SUCCESS' AND timestamp > (EXTRACT(EPOCH FROM NOW())::BIGINT - 86400)
       `).get() as any
     };
 

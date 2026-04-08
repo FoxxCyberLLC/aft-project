@@ -8,6 +8,11 @@ dist
 
 data
 /data
+*.db
+*.db-wal
+*.db-shm
+pgdata
+/pgdata
 
 # code coverage
 coverage

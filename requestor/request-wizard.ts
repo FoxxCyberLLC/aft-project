@@ -40,7 +40,7 @@ export class RequestWizard {
     
     // Load existing draft if editing
     if (draftId) {
-      existingDraft = db.query("SELECT * FROM aft_requests WHERE id = ? AND requestor_id = ?").get(draftId, userId) as any;
+      existingDraft = await db.query("SELECT * FROM aft_requests WHERE id = ? AND requestor_id = ?").get(draftId, userId) as any;
       if (existingDraft) {
         // Parse files list if it exists
         if (existingDraft.files_list) {

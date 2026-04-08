@@ -2,22 +2,33 @@
 import { getDb, UserRole, getRoleDisplayName, getRoleDescription, backupDatabase, runMaintenance, getSystemSettings, saveSystemSettings } from "../../lib/database-bun";
 import { auditLog } from "../../lib/security";
 import { RoleMiddleware } from "../../middleware/role-middleware";
+import { escapeCsv } from "../../lib/formatters";
 
 const db = getDb();
+
+// Helper that runs the standard admin-API checks: must be authenticated as
+// admin AND, for state-changing methods, must present a valid CSRF token.
+async function adminAuth(request: Request, ipAddress: string) {
+  const authResult = await RoleMiddleware.checkAuthAndRole(request, ipAddress, UserRole.ADMIN);
+  if (authResult.response) return authResult;
+  const csrfFail = RoleMiddleware.verifyCsrf(request, authResult.session);
+  if (csrfFail) return { session: authResult.session, response: csrfFail };
+  return authResult;
+}
 
 export async function handleAdminAPI(request: Request, path: string, ipAddress: string): Promise<Response | null> {
   const method = request.method;
   
   // Admin stats API
   if (path === '/api/admin/stats' && method === 'GET') {
-    const authResult = await RoleMiddleware.checkAuthAndRole(request, ipAddress, UserRole.ADMIN);
+    const authResult = await adminAuth(request, ipAddress);
     if (authResult.response) return authResult.response;
     
-    const userCount = db.query("SELECT COUNT(*) as count FROM users WHERE is_active = 1").get() as any;
-    const requestCount = db.query("SELECT COUNT(*) as count FROM aft_requests").get() as any;
-    const recentLogins = db.query(`
+    const userCount = await db.query("SELECT COUNT(*) as count FROM users WHERE is_active = TRUE").get() as any;
+    const requestCount = await db.query("SELECT COUNT(*) as count FROM aft_requests").get() as any;
+    const recentLogins = await db.query(`
       SELECT COUNT(*) as count FROM security_audit_log 
-      WHERE action = 'LOGIN_SUCCESS' AND timestamp > (unixepoch() - 86400)
+      WHERE action = 'LOGIN_SUCCESS' AND timestamp > (EXTRACT(EPOCH FROM NOW())::BIGINT - 86400)
     `).get() as any;
     
     return new Response(JSON.stringify({
@@ -32,10 +43,10 @@ export async function handleAdminAPI(request: Request, path: string, ipAddress: 
   
   // Security audit API
   if (path === '/api/security/audit' && method === 'GET') {
-    const authResult = await RoleMiddleware.checkAuthAndRole(request, ipAddress, UserRole.ADMIN);
+    const authResult = await adminAuth(request, ipAddress);
     if (authResult.response) return authResult.response;
     
-    const logs = db.query(`
+    const logs = await db.query(`
       SELECT 
         sal.*, 
         u.first_name || ' ' || u.last_name as user_name,
@@ -53,7 +64,7 @@ export async function handleAdminAPI(request: Request, path: string, ipAddress: 
   
   // User Management APIs
   if (path === '/api/admin/users' && method === 'POST') {
-    const authResult = await RoleMiddleware.checkAuthAndRole(request, ipAddress, UserRole.ADMIN);
+    const authResult = await adminAuth(request, ipAddress);
     if (authResult.response) return authResult.response;
     
     try {
@@ -63,7 +74,7 @@ export async function handleAdminAPI(request: Request, path: string, ipAddress: 
         cost: 12,
       });
       
-      const result = db.query(`
+      const result = await db.query(`
         INSERT INTO users (email, password, first_name, last_name, primary_role, organization, phone, is_active)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         RETURNING id
@@ -75,11 +86,11 @@ export async function handleAdminAPI(request: Request, path: string, ipAddress: 
         userData.primary_role,
         userData.organization || null,
         userData.phone || null,
-        userData.is_active ? 1 : 0
+        userData.is_active ? true : false
       ) as any;
       
       // Add primary role to user_roles table
-      db.query(`
+      await db.query(`
         INSERT INTO user_roles (user_id, role, is_active, assigned_by)
         VALUES (?, ?, 1, ?)
       `).run(result.id, userData.primary_role, authResult.session.userId);
@@ -102,7 +113,7 @@ export async function handleAdminAPI(request: Request, path: string, ipAddress: 
   }
   
   if (path.startsWith('/api/admin/users/') && path.endsWith('/roles') && method === 'GET') {
-    const authResult = await RoleMiddleware.checkAuthAndRole(request, ipAddress, UserRole.ADMIN);
+    const authResult = await adminAuth(request, ipAddress);
     if (authResult.response) return authResult.response;
     
     const userId = path.split('/')[4];
@@ -114,7 +125,7 @@ export async function handleAdminAPI(request: Request, path: string, ipAddress: 
     }
     
     // Get user info
-    const user = db.query("SELECT * FROM users WHERE id = ?").get(userId) as any;
+    const user = await db.query("SELECT * FROM users WHERE id = ?").get(userId) as any;
     if (!user) {
       return new Response(JSON.stringify({ error: 'User not found' }), { 
         status: 404,
@@ -123,9 +134,9 @@ export async function handleAdminAPI(request: Request, path: string, ipAddress: 
     }
     
     // Get user's current roles
-    const userRoles = db.query(`
+    const userRoles = await db.query(`
       SELECT role FROM user_roles 
-      WHERE user_id = ? AND is_active = 1
+      WHERE user_id = ? AND is_active = TRUE
     `).all(userId);
     
     // Get all available roles
@@ -145,7 +156,7 @@ export async function handleAdminAPI(request: Request, path: string, ipAddress: 
   }
   
   if (path.startsWith('/api/admin/users/') && path.endsWith('/roles') && method === 'PUT') {
-    const authResult = await RoleMiddleware.checkAuthAndRole(request, ipAddress, UserRole.ADMIN);
+    const authResult = await adminAuth(request, ipAddress);
     if (authResult.response) return authResult.response;
     
     const userId = path.split('/')[4];
@@ -158,7 +169,7 @@ export async function handleAdminAPI(request: Request, path: string, ipAddress: 
     const { roles } = await request.json() as { roles: string[] };
     
     // Get user's primary role (cannot be removed)
-    const user = db.query("SELECT primary_role FROM users WHERE id = ?").get(userId) as any;
+    const user = await db.query("SELECT primary_role FROM users WHERE id = ?").get(userId) as any;
     if (!user) {
       return new Response(JSON.stringify({ error: 'User not found' }), { 
         status: 404,
@@ -170,11 +181,11 @@ export async function handleAdminAPI(request: Request, path: string, ipAddress: 
     const allRoles = [...new Set([user.primary_role, ...roles])];
     
     // Remove all current roles (except we'll re-add them)
-    db.query("DELETE FROM user_roles WHERE user_id = ?").run(userId);
+    await db.query("DELETE FROM user_roles WHERE user_id = ?").run(userId);
     
     // Add all roles back
     for (const role of allRoles) {
-      db.query(`
+      await db.query(`
         INSERT INTO user_roles (user_id, role, is_active, assigned_by)
         VALUES (?, ?, 1, ?)
       `).run(userId, role, authResult.session.userId);
@@ -189,7 +200,7 @@ export async function handleAdminAPI(request: Request, path: string, ipAddress: 
   }
   
   if (path.startsWith('/api/admin/users/') && method === 'GET') {
-    const authResult = await RoleMiddleware.checkAuthAndRole(request, ipAddress, UserRole.ADMIN);
+    const authResult = await adminAuth(request, ipAddress);
     if (authResult.response) return authResult.response;
     
     const userId = path.split('/')[4];
@@ -199,7 +210,7 @@ export async function handleAdminAPI(request: Request, path: string, ipAddress: 
         headers: { 'Content-Type': 'application/json' }
       });
     }
-    const user = db.query("SELECT * FROM users WHERE id = ?").get(userId) as any;
+    const user = await db.query("SELECT * FROM users WHERE id = ?").get(userId) as any;
     
     if (!user) {
       return new Response(JSON.stringify({ error: 'User not found' }), { 
@@ -214,7 +225,7 @@ export async function handleAdminAPI(request: Request, path: string, ipAddress: 
   }
   
   if (path.startsWith('/api/admin/users/') && method === 'PUT') {
-    const authResult = await RoleMiddleware.checkAuthAndRole(request, ipAddress, UserRole.ADMIN);
+    const authResult = await adminAuth(request, ipAddress);
     if (authResult.response) return authResult.response;
     
     try {
@@ -233,7 +244,7 @@ export async function handleAdminAPI(request: Request, path: string, ipAddress: 
       let updateQuery = `
         UPDATE users 
         SET first_name = ?, last_name = ?, email = ?, primary_role = ?, 
-            organization = ?, phone = ?, is_active = ?, updated_at = unixepoch()
+            organization = ?, phone = ?, is_active = ?, updated_at = EXTRACT(EPOCH FROM NOW())::BIGINT
         WHERE id = ?
       `;
       let params = [
@@ -243,7 +254,7 @@ export async function handleAdminAPI(request: Request, path: string, ipAddress: 
         userData.primary_role,
         userData.organization || null,
         userData.phone || null,
-        userData.is_active ? 1 : 0,
+        userData.is_active ? true : false,
         userId
       ];
       
@@ -256,7 +267,7 @@ export async function handleAdminAPI(request: Request, path: string, ipAddress: 
         updateQuery = `
           UPDATE users 
           SET first_name = ?, last_name = ?, email = ?, password = ?, primary_role = ?, 
-              organization = ?, phone = ?, is_active = ?, updated_at = unixepoch()
+              organization = ?, phone = ?, is_active = ?, updated_at = EXTRACT(EPOCH FROM NOW())::BIGINT
           WHERE id = ?
         `;
         params = [
@@ -267,12 +278,12 @@ export async function handleAdminAPI(request: Request, path: string, ipAddress: 
           userData.primary_role,
           userData.organization || null,
           userData.phone || null,
-          userData.is_active ? 1 : 0,
+          userData.is_active ? true : false,
           userId
         ];
       }
       
-      db.query(updateQuery).run(...params);
+      await db.query(updateQuery).run(...params);
       
       await auditLog(authResult.session.userId, 'USER_UPDATED', 
         `Updated user: ${userData.email}`, ipAddress);
@@ -293,7 +304,7 @@ export async function handleAdminAPI(request: Request, path: string, ipAddress: 
   
   // Database Backup API
   if (path === '/api/admin/backup-database' && method === 'POST') {
-    const authResult = await RoleMiddleware.checkAuthAndRole(request, ipAddress, UserRole.ADMIN);
+    const authResult = await adminAuth(request, ipAddress);
     if (authResult.response) return authResult.response;
 
     try {
@@ -325,11 +336,11 @@ export async function handleAdminAPI(request: Request, path: string, ipAddress: 
   
   // Database Maintenance API
   if (path === '/api/admin/run-maintenance' && method === 'POST') {
-    const authResult = await RoleMiddleware.checkAuthAndRole(request, ipAddress, UserRole.ADMIN);
+    const authResult = await adminAuth(request, ipAddress);
     if (authResult.response) return authResult.response;
 
     try {
-      runMaintenance();
+      await runMaintenance();
       
       await auditLog(authResult.session.userId, 'DB_MAINTENANCE_RUN', 
         'Database maintenance (VACUUM, ANALYZE) completed.', ipAddress);
@@ -356,10 +367,10 @@ export async function handleAdminAPI(request: Request, path: string, ipAddress: 
   
   // Email Settings API
   if (path === '/api/admin/email-settings' && method === 'GET') {
-    const authResult = await RoleMiddleware.checkAuthAndRole(request, ipAddress, UserRole.ADMIN);
+    const authResult = await adminAuth(request, ipAddress);
     if (authResult.response) return authResult.response;
 
-    const allSettings = getSystemSettings();
+    const allSettings = await getSystemSettings();
     const emailSettings = {
       smtpServer: allSettings['email.smtpServer'] || '',
       smtpPort: allSettings['email.smtpPort'] || '587',
@@ -372,7 +383,7 @@ export async function handleAdminAPI(request: Request, path: string, ipAddress: 
   }
 
   if (path === '/api/admin/email-settings' && method === 'POST') {
-    const authResult = await RoleMiddleware.checkAuthAndRole(request, ipAddress, UserRole.ADMIN);
+    const authResult = await adminAuth(request, ipAddress);
     if (authResult.response) return authResult.response;
 
     try {
@@ -383,7 +394,7 @@ export async function handleAdminAPI(request: Request, path: string, ipAddress: 
         'email.smtpSecurity': body.smtpSecurity,
       };
 
-      saveSystemSettings(settingsToSave);
+      await saveSystemSettings(settingsToSave);
 
       await auditLog(authResult.session.userId, 'EMAIL_SETTINGS_UPDATED', 
         'Email settings were updated.', ipAddress);
@@ -400,7 +411,7 @@ export async function handleAdminAPI(request: Request, path: string, ipAddress: 
   }
   
   if (path === '/api/admin/test-email' && method === 'POST') {
-    const authResult = await RoleMiddleware.checkAuthAndRole(request, ipAddress, UserRole.ADMIN);
+    const authResult = await adminAuth(request, ipAddress);
     if (authResult.response) return authResult.response;
 
     try {
@@ -430,30 +441,37 @@ export async function handleAdminAPI(request: Request, path: string, ipAddress: 
   }
   
   if (path === '/api/admin/export-logs' && method === 'GET') {
-    const authResult = await RoleMiddleware.checkAuthAndRole(request, ipAddress, UserRole.ADMIN);
+    const authResult = await adminAuth(request, ipAddress);
     if (authResult.response) return authResult.response;
 
     try {
-      const logs = db.query(`
-        SELECT 
-          sal.id, 
-          sal.timestamp, 
-          sal.action, 
-          sal.details, 
-          sal.ip_address, 
+      const logs = await db.query(`
+        SELECT
+          sal.id,
+          sal.timestamp,
+          sal.action,
+          sal.description,
+          sal.ip_address,
           u.email as user_email
         FROM security_audit_log sal
         LEFT JOIN users u ON sal.user_id = u.id
         ORDER BY sal.timestamp DESC
       `).all() as any[];
 
-      // Convert to CSV
-      const header = 'ID,Timestamp,User,Action,Details,IP Address\n';
+      // Convert to CSV with proper quoting and CSV-injection scrubbing.
+      const header = ['ID','Timestamp','User','Action','Details','IP Address']
+        .map(escapeCsv).join(',') + '\n';
       const csvRows = logs.map(log => {
         const timestamp = new Date(log.timestamp * 1000).toISOString();
         const user = log.user_email || 'System';
-        const details = `\"${(log.details || '').replace(/"/g, '""')}\"`
-        return `${log.id},${timestamp},${user},${log.action},${details},${log.ip_address}`;
+        return [
+          log.id,
+          timestamp,
+          user,
+          log.action,
+          log.description || '',
+          log.ip_address || ''
+        ].map(escapeCsv).join(',');
       }).join('\n');
 
       const csv = header + csvRows;
@@ -476,12 +494,12 @@ export async function handleAdminAPI(request: Request, path: string, ipAddress: 
   }
   
   if (path === '/api/admin/health-check' && method === 'GET') {
-    const authResult = await RoleMiddleware.checkAuthAndRole(request, ipAddress, UserRole.ADMIN);
+    const authResult = await adminAuth(request, ipAddress);
     if (authResult.response) return authResult.response;
 
     try {
       // Check database connection
-      db.query("SELECT 1").get();
+      await db.query("SELECT 1").get();
       const dbStatus = 'OK';
 
       const healthStatus = {
@@ -512,22 +530,22 @@ export async function handleAdminAPI(request: Request, path: string, ipAddress: 
   
   // Security Settings API
   if (path === '/api/admin/security-settings' && method === 'GET') {
-    const authResult = await RoleMiddleware.checkAuthAndRole(request, ipAddress, UserRole.ADMIN);
+    const authResult = await adminAuth(request, ipAddress);
     if (authResult.response) return authResult.response;
 
-    const allSettings = getSystemSettings();
+    const allSettings = await getSystemSettings();
     return new Response(JSON.stringify(allSettings), {
       headers: { 'Content-Type': 'application/json' }
     });
   }
 
   if (path === '/api/admin/security-settings' && method === 'POST') {
-    const authResult = await RoleMiddleware.checkAuthAndRole(request, ipAddress, UserRole.ADMIN);
+    const authResult = await adminAuth(request, ipAddress);
     if (authResult.response) return authResult.response;
 
     try {
       const settings = await request.json() as Record<string, string>;
-      saveSystemSettings(settings);
+      await saveSystemSettings(settings);
 
       await auditLog(authResult.session.userId, 'SECURITY_SETTINGS_UPDATED', 
         'Security settings were updated.', ipAddress);
@@ -544,7 +562,7 @@ export async function handleAdminAPI(request: Request, path: string, ipAddress: 
   }
   
   if (path === '/api/admin/restart-system' && method === 'POST') {
-    const authResult = await RoleMiddleware.checkAuthAndRole(request, ipAddress, UserRole.ADMIN);
+    const authResult = await adminAuth(request, ipAddress);
     if (authResult.response) return authResult.response;
 
     await auditLog(authResult.session.userId, 'SYSTEM_RESTART_INITIATED', 
@@ -562,7 +580,7 @@ export async function handleAdminAPI(request: Request, path: string, ipAddress: 
   }
   
   if (path === '/api/admin/clear-cache' && method === 'POST') {
-    const authResult = await RoleMiddleware.checkAuthAndRole(request, ipAddress, UserRole.ADMIN);
+    const authResult = await adminAuth(request, ipAddress);
     if (authResult.response) return authResult.response;
 
     // In a real app, this would clear a Redis/Memcached cache or an in-memory store.
@@ -577,22 +595,22 @@ export async function handleAdminAPI(request: Request, path: string, ipAddress: 
   
   // Backup Settings API
   if (path === '/api/admin/backup-settings' && method === 'GET') {
-    const authResult = await RoleMiddleware.checkAuthAndRole(request, ipAddress, UserRole.ADMIN);
+    const authResult = await adminAuth(request, ipAddress);
     if (authResult.response) return authResult.response;
 
-    const settings = getSystemSettings();
+    const settings = await getSystemSettings();
     return new Response(JSON.stringify(settings), {
       headers: { 'Content-Type': 'application/json' }
     });
   }
 
   if (path === '/api/admin/backup-settings' && method === 'POST') {
-    const authResult = await RoleMiddleware.checkAuthAndRole(request, ipAddress, UserRole.ADMIN);
+    const authResult = await adminAuth(request, ipAddress);
     if (authResult.response) return authResult.response;
 
     try {
       const settings = await request.json() as Record<string, string>;
-      saveSystemSettings(settings);
+      await saveSystemSettings(settings);
 
       await auditLog(authResult.session.userId, 'BACKUP_SCHEDULE_UPDATED', 
         `Backup schedule updated to: ${Object.values(settings).join(', ')}`, ipAddress);
@@ -609,7 +627,7 @@ export async function handleAdminAPI(request: Request, path: string, ipAddress: 
   }
   
   if (path.startsWith('/api/admin/requests/') && method === 'DELETE') {
-    const authResult = await RoleMiddleware.checkAuthAndRole(request, ipAddress, UserRole.ADMIN);
+    const authResult = await adminAuth(request, ipAddress);
     if (authResult.response) return authResult.response;
 
     const requestId = path.split('/')[4];
@@ -621,7 +639,7 @@ export async function handleAdminAPI(request: Request, path: string, ipAddress: 
     }
 
     try {
-      const requestToDelete = db.query("SELECT status FROM aft_requests WHERE id = ?").get(requestId) as { status: string } | undefined;
+      const requestToDelete = await db.query("SELECT status FROM aft_requests WHERE id = ?").get(requestId) as { status: string } | undefined;
 
       if (!requestToDelete) {
         return new Response(JSON.stringify({ success: false, message: 'Request not found' }), {
@@ -639,7 +657,7 @@ export async function handleAdminAPI(request: Request, path: string, ipAddress: 
         });
       }
 
-      db.query("DELETE FROM aft_requests WHERE id = ?").run(requestId);
+      await db.query("DELETE FROM aft_requests WHERE id = ?").run(requestId);
 
       await auditLog(authResult.session.userId, 'REQUEST_DELETED',
         `Deleted request ID: ${requestId}`, ipAddress);

@@ -43,8 +43,8 @@ export async function handleTimelineAPI(request: Request, path: string, ipAddres
       }
       
       const requestData = auth.activeRole === 'requestor' 
-        ? db.query(request_query).get(requestId, auth.userId) as any
-        : db.query(request_query).get(requestId) as any;
+        ? await db.query(request_query).get(requestId, auth.userId) as any
+        : await db.query(request_query).get(requestId) as any;
       
       if (!requestData) {
         return new Response(JSON.stringify({ 

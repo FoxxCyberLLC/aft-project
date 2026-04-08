@@ -8,16 +8,16 @@ export class DTADashboard {
     const db = getDb();
     
     // Get DTA statistics - filtered by assigned DTA
-    const allRequests = db.query("SELECT COUNT(*) as count FROM aft_requests WHERE dta_id = ?").get(userId) as any;
-    const dtaPendingRequests = db.query(`
+    const allRequests = await db.query("SELECT COUNT(*) as count FROM aft_requests WHERE dta_id = ?").get(userId) as any;
+    const dtaPendingRequests = await db.query(`
       SELECT COUNT(*) as count FROM aft_requests 
       WHERE status = 'pending_dta' AND dta_id = ?
     `).get(userId) as any;
-    const activeTransfers = db.query(`
+    const activeTransfers = await db.query(`
       SELECT COUNT(*) as count FROM aft_requests 
       WHERE status = 'active_transfer' AND dta_id = ?
     `).get(userId) as any;
-    const recentRequests = db.query(`
+    const recentRequests = await db.query(`
       SELECT * FROM aft_requests 
       WHERE status IN ('pending_dta', 'active_transfer', 'completed')
         AND dta_id = ?
@@ -50,18 +50,25 @@ export class DTADashboard {
     let scanStats: any = { origination_scans: 0, destination_scans: 0, total_threats: 0 };
     
     try {
-      const columns = db.query("PRAGMA table_info(aft_requests)").all() as Array<{ name: string }>;
+      // Check column existence via Postgres information_schema (the columns
+      // are present after schema migrations have run, but we keep the guard
+      // here for legacy databases that pre-date the migration).
+      const columns = await db.query(`
+        SELECT column_name AS name
+        FROM information_schema.columns
+        WHERE table_name = 'aft_requests'
+      `).all() as Array<{ name: string }>;
       const columnNames = columns.map(c => c.name);
-      
-      if (columnNames.includes('origination_scan_performed') && 
+
+      if (columnNames.includes('origination_scan_performed') &&
           columnNames.includes('destination_scan_performed') &&
           columnNames.includes('origination_threats_found') &&
           columnNames.includes('destination_threats_found')) {
         
-        scanStats = db.query(`
+        scanStats = await db.query(`
           SELECT 
-            COUNT(CASE WHEN origination_scan_performed = 1 THEN 1 END) as origination_scans,
-            COUNT(CASE WHEN destination_scan_performed = 1 THEN 1 END) as destination_scans,
+            COUNT(CASE WHEN origination_scan_performed = TRUE THEN 1 END) as origination_scans,
+            COUNT(CASE WHEN destination_scan_performed = TRUE THEN 1 END) as destination_scans,
             SUM(COALESCE(origination_threats_found, 0) + COALESCE(destination_threats_found, 0)) as total_threats
           FROM aft_requests
           WHERE status IN ('active_transfer', 'pending_sme_signature', 'completed', 'disposed')

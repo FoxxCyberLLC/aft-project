@@ -1,0 +1,60 @@
+# Convenience wrapper for the all-in-one AFT container.
+#
+# Quick start:
+#   1. Copy .env.example to .env and fill in:
+#        AFT_PROXY_SHARED_SECRET=$(openssl rand -hex 32)
+#        AFT_ADMIN_BOOTSTRAP_PASSWORD='change-me-please-1234'
+#        POSTGRES_PASSWORD='set-a-strong-pg-password'
+#   2. (optional) place TLS material in ./ssl/cert.pem and ./ssl/key.pem
+#      (otherwise the container will generate a self-signed cert on first
+#      boot for local testing).
+#   3. docker compose up -d --build
+#
+# The first boot bootstraps Postgres and seeds the admin user. Subsequent
+# boots are just `docker compose up -d`.
+
+services:
+  aft:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: aft:latest
+    container_name: aft
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      # ---- Reverse-proxy security ----
+      AFT_PROXY_SHARED_SECRET: "${AFT_PROXY_SHARED_SECRET:?AFT_PROXY_SHARED_SECRET must be set}"
+      # ---- Admin bootstrap (only used until an admin exists) ----
+      AFT_ADMIN_BOOTSTRAP_EMAIL: "${AFT_ADMIN_BOOTSTRAP_EMAIL:-admin@aft.gov}"
+      AFT_ADMIN_BOOTSTRAP_PASSWORD: "${AFT_ADMIN_BOOTSTRAP_PASSWORD:?AFT_ADMIN_BOOTSTRAP_PASSWORD must be set on first boot}"
+      # ---- Postgres ----
+      POSTGRES_USER: "${POSTGRES_USER:-aft}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}"
+      POSTGRES_DB: "${POSTGRES_DB:-aft}"
+      # ---- SMTP (optional, leave blank to disable email) ----
+      SMTP_HOST: "${SMTP_HOST:-}"
+      SMTP_PORT: "${SMTP_PORT:-587}"
+      SMTP_SECURE: "${SMTP_SECURE:-false}"
+      SMTP_USER: "${SMTP_USER:-}"
+      SMTP_PASS: "${SMTP_PASS:-}"
+      SMTP_FROM: "${SMTP_FROM:-AFT System <noreply@aft-system.local>}"
+      SMTP_REPLY_TO: "${SMTP_REPLY_TO:-}"
+    volumes:
+      - aft_pgdata:/var/lib/postgresql/data
+      - aft_logs:/var/log/aft
+      # Mount your own TLS material here. If absent, the container generates
+      # a self-signed cert on first boot.
+      - ./ssl:/etc/aft/ssl
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  aft_pgdata:
+  aft_logs:

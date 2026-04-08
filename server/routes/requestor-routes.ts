@@ -83,7 +83,7 @@ export async function handleRequestorRoutes(request: Request, path: string, ipAd
 // Handle individual request detail page
 export async function handleRequestDetailPage(request: Request, requestId: number, user: any, userId: number): Promise<Response> {
   // Get request details - ensure requestor can only view their own requests
-  const requestData = db.query(`
+  const requestData = await db.query(`
     SELECT ar.*, u.first_name || ' ' || u.last_name as requestor_name
     FROM aft_requests ar
     LEFT JOIN users u ON ar.requestor_id = u.id
@@ -99,7 +99,7 @@ export async function handleRequestDetailPage(request: Request, requestId: numbe
   const timelineData = RequestTrackingService.getRequestTimeline(requestId);
   
   // Get CAC signature data for this request
-  const cacSignature = db.query(`
+  const cacSignature = await db.query(`
     SELECT cs.*, u.first_name || ' ' || u.last_name as signer_name
     FROM cac_signatures cs
     LEFT JOIN users u ON cs.user_id = u.id

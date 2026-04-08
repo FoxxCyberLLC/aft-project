@@ -8,55 +8,62 @@ export class CPSOReportsPage {
   static async render(user: CPSOUser): Promise<string> {
     const db = getDb();
     
-    // Get CPSO review statistics
+    // CPSO actions are recorded against the shared approver_email column
+    // when the request advances out of pending_cpso. Statuses moved past
+    // pending_cpso ('pending_dta' and beyond, plus 'rejected' / 'approved')
+    // count as CPSO-acted requests.
+    const cpsoAdvancedStatuses = ['approved', 'rejected', 'pending_dta', 'active_transfer', 'pending_sme_signature', 'pending_media_custodian', 'completed', 'disposed'];
+    const advancedStatusList = cpsoAdvancedStatuses.map(() => '?').join(',');
+
     const stats = {
-      total: db.query(`
-        SELECT COUNT(*) as count FROM aft_requests 
-        WHERE cpso_email = ?
+      total: await db.query(`
+        SELECT COUNT(*) as count FROM aft_requests
+        WHERE approver_email = ? AND status IN (${advancedStatusList})
+      `).get(user.email, ...cpsoAdvancedStatuses) as any,
+
+      approved: await db.query(`
+        SELECT COUNT(*) as count FROM aft_requests
+        WHERE approver_email = ? AND status NOT IN ('rejected', 'cancelled')
+          AND status IN (${advancedStatusList})
+      `).get(user.email, ...cpsoAdvancedStatuses) as any,
+
+      rejected: await db.query(`
+        SELECT COUNT(*) as count FROM aft_requests
+        WHERE approver_email = ? AND status = 'rejected'
       `).get(user.email) as any,
-      
-      approved: db.query(`
-        SELECT COUNT(*) as count FROM aft_requests 
-        WHERE cpso_status = 'approved' AND cpso_email = ?
-      `).get(user.email) as any,
-      
-      rejected: db.query(`
-        SELECT COUNT(*) as count FROM aft_requests 
-        WHERE cpso_status = 'rejected' AND cpso_email = ?
-      `).get(user.email) as any,
-      
-      avgProcessingTime: db.query(`
-        SELECT AVG(julianday(cpso_reviewed_at) - julianday(created_at)) * 24 as hours
-        FROM aft_requests 
-        WHERE cpso_status IN ('approved', 'rejected') AND cpso_email = ?
-      `).get(user.email) as any
+
+      avgProcessingTime: await db.query(`
+        SELECT AVG((updated_at - created_at) / 3600.0) as hours
+        FROM aft_requests
+        WHERE approver_email = ? AND status IN (${advancedStatusList})
+      `).get(user.email, ...cpsoAdvancedStatuses) as any
     };
 
     // Get monthly breakdown
-    const monthlyData = db.query(`
-      SELECT 
-        strftime('%Y-%m', cpso_reviewed_at) as month,
-        COUNT(CASE WHEN cpso_status = 'approved' THEN 1 END) as approved,
-        COUNT(CASE WHEN cpso_status = 'rejected' THEN 1 END) as rejected
+    const monthlyData = await db.query(`
+      SELECT
+        to_char(to_timestamp(updated_at), 'YYYY-MM') as month,
+        COUNT(CASE WHEN status NOT IN ('rejected', 'cancelled') THEN 1 END) as approved,
+        COUNT(CASE WHEN status = 'rejected' THEN 1 END) as rejected
       FROM aft_requests
-      WHERE cpso_email = ? AND cpso_status IN ('approved', 'rejected')
+      WHERE approver_email = ? AND status IN (${advancedStatusList})
       GROUP BY month
       ORDER BY month DESC
       LIMIT 6
-    `).all(user.email) as any[];
+    `).all(user.email, ...cpsoAdvancedStatuses) as any[];
 
     // Get system breakdown
-    const systemData = db.query(`
-      SELECT 
+    const systemData = await db.query(`
+      SELECT
         source_system,
         dest_system,
         COUNT(*) as count
       FROM aft_requests
-      WHERE cpso_email = ? AND cpso_status IN ('approved', 'rejected')
+      WHERE approver_email = ? AND status IN (${advancedStatusList})
       GROUP BY source_system, dest_system
       ORDER BY count DESC
       LIMIT 10
-    `).all(user.email) as any[];
+    `).all(user.email, ...cpsoAdvancedStatuses) as any[];
 
     const approvalRate = stats.total?.count ? 
       Math.round((stats.approved?.count / stats.total?.count) * 100) : 0;

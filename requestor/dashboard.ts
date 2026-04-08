@@ -8,12 +8,12 @@ export class RequestorDashboard {
     const db = getDb();
     
     // Get requestor's statistics
-    const myRequests = db.query("SELECT COUNT(*) as count FROM aft_requests WHERE requestor_id = ?").get(userId) as any;
-    const pendingRequests = db.query(`
+    const myRequests = await db.query("SELECT COUNT(*) as count FROM aft_requests WHERE requestor_id = ?").get(userId) as any;
+    const pendingRequests = await db.query(`
       SELECT COUNT(*) as count FROM aft_requests 
       WHERE requestor_id = ? AND status NOT IN ('completed', 'rejected', 'cancelled')
     `).get(userId) as any;
-    const recentRequests = db.query(`
+    const recentRequests = await db.query(`
       SELECT * FROM aft_requests 
       WHERE requestor_id = ?
       ORDER BY created_at DESC 
