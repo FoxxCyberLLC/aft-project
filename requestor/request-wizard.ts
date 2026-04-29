@@ -30,6 +30,11 @@ export interface AFTRequestDraft {
   destination_address?: string;
   media_encrypted?: boolean;
   destinations_json?: string;
+
+  // DAO out-of-band attestation (high-to-low only)
+  dao_approved?: boolean;
+  dao_approver_name?: string;
+  dao_approval_date?: string; // ISO yyyy-mm-dd from <input type="date">
 }
 
 async function render(user: RequestorUser, userId: number, draftId?: number): Promise<string> {
@@ -279,7 +284,7 @@ async function render(user: RequestorUser, userId: number, draftId?: number): Pr
             ],
           }),
         })}
-        
+
         ${FormComponents.formField({
           label: 'Destination File Operation',
           required: true,
@@ -294,6 +299,60 @@ async function render(user: RequestorUser, userId: number, draftId?: number): Pr
             ],
           }),
         })}
+      </div>
+
+      <!-- DAO Attestation (high-to-low only; toggled via inline JS in getScript) -->
+      <div
+        id="dao-attestation-block"
+        class="hidden border border-[var(--warning)] bg-[var(--warning)]/5 rounded-md p-4 space-y-4"
+        data-dao-block
+      >
+        <div class="flex items-start gap-3">
+          <div class="flex-1">
+            <h4 class="text-sm font-semibold text-[var(--foreground)]">
+              DAO Out-of-Band Approval (High-to-Low)
+            </h4>
+            <p class="text-xs text-[var(--muted-foreground)] mt-1">
+              The Designated Authorizing Official signs the AFT request form on the
+              unclassified side. Confirm their approval below before submitting.
+            </p>
+          </div>
+        </div>
+
+        <label class="flex items-start gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            name="dao_approved"
+            id="dao_approved"
+            ${existingDraft?.dao_approved ? 'checked' : ''}
+            class="mt-1 h-4 w-4 rounded border-[var(--border)]"
+          />
+          <span class="text-sm text-[var(--foreground)]">
+            I confirm the DAO has signed the AFT request form for this high-to-low transfer.
+          </span>
+        </label>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          ${FormComponents.formField({
+            label: 'DAO Approver Name',
+            description: 'Full name as signed on the AFT form',
+            children: FormComponents.textInput({
+              name: 'dao_approver_name',
+              value: (existingDraft?.dao_approver_name as string) ?? '',
+              maxLength: 200,
+            }),
+          })}
+          ${FormComponents.formField({
+            label: 'DAO Approval Date',
+            description: 'Date the DAO signed the form',
+            children: `<input
+              type="date"
+              name="dao_approval_date"
+              value="${existingDraft?.dao_approval_date ? new Date(Number(existingDraft.dao_approval_date) * 1000).toISOString().slice(0, 10) : ''}"
+              class="w-full px-3 py-2 text-sm border border-[var(--border)] rounded-md bg-[var(--background)] text-[var(--foreground)]"
+            />`,
+          })}
+        </div>
       </div>
 
       <!-- Non-Human Readable Process -->
@@ -528,6 +587,31 @@ function getScript(): string {
           details.style.display = (value === 'true') ? 'block' : 'none';
         });
       });
+
+      // Toggle the DAO attestation block based on transfer type. The block
+      // is required for high-to-low transfers; the API rejects submissions
+      // without dao_approved/name/date for that transfer type.
+      function toggleDaoBlock() {
+        const sel = document.querySelector('select[name="transfer_type"]');
+        const block = document.getElementById('dao-attestation-block');
+        if (!sel || !block) return;
+        const isHighToLow = String(sel.value || '').toLowerCase().replace(/[-_\\s]/g, '_') === 'high_to_low';
+        block.classList.toggle('hidden', !isHighToLow);
+        // Mirror required-ness onto the inputs so browser validation kicks in.
+        const cb = block.querySelector('input[name="dao_approved"]');
+        const nm = block.querySelector('input[name="dao_approver_name"]');
+        const dt = block.querySelector('input[name="dao_approval_date"]');
+        [cb, nm, dt].forEach(function(el) {
+          if (!el) return;
+          if (isHighToLow) el.setAttribute('required', 'required');
+          else el.removeAttribute('required');
+        });
+      }
+      const transferTypeSel = document.querySelector('select[name="transfer_type"]');
+      if (transferTypeSel) {
+        transferTypeSel.addEventListener('change', toggleDaoBlock);
+      }
+      toggleDaoBlock();
 
       const controlNumberField = document.querySelector('input[name="media_control_number"]');
       if (controlNumberField && !controlNumberField.value) {

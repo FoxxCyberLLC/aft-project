@@ -134,12 +134,13 @@ Bun.serve({
     // Handle page routes
     let response: Response;
 
-    // Handle legacy dashboard routes - redirect to new role-specific routes
+    // Handle legacy dashboard routes - redirect to new role-specific routes.
+    // The DAO role is intentionally not implemented in-app: DAOs sign the
+    // AFT request form on the unclassified side; their approval is
+    // captured as an attestation on each high-to-low request rather than
+    // as an in-app workflow step.
     if (path === '/dashboard/approver' || path === '/dashboard/cpso') {
       response = Response.redirect('/approver', 302);
-    } else if (path === '/dashboard/dao') {
-      // This role is not yet implemented, return appropriate message
-      response = new Response('This role dashboard is not yet implemented', { status: 501 });
     } else if (path.startsWith('/sme') || path === '/dashboard/sme') {
       response = await handleSMERoutes(request, path, ipAddress);
     } else if (path === '/dashboard/dta') {

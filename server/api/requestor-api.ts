@@ -1,7 +1,13 @@
 // Requestor API routes
 
 import { type CACSignatureData, CACSignatureManager } from '../../lib/cac-signature';
-import { type DbRow, generateRequestNumber, getDb, UserRole } from '../../lib/database-bun';
+import {
+  type DbRow,
+  generateRequestNumber,
+  getDb,
+  isHighToLowTransfer,
+  UserRole,
+} from '../../lib/database-bun';
 import { emailService, getNextApproverEmails } from '../../lib/email-service';
 import { auditLog } from '../../lib/security';
 import { RoleMiddleware } from '../../middleware/role-middleware';
@@ -108,6 +114,10 @@ export async function handleRequestorAPI(
         source_classification?: string;
         source_is?: string;
         transfer_type?: string;
+        // DAO out-of-band attestation; required for high-to-low transfers.
+        dao_approved?: boolean | string;
+        dao_approver_name?: string;
+        dao_approval_date?: string; // ISO yyyy-mm-dd from <input type="date">
       };
 
       // Parse multi-destination payload and prepare transfer_data JSON
@@ -131,6 +141,37 @@ export async function handleRequestorAPI(
         if (!requestData.dest_system) requestData.dest_system = first.is || '';
         if (!requestData.dest_location) requestData.dest_location = first.location || '';
         if (!requestData.destination_poc) requestData.destination_poc = first.contact || '';
+      }
+
+      // DAO attestation: required for high-to-low transfers because the DAO
+      // signs the AFT form on the unclassified side. We accept either a
+      // boolean or a checkbox-style string ('on', 'true') from the form
+      // post and normalize. The columns are persisted on save so a draft
+      // can be edited without losing the attestation.
+      const daoApprovedRaw = requestData.dao_approved;
+      const daoApproved =
+        daoApprovedRaw === true ||
+        daoApprovedRaw === 'true' ||
+        daoApprovedRaw === 'on' ||
+        daoApprovedRaw === '1';
+      const daoApproverName = (requestData.dao_approver_name ?? '').trim() || null;
+      // Convert ISO yyyy-mm-dd to epoch seconds (matches the column type).
+      let daoApprovalDate: number | null = null;
+      if (requestData.dao_approval_date) {
+        const parsed = new Date(`${requestData.dao_approval_date}T00:00:00Z`).getTime();
+        if (!Number.isNaN(parsed)) daoApprovalDate = Math.floor(parsed / 1000);
+      }
+      if (isHighToLowTransfer(requestData.transfer_type)) {
+        if (!daoApproved || !daoApproverName || !daoApprovalDate) {
+          return new Response(
+            JSON.stringify({
+              success: false,
+              message:
+                'DAO attestation is required for high-to-low transfers: please confirm the DAO has signed the AFT request form, and provide the DAO approver name and approval date.',
+            }),
+            { status: 400, headers: { 'Content-Type': 'application/json' } },
+          );
+        }
       }
 
       // Ensure we have a request number and that it is unique
@@ -232,6 +273,9 @@ export async function handleRequestorAPI(
             compression_required = ?,
             encryption = ?,
             transfer_data = ?,
+            dao_approved = ?,
+            dao_approver_name = ?,
+            dao_approval_date = ?,
             updated_at = EXTRACT(EPOCH FROM NOW())::BIGINT
           WHERE id = ? AND requestor_id = ?
         `)
@@ -257,6 +301,9 @@ export async function handleRequestorAPI(
             !!requestData.media_encrypted,
             requestData.media_encrypted ? 'Yes' : 'No',
             transferDataJson,
+            daoApproved,
+            daoApproverName,
+            daoApprovalDate,
             requestId,
             authResult.session.userId,
           );
@@ -286,8 +333,9 @@ export async function handleRequestorAPI(
             request_number, status, requestor_id, requestor_name, requestor_org, requestor_phone, requestor_email,
             transfer_purpose, transfer_type, classification, data_description, source_system, source_location,
             dta_id, selected_drive_id, dest_system, dest_location, dest_contact, files_list, additional_file_list_attached,
-            compression_required, encryption, transfer_data, created_at, updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, EXTRACT(EPOCH FROM NOW())::BIGINT, EXTRACT(EPOCH FROM NOW())::BIGINT)
+            compression_required, encryption, transfer_data, dao_approved, dao_approver_name, dao_approval_date,
+            created_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, EXTRACT(EPOCH FROM NOW())::BIGINT, EXTRACT(EPOCH FROM NOW())::BIGINT)
         `)
           .run(
             requestData.media_control_number,
@@ -313,6 +361,9 @@ export async function handleRequestorAPI(
             !!requestData.media_encrypted,
             requestData.media_encrypted ? 'Yes' : 'No',
             transferDataJson,
+            daoApproved,
+            daoApproverName,
+            daoApprovalDate,
           );
 
         requestId = Number(result.lastInsertRowid);
@@ -431,7 +482,9 @@ export async function handleRequestorAPI(
       // Verify the request belongs to this user and is in a submittable status
       const existingRequest = (await db
         .query(`
-        SELECT id, status, request_number, transfer_type FROM aft_requests 
+        SELECT id, status, request_number, transfer_type, classification,
+               dao_approved, dao_approver_name, dao_approval_date
+        FROM aft_requests
         WHERE id = ? AND requestor_id = ?
       `)
         .get(requestId, authResult.session.userId)) as
@@ -441,6 +494,9 @@ export async function handleRequestorAPI(
             request_number: string;
             transfer_type: string | null;
             classification: string | null;
+            dao_approved: boolean | number | null;
+            dao_approver_name: string | null;
+            dao_approval_date: number | null;
           }
         | undefined;
 
@@ -479,10 +535,30 @@ export async function handleRequestorAPI(
 
       console.log('Status check passed, proceeding with submission...');
 
-      // Determine initial status based on transfer type
-      // High-to-Low transfers require DAO review first, others go directly to approver
-      const nextStatus =
-        existingRequest.transfer_type === 'high-to-low' ? 'pending_dao' : 'pending_approver';
+      // Re-validate DAO attestation at submit time. Save-draft enforces this
+      // for new submissions, but a request can be created via other paths
+      // (admin, scripts, future imports) so we don't trust the saved row.
+      if (isHighToLowTransfer(existingRequest.transfer_type)) {
+        const ok =
+          !!existingRequest.dao_approved &&
+          !!existingRequest.dao_approver_name &&
+          !!existingRequest.dao_approval_date;
+        if (!ok) {
+          return new Response(
+            JSON.stringify({
+              success: false,
+              message:
+                'DAO attestation is required for high-to-low transfers. Edit the draft and confirm the DAO has signed the AFT request form before submitting.',
+            }),
+            { status: 400, headers: { 'Content-Type': 'application/json' } },
+          );
+        }
+      }
+
+      // All transfer types route to ISSM (pending_approver) at submission.
+      // High-to-low transfers carry the DAO out-of-band attestation as
+      // columns on the request itself, validated above and at draft save.
+      const nextStatus = 'pending_approver';
 
       // Handle signature based on method
       let signatureResult: { success: boolean; error?: string } | undefined;

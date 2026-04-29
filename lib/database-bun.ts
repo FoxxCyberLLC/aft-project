@@ -63,6 +63,17 @@ export const AFTStatus = {
   CANCELLED: 'cancelled',
 } as const;
 
+/**
+ * Whether a transfer_type string represents a high-to-low transfer. The
+ * UI stores `'High-to-Low'` while older code paths checked for
+ * `'high-to-low'`; this helper accepts any common spelling so the check
+ * is robust against capitalization or separator drift.
+ */
+export function isHighToLowTransfer(transferType: string | null | undefined): boolean {
+  if (!transferType) return false;
+  return transferType.toLowerCase().replace(/[-_\s]/g, '_') === 'high_to_low';
+}
+
 export const AFT_STATUS_LABELS = {
   [AFTStatus.DRAFT]: 'Draft',
   [AFTStatus.SUBMITTED]: 'Submitted',

@@ -130,10 +130,12 @@ function accessDenied(message: string = 'Access denied'): Response {
 
 // Get role-specific dashboard URL
 function getRoleDashboardUrl(role: UserRoleType): string {
-  const roleUrls = {
+  // DAO is intentionally absent: DAOs sign the AFT form on the
+  // unclassified side and never log in. If a user somehow holds the
+  // DAO role they fall through to the default below.
+  const roleUrls: Partial<Record<UserRoleType, string>> = {
     [UserRole.ADMIN]: '/admin',
     [UserRole.REQUESTOR]: '/requestor',
-    [UserRole.DAO]: '/dashboard/dao',
     [UserRole.APPROVER]: '/approver',
     [UserRole.CPSO]: '/approver', // CPSO uses approver interface
     [UserRole.DTA]: '/dashboard/dta',

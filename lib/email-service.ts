@@ -167,7 +167,6 @@ class EmailService {
     data: NotificationData,
   ): Promise<boolean> {
     const roleMap: Record<string, string> = {
-      pending_dao: 'DAO Review',
       pending_approver: 'ISSM/ISSO Approval',
       pending_cpso: 'CPSO Approval',
       pending_dta: 'DTA Assignment',
@@ -378,7 +377,6 @@ export async function getNextApproverEmails(status: string): Promise<string[]> {
 
   // user_roles.role is stored lowercase (matching the UserRole constants).
   const roleMap: Record<string, string> = {
-    pending_dao: 'dao',
     pending_approver: 'approver',
     pending_cpso: 'cpso',
     pending_dta: 'dta',
