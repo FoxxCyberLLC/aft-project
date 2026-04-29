@@ -3,7 +3,7 @@ import { getDb, type DbRow, type AFTStatusType } from '../../lib/database-bun';
 import { RequestTrackingService } from '../../lib/request-tracking';
 
 // Get all users for assignment dropdowns
-async function getAllUsers(): Promise<any[]> {
+async function getAllUsers(): Promise<DbRow[]> {
   const db = getDb();
   return (await db
     .query(`
@@ -16,7 +16,7 @@ async function getAllUsers(): Promise<any[]> {
 }
 
 // Get only DTAs for drive assignment
-async function getDTAUsers(): Promise<any[]> {
+async function getDTAUsers(): Promise<DbRow[]> {
   const db = getDb();
   return (await db
     .query(`
@@ -30,7 +30,7 @@ async function getDTAUsers(): Promise<any[]> {
 }
 
 // Media Drive CRUD Operations
-async function getAllMediaDrives(): Promise<any[]> {
+async function getAllMediaDrives(): Promise<DbRow[]> {
   const db = getDb();
   return (await db
     .query(`
@@ -218,12 +218,12 @@ async function returnDrive(driveId: number): Promise<{ success: boolean; message
 }
 
 // Get media inventory (alias for getAllMediaDrives for inventory page)
-async function getMediaInventory(): Promise<any[]> {
+async function getMediaInventory(): Promise<DbRow[]> {
   return getAllMediaDrives();
 }
 
 // Get all requests with filtering support
-async function getAllRequests(query: any = {}): Promise<any[]> {
+async function getAllRequests(query: Record<string, unknown> = {}): Promise<DbRow[]> {
   const db = getDb();
 
   let sql = `
@@ -234,28 +234,28 @@ async function getAllRequests(query: any = {}): Promise<any[]> {
     LEFT JOIN users u ON ar.requestor_id = u.id
   `;
 
-  const conditions = [];
-  const params = [];
+  const conditions: string[] = [];
+  const params: Array<string | number | null> = [];
 
   // Add filtering conditions based on query parameters
   if (query.status) {
     conditions.push('ar.status = ?');
-    params.push(query.status);
+    params.push(String(query.status));
   }
 
   if (query.requestor_id) {
     conditions.push('ar.requestor_id = ?');
-    params.push(query.requestor_id);
+    params.push(Number(query.requestor_id));
   }
 
   if (query.classification) {
     conditions.push('ar.classification = ?');
-    params.push(query.classification);
+    params.push(String(query.classification));
   }
 
   if (query.transfer_type) {
     conditions.push('ar.transfer_type = ?');
-    params.push(query.transfer_type);
+    params.push(String(query.transfer_type));
   }
 
   if (conditions.length > 0) {
@@ -267,7 +267,7 @@ async function getAllRequests(query: any = {}): Promise<any[]> {
   // Add limit if specified
   if (query.limit) {
     sql += ' LIMIT ?';
-    params.push(parseInt(query.limit, 10));
+    params.push(parseInt(String(query.limit), 10));
   }
 
   return (await db.query(sql).all(...params)) as DbRow[];

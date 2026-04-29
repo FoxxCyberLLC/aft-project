@@ -3,7 +3,7 @@
 import { type CACSignatureData, CACSignatureManager } from '../../lib/cac-signature';
 import { getDb, UserRole, type DbRow } from '../../lib/database-bun';
 import { RequestTrackingService } from '../../lib/request-tracking';
-import { auditLog } from '../../lib/security';
+import { auditLog, type SecureSession } from '../../lib/security';
 import { RoleMiddleware } from '../../middleware/role-middleware';
 
 export async function handleSMEAPI(
@@ -285,7 +285,7 @@ async function signRequestWithCAC(
 }
 
 // Get client certificate information for CAC authentication
-function getCACInfo(session?: any): Response {
+function getCACInfo(session?: SecureSession): Response {
   try {
     // First check if we have CAC info stored in the session
     let hasCACCert = false;

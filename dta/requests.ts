@@ -264,9 +264,9 @@ async function renderRequestsPage(
 }
 
 // Render timeline view for requests
-async function renderTimelineView(tableData: any[]): Promise<string> {
+async function renderTimelineView(tableData: DbRow[]): Promise<string> {
   const timelines = await Promise.all(
-    tableData.map((r) => RequestTrackingService.getRequestTimeline(r.id)),
+    tableData.map((r) => RequestTrackingService.getRequestTimeline(Number(r.id))),
   );
   return `
     <div class="space-y-6">
@@ -293,10 +293,10 @@ async function renderTimelineView(tableData: any[]): Promise<string> {
               </div>
               <div class="flex items-center gap-2">
                 ${ComponentBuilder.timelineStatusBadge(
-                  request.status,
+                  request.status as string,
                   request.is_terminal ? 'success' : 'info',
                   true,
-                  { current: request.current_step, total: request.total_steps },
+                  { current: Number(request.current_step), total: Number(request.total_steps) },
                 )}
                 <div class="flex gap-1">
                   <button onclick="viewRequest(${request.id})" class="action-btn secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">View</button>
@@ -307,7 +307,7 @@ async function renderTimelineView(tableData: any[]): Promise<string> {
             
             <div class="mb-4">
               ${ComponentBuilder.statusProgress({
-                currentStatus: request.status,
+                currentStatus: request.status as string,
                 allStatuses: timelineData.timeline_steps.map((step) => step.id),
                 statusLabels: AFT_STATUS_LABELS,
               })}

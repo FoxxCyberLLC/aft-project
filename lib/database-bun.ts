@@ -192,7 +192,7 @@ export class TxDb {
   }
 }
 
-class Db {
+export class Db {
   query(text: string): Query {
     return new Query(text);
   }

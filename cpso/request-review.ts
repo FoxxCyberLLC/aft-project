@@ -255,7 +255,7 @@ function renderDestinations(request: any): string {
 }
 
 function renderFileInformation(request: any): string {
-  let files: any[] = [];
+  let files: Array<{ name: string; size: number; type: string; hash?: string }> = [];
   try {
     files = request.files_list ? JSON.parse(String(request.files_list)) : [];
     if (!Array.isArray(files)) files = [];

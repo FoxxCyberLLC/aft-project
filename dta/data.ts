@@ -1,6 +1,6 @@
 // DTA Data Tracking - Section 4 transfer history and anti-virus scan records
 import { ComponentBuilder, Templates } from '../components/ui/server-components';
-import { getDb, type DbRow } from '../lib/database-bun';
+import { getDb, type Db, type DbRow } from '../lib/database-bun';
 import { DTANavigation, type DTAUser } from './dta-nav';
 
 async function render(user: DTAUser, userId: number): Promise<string> {
@@ -101,7 +101,7 @@ async function render(user: DTAUser, userId: number): Promise<string> {
   );
 }
 
-async function getTransferHistory(db: any, userId?: number) {
+async function getTransferHistory(db: Db, userId?: number) {
   // Get actual DTA transfer statistics with file and data size accumulation
   const baseQuery = userId
     ? `SELECT
@@ -119,9 +119,16 @@ async function getTransferHistory(db: any, userId?: number) {
     FROM aft_requests
     WHERE status IN ('active_transfer', 'pending_sme_signature', 'pending_media_custodian', 'completed', 'disposed')`;
 
-  const stats = userId
+  const stats = (userId
     ? await db.query(baseQuery).get(userId)
-    : ((await db.query(baseQuery).get()) as DbRow);
+    : await db.query(baseQuery).get()) as
+    | {
+        total_transfers: number;
+        total_files_transferred: number;
+        completed_transfers: number;
+        signed_transfers: number;
+      }
+    | undefined;
 
   return {
     totalTransfers: stats?.total_transfers || 0,
@@ -131,7 +138,7 @@ async function getTransferHistory(db: any, userId?: number) {
   };
 }
 
-async function getScanStatistics(db: any, userId?: number) {
+async function getScanStatistics(db: Db, userId?: number) {
   // Get actual anti-virus scan statistics from Section 4 data
   const baseQuery = userId
     ? `SELECT
@@ -149,9 +156,16 @@ async function getScanStatistics(db: any, userId?: number) {
     FROM aft_requests
     WHERE status IN ('active_transfer', 'pending_sme_signature', 'pending_media_custodian', 'completed', 'disposed')`;
 
-  const scanStats = userId
+  const scanStats = (userId
     ? await db.query(baseQuery).get(userId)
-    : ((await db.query(baseQuery).get()) as DbRow);
+    : await db.query(baseQuery).get()) as
+    | {
+        origination_scans: number;
+        destination_scans: number;
+        total_threats: number;
+        total_files_scanned: number;
+      }
+    | undefined;
 
   return {
     totalScans: (scanStats?.origination_scans || 0) + (scanStats?.destination_scans || 0),
@@ -162,7 +176,7 @@ async function getScanStatistics(db: any, userId?: number) {
   };
 }
 
-async function getRecentDTATransfers(db: any, userId?: number) {
+async function getRecentDTATransfers(db: Db, userId?: number) {
   // Get recent transfers that DTA has handled
   const baseQuery = userId
     ? `SELECT

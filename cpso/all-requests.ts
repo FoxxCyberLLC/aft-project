@@ -228,9 +228,9 @@ async function render(user: CPSOUser, viewMode: 'table' | 'timeline' = 'table'):
   );
 }
 
-async function renderTimelineView(tableData: any[]): Promise<string> {
+async function renderTimelineView(tableData: DbRow[]): Promise<string> {
   const timelines = await Promise.all(
-    tableData.map((r) => RequestTrackingService.getRequestTimeline(r.id)),
+    tableData.map((r) => RequestTrackingService.getRequestTimeline(Number(r.id))),
   );
   return `
     <div class="space-y-4">
@@ -248,10 +248,10 @@ async function renderTimelineView(tableData: any[]): Promise<string> {
                   <p class="text-xs text-[var(--muted-foreground)]">${request.requestor_name} • ${request.transfer_type} • ${request.classification}</p>
                 </div>
                 ${ComponentBuilder.timelineStatusBadge(
-                  request.status,
+                  request.status as string,
                   request.is_terminal ? 'success' : 'info',
                   true,
-                  { current: request.current_step, total: request.total_steps },
+                  { current: Number(request.current_step), total: Number(request.total_steps) },
                 )}
               </div>
               <div class="flex gap-1">
@@ -261,7 +261,7 @@ async function renderTimelineView(tableData: any[]): Promise<string> {
             </div>
 
             ${ComponentBuilder.statusProgress({
-              currentStatus: request.status,
+              currentStatus: request.status as string,
               allStatuses: timelineData.timeline_steps.map((step: any) => step.id),
               statusLabels: AFT_STATUS_LABELS,
             })}

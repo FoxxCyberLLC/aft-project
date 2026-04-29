@@ -1,9 +1,9 @@
 // DTA API endpoints
 
 import { type CACSignatureData, CACSignatureManager } from '../../lib/cac-signature';
-import { getDb, UserRole, type DbRow } from '../../lib/database-bun';
+import { getDb, UserRole, type Db, type DbRow } from '../../lib/database-bun';
 import { RequestTrackingService } from '../../lib/request-tracking';
-import { auditLog } from '../../lib/security';
+import { auditLog, type SecureSession } from '../../lib/security';
 import { RoleMiddleware } from '../../middleware/role-middleware';
 
 export async function handleDTAAPI(
@@ -58,7 +58,7 @@ async function handleDTAGet(
   userId: number,
   _userEmail: string,
   _ipAddress: string,
-  session?: any,
+  session?: SecureSession,
 ): Promise<Response> {
   const [resource, id, action] = segments;
 
@@ -205,7 +205,7 @@ async function handleDTAPut(
 }
 
 // GET endpoint implementations
-async function getDashboardData(db: any): Promise<Response> {
+async function getDashboardData(db: Db): Promise<Response> {
   const stats = {
     totalRequests: await db.query('SELECT COUNT(*) as count FROM aft_requests').get(),
     pendingDTA: await db
@@ -227,7 +227,7 @@ async function getDashboardData(db: any): Promise<Response> {
   });
 }
 
-async function getAllRequests(db: any, userId?: number): Promise<Response> {
+async function getAllRequests(db: Db, userId?: number): Promise<Response> {
   // For DTA, show assigned requests
   const requests = (await db
     .query(`
@@ -250,7 +250,7 @@ async function getAllRequests(db: any, userId?: number): Promise<Response> {
   });
 }
 
-async function getRequestDetails(db: any, requestId: number, userId?: number): Promise<Response> {
+async function getRequestDetails(db: Db, requestId: number, userId?: number): Promise<Response> {
   // DTA can only access details of their assigned requests
   const request = await db
     .query('SELECT * FROM aft_requests WHERE id = ? AND dta_id = ?')
@@ -267,7 +267,7 @@ async function getRequestDetails(db: any, requestId: number, userId?: number): P
   });
 }
 
-async function getRequestTimeline(db: any, requestId: number): Promise<Response> {
+async function getRequestTimeline(db: Db, requestId: number): Promise<Response> {
   const request = await db.query('SELECT * FROM aft_requests WHERE id = ?').get(requestId);
   if (!request) {
     return new Response(JSON.stringify({ error: 'Request not found' }), {
@@ -282,7 +282,7 @@ async function getRequestTimeline(db: any, requestId: number): Promise<Response>
   });
 }
 
-async function getActiveTransfers(db: any): Promise<Response> {
+async function getActiveTransfers(db: Db): Promise<Response> {
   const transfers = await db
     .query(`
     SELECT * FROM aft_requests 
@@ -296,7 +296,7 @@ async function getActiveTransfers(db: any): Promise<Response> {
   });
 }
 
-async function getAllTransfers(db: any): Promise<Response> {
+async function getAllTransfers(db: Db): Promise<Response> {
   const transfers = await db
     .query(`
     SELECT * FROM aft_requests 
@@ -311,7 +311,7 @@ async function getAllTransfers(db: any): Promise<Response> {
   });
 }
 
-async function getTransferStatus(db: any, requestId: number): Promise<Response> {
+async function getTransferStatus(db: Db, requestId: number): Promise<Response> {
   const request = await db.query('SELECT * FROM aft_requests WHERE id = ?').get(requestId);
 
   if (!request) {
@@ -344,7 +344,7 @@ async function getTransferStatus(db: any, requestId: number): Promise<Response> 
   );
 }
 
-async function getDTAStatistics(db: any): Promise<Response> {
+async function getDTAStatistics(db: Db): Promise<Response> {
   const stats = {
     totalProcessed: await db
       .query(
@@ -370,7 +370,7 @@ async function getDTAStatistics(db: any): Promise<Response> {
   });
 }
 
-async function getSMEUsers(db: any): Promise<Response> {
+async function getSMEUsers(db: Db): Promise<Response> {
   // Get all users with SME role
   const smeUsers = (await db
     .query(`
@@ -830,7 +830,7 @@ async function updateRequest(
 }
 
 async function updateTransferSettings(
-  _db: any,
+  _db: Db,
   _requestId: number,
   _body: any,
   _userId: number,
@@ -1887,7 +1887,7 @@ async function signTransferWithCAC(
 }
 
 // Get client certificate information for CAC authentication
-function getCACInfo(session?: any): Response {
+function getCACInfo(session?: SecureSession): Response {
   try {
     // First check if we have CAC info stored in the session
     let hasCACCert = false;

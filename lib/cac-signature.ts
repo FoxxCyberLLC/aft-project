@@ -648,7 +648,7 @@ async function generateSignatureHash(signatureData: CACSignatureData): Promise<s
   return Array.from(hashArray, (byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
-async function getRequestSignatures(requestId: number): Promise<any[]> {
+async function getRequestSignatures(requestId: number): Promise<DbRow[]> {
   const db = getDb();
   return (await db
     .query(`

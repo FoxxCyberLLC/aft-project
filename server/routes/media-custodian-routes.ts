@@ -1,6 +1,7 @@
 // Media Custodian Routes - Handle all media custodian-related requests
 
 import { UserRole, type DbRow } from '../../lib/database-bun';
+import type { SecureSession } from '../../lib/security';
 import { MediaCustodianDashboard } from '../../media-custodian/dashboard';
 import { MediaCustodianInventory } from '../../media-custodian/inventory';
 import { MediaCustodianReports } from '../../media-custodian/reports';
@@ -169,7 +170,7 @@ async function handleAPI(
   request: Request,
   user: any,
   endpoint: string,
-  session?: any,
+  session?: SecureSession,
 ): Promise<Response> {
   try {
     const method = request.method;
