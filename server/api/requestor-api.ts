@@ -98,7 +98,7 @@ export async function handleRequestorAPI(
         destination_poc?: string;
         destinations_json?: string;
         draft_id?: string;
-        dta_id?: number;
+        dta_id?: string;
         files?: Array<{ name?: string; size?: number; type?: string; hash?: string }>;
         justification?: string;
         media_control_number?: string;

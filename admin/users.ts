@@ -1,6 +1,6 @@
 // Admin User Management Interface
 import { ComponentBuilder } from '../components/ui/server-components';
-import { getDb, getRoleDisplayName, UserRole, type DbRow } from '../lib/database-bun';
+import { getDb, getRoleDisplayName, UserRole, type DbRow, type UserRoleType } from '../lib/database-bun';
 import { escapeHtml } from '../lib/formatters';
 import { AdminNavigation, type AdminUser } from './admin-nav';
 
@@ -10,7 +10,7 @@ async function renderUsersPage(user: AdminUser): Promise<string> {
   // Get all users with their role information
   const users = (await db
     .query(`
-    SELECT 
+    SELECT
       u.*,
       COUNT(ur.id) as role_count,
       GROUP_CONCAT(ur.role) as roles
@@ -19,7 +19,19 @@ async function renderUsersPage(user: AdminUser): Promise<string> {
     GROUP BY u.id
     ORDER BY u.created_at DESC
   `)
-    .all()) as DbRow[];
+    .all()) as Array<{
+    id: number;
+    first_name: string;
+    last_name: string;
+    email: string;
+    organization: string | null;
+    phone: string | null;
+    primary_role: UserRoleType;
+    role_count: number;
+    is_active: boolean;
+    created_at: number;
+    roles?: string;
+  }>;
 
   // Transform users data for table
   const tableData = users.map((dbUser) => ({
@@ -63,8 +75,8 @@ async function renderUsersPage(user: AdminUser): Promise<string> {
       label: 'Primary Role',
       render: (_value: unknown, row: DbRow) => `
         <div>
-          <div class="text-sm font-medium text-[var(--primary)]">${escapeHtml(getRoleDisplayName(row.primary_role))}</div>
-          <div class="text-xs text-[var(--muted-foreground)]">+${Math.max(0, (row.role_count || 1) - 1)} additional</div>
+          <div class="text-sm font-medium text-[var(--primary)]">${escapeHtml(getRoleDisplayName(row.primary_role as UserRoleType))}</div>
+          <div class="text-xs text-[var(--muted-foreground)]">+${Math.max(0, (Number(row.role_count) || 1) - 1)} additional</div>
         </div>
       `,
     },

@@ -97,7 +97,7 @@ async function renderRequestsPage(
           cancelled: 'default',
         };
 
-        const variant = statusVariant[row.status] || 'default';
+        const variant = statusVariant[row.status as string] || 'default';
         const _statusLabel =
           AFT_STATUS_LABELS[row.status as keyof typeof AFT_STATUS_LABELS] || row.status;
 

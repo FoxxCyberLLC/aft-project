@@ -96,7 +96,7 @@ async function render(
           disposed: 'success',
           cancelled: 'default',
         };
-        const variant = statusVariant[row.status] || 'default';
+        const variant = statusVariant[row.status as string] || 'default';
         return `
           <div class="space-y-2">
             ${ComponentBuilder.timelineStatusBadge(row.status, variant, true, {

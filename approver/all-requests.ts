@@ -29,25 +29,35 @@ async function render(
   const tableData = await Promise.all(
     requestsWithTimeline.map(async (request: any) => {
       // Get DTA information
-      let dtaInfo = null;
+      type DtaInfo = { first_name: string; last_name: string; email: string };
+      let dtaInfo: DtaInfo | null = null;
       if (request.dta_id) {
-        dtaInfo = (await db
-          .query(`
+        dtaInfo =
+          ((await db
+            .query(`
         SELECT u.first_name, u.last_name, u.email
         FROM users u WHERE u.id = ?
       `)
-          .get(request.dta_id)) as DbRow;
+            .get(request.dta_id)) as DtaInfo | undefined) ?? null;
       }
 
       // Get drive information
-      let driveInfo = null;
+      type DriveInfo = {
+        serial_number: string;
+        media_control_number: string;
+        type: string;
+        model: string;
+        status: string;
+      };
+      let driveInfo: DriveInfo | null = null;
       if (request.selected_drive_id) {
-        driveInfo = (await db
-          .query(`
+        driveInfo =
+          ((await db
+            .query(`
         SELECT serial_number, media_control_number, type, model, status
         FROM media_drives WHERE id = ?
       `)
-          .get(request.selected_drive_id)) as DbRow;
+            .get(request.selected_drive_id)) as DriveInfo | undefined) ?? null;
       }
 
       return {
@@ -95,8 +105,8 @@ async function render(
         <div class="text-sm">
           ${
             row.dta_info
-              ? `<div class="text-[var(--foreground)]">${row.dta_info.first_name} ${row.dta_info.last_name}</div>
-             <div class="text-xs text-[var(--muted-foreground)]">${row.dta_info.email}</div>`
+              ? `<div class="text-[var(--foreground)]">${(row.dta_info as { first_name: string })?.first_name} ${(row.dta_info as { last_name: string })?.last_name}</div>
+             <div class="text-xs text-[var(--muted-foreground)]">${(row.dta_info as { email: string })?.email}</div>`
               : '<span class="text-[var(--muted-foreground)]">Not assigned</span>'
           }
         </div>
@@ -109,8 +119,8 @@ async function render(
         <div class="text-sm">
           ${
             row.drive_info
-              ? `<div class="text-[var(--foreground)]">${row.drive_info.serial_number}</div>
-             <div class="text-xs text-[var(--muted-foreground)]">${row.drive_info.type} - ${row.drive_info.status}</div>`
+              ? `<div class="text-[var(--foreground)]">${(row.drive_info as { serial_number: string })?.serial_number}</div>
+             <div class="text-xs text-[var(--muted-foreground)]">${(row.drive_info as { type: string })?.type} - ${(row.drive_info as { status: string })?.status}</div>`
               : '<span class="text-[var(--muted-foreground)]">No drive</span>'
           }
         </div>
@@ -165,7 +175,7 @@ async function render(
           disposed: 'success',
           cancelled: 'default',
         };
-        const variant = statusVariant[row.status] || 'default';
+        const variant = statusVariant[row.status as string] || 'default';
         return `
           <div class="space-y-2">
             ${ComponentBuilder.timelineStatusBadge(row.status, variant, true, {

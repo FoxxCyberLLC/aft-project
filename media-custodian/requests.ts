@@ -112,7 +112,7 @@ async function renderRequestsPage(
           cancelled: 'default',
         };
 
-        const variant = statusVariant[row.status] || 'default';
+        const variant = statusVariant[row.status as string] || 'default';
 
         return `
           <div class="space-y-2">
