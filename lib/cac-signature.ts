@@ -812,7 +812,7 @@ function generateSignatureBlock(signature: any): string {
   `;
 }
 
-async function exportSignatureData(signatureId: number): Promise<any> {
+async function exportSignatureData(signatureId: number): Promise<unknown> {
   const db = getDb();
 
   const signature = (await db

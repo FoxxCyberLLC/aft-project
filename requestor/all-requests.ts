@@ -267,7 +267,7 @@ async function renderTimelineView(tableData: DbRow[]): Promise<string> {
 
             ${ComponentBuilder.statusProgress({
               currentStatus: request.status as string,
-              allStatuses: timelineData.timeline_steps.map((step: any) => step.id),
+              allStatuses: timelineData.timeline_steps.map((step) => step.id),
               statusLabels: AFT_STATUS_LABELS,
             })}
           </div>

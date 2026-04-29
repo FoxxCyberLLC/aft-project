@@ -148,7 +148,7 @@ export async function handleRequestDetailPage(
     | undefined;
 
   // Parse files list
-  let files = [];
+  let files: Array<{ name?: string; size?: string | number; type?: string; classification?: string }> = [];
   try {
     files = JSON.parse(requestData.files_list || '[]');
   } catch (_e) {
@@ -221,7 +221,7 @@ export async function handleRequestDetailPage(
                   ? `
                 <div class="space-y-2">
                   ${files
-                    .map((file: any) => {
+                    .map((file) => {
                       const base = (file?.name || '').toString();
                       const ext = (file?.type || '').toString();
                       const fullName = base && ext ? `${base}.${ext}` : base || '(unnamed)';

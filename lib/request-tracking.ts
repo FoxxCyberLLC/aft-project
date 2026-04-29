@@ -411,7 +411,7 @@ async function getRequestsWithTimeline(filters?: {
   `;
 
   const conditions: string[] = [];
-  const params: any[] = [];
+  const params: Array<string | number | null> = [];
 
   if (filters?.status) {
     conditions.push('r.status = ?');

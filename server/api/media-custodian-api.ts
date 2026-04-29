@@ -55,7 +55,7 @@ async function getMediaDriveById(id: number): Promise<any | null> {
   return row || null;
 }
 
-async function createMediaDrive(driveData: any): Promise<any> {
+async function createMediaDrive(driveData: any): Promise<unknown> {
   const db = getDb();
   const result = await db
     .query(`
@@ -274,7 +274,7 @@ async function getAllRequests(query: Record<string, unknown> = {}): Promise<DbRo
 }
 
 // Get request statistics for reports page
-async function getRequestStats(): Promise<any> {
+async function getRequestStats(): Promise<unknown> {
   const db = getDb();
 
   // Get total requests count
@@ -312,7 +312,7 @@ async function getRequestStats(): Promise<any> {
 }
 
 // Generate reports based on type and parameters
-async function generateReport(type: string, params?: any): Promise<any> {
+async function generateReport(type: string, params?: Record<string, unknown>): Promise<unknown> {
   const _db = getDb();
 
   try {
@@ -339,7 +339,7 @@ async function generateReport(type: string, params?: any): Promise<any> {
 }
 
 // Generate media inventory report
-async function generateMediaInventoryReport(_params?: any): Promise<any> {
+async function generateMediaInventoryReport(_params?: Record<string, unknown>): Promise<unknown> {
   const db = getDb();
 
   // Get drive counts by status
@@ -385,7 +385,7 @@ async function generateMediaInventoryReport(_params?: any): Promise<any> {
 }
 
 // Generate request summary report
-async function generateRequestSummaryReport(_params?: any): Promise<any> {
+async function generateRequestSummaryReport(_params?: Record<string, unknown>): Promise<unknown> {
   const db = getDb();
 
   // Get request counts by status
@@ -434,7 +434,7 @@ async function generateRequestSummaryReport(_params?: any): Promise<any> {
 }
 
 // Generate drive utilization report
-async function generateDriveUtilizationReport(_params?: any): Promise<any> {
+async function generateDriveUtilizationReport(_params?: Record<string, unknown>): Promise<unknown> {
   const db = getDb();
 
   // Get utilization statistics
@@ -489,7 +489,7 @@ async function generateDriveUtilizationReport(_params?: any): Promise<any> {
 }
 
 // Generate user activity report
-async function generateUserActivityReport(_params?: any): Promise<any> {
+async function generateUserActivityReport(_params?: Record<string, unknown>): Promise<unknown> {
   const db = getDb();
 
   // Get user request activity

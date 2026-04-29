@@ -73,7 +73,7 @@ function isValidCertificate(certificate: CACClientCertificate): boolean {
 // email (extracted from the certificate) and, as a fallback, by the
 // fingerprint stored in the cac_certificates table. We refuse to auto-
 // create users from a CAC alone - admins must provision the account first.
-async function getUserFromCertificate(certificate: CACClientCertificate): Promise<any> {
+async function getUserFromCertificate(certificate: CACClientCertificate): Promise<{ id: number; is_active: boolean | number; [key: string]: unknown } | null> {
   const db = getDb();
 
   const email = extractEmail(certificate.subject);

@@ -54,7 +54,7 @@ export async function handleDTAAPI(
 
 async function handleDTAGet(
   segments: string[],
-  db: any,
+  db: Db,
   userId: number,
   _userEmail: string,
   _ipAddress: string,
@@ -104,7 +104,7 @@ async function handleDTAGet(
 async function handleDTAPost(
   segments: string[],
   request: Request,
-  db: any,
+  db: Db,
   userId: number,
   userEmail: string,
   ipAddress: string,
@@ -176,7 +176,7 @@ async function handleDTAPost(
 async function handleDTAPut(
   segments: string[],
   request: Request,
-  db: any,
+  db: Db,
   userId: number,
   userEmail: string,
   ipAddress: string,
@@ -400,7 +400,7 @@ async function getSMEUsers(db: Db): Promise<Response> {
 
 // POST endpoint implementations
 async function approveRequest(
-  db: any,
+  db: Db,
   requestId: number,
   body: any,
   userId: number,
@@ -465,7 +465,7 @@ async function approveRequest(
 }
 
 async function rejectRequest(
-  db: any,
+  db: Db,
   requestId: number,
   body: any,
   userId: number,
@@ -528,7 +528,7 @@ async function rejectRequest(
 }
 
 async function pauseTransfer(
-  db: any,
+  db: Db,
   requestId: number,
   userId: number,
   userEmail: string,
@@ -575,7 +575,7 @@ async function pauseTransfer(
 }
 
 async function resumeTransfer(
-  db: any,
+  db: Db,
   requestId: number,
   userId: number,
   userEmail: string,
@@ -618,7 +618,7 @@ async function resumeTransfer(
 }
 
 async function cancelTransfer(
-  db: any,
+  db: Db,
   requestId: number,
   body: any,
   userId: number,
@@ -675,7 +675,7 @@ async function cancelTransfer(
 }
 
 async function bulkProcessRequests(
-  db: any,
+  db: Db,
   body: any,
   userId: number,
   userEmail: string,
@@ -772,7 +772,7 @@ async function bulkProcessRequests(
 }
 
 async function updateRequest(
-  db: any,
+  db: Db,
   requestId: number,
   body: any,
   userId: number,
@@ -789,13 +789,13 @@ async function updateRequest(
 
   // Update allowed fields
   const allowedFields = ['priority', 'notes', 'transfer_window'];
-  const updates = [];
-  const values = [];
+  const updates: string[] = [];
+  const values: Array<string | number | null> = [];
 
   for (const [field, value] of Object.entries(body)) {
     if (allowedFields.includes(field)) {
       updates.push(`${field} = ?`);
-      values.push(value);
+      values.push(value as string | number | null);
     }
   }
 
@@ -846,7 +846,7 @@ async function updateTransferSettings(
 // Section 4 AFT Form Functions - Anti-Virus Scan and Transfer Process
 
 async function recordAntivirusScan(
-  db: any,
+  db: Db,
   requestId: number,
   body: any,
   userId: number,
@@ -976,7 +976,7 @@ async function recordAntivirusScan(
 }
 
 async function activateTransfer(
-  db: any,
+  db: Db,
   requestId: number,
   _body: any,
   userId: number,
@@ -1058,7 +1058,7 @@ async function activateTransfer(
 }
 
 async function signDTARequest(
-  db: any,
+  db: Db,
   requestId: number,
   body: any,
   userId: number,
@@ -1175,7 +1175,7 @@ async function signDTARequest(
 }
 
 async function handleTransferFormSubmission(
-  db: any,
+  db: Db,
   body: any,
   userId: number,
   _userEmail: string,
@@ -1281,7 +1281,7 @@ async function handleTransferFormSubmission(
         .query('SELECT * FROM aft_requests WHERE id = ?')
         .get(requestId);
       const canTransfer =
-        !!latestRequest.origination_scan_performed && !!latestRequest.destination_scan_performed;
+        !!latestRequest?.origination_scan_performed && !!latestRequest?.destination_scan_performed;
       if (!canTransfer) {
         return new Response(
           JSON.stringify({ error: 'Both scans must be recorded before completing transfer' }),
@@ -1328,8 +1328,8 @@ async function handleTransferFormSubmission(
         .query('SELECT * FROM aft_requests WHERE id = ?')
         .get(requestId);
       if (
-        !updatedRequest.origination_scan_performed ||
-        !updatedRequest.destination_scan_performed
+        !updatedRequest?.origination_scan_performed ||
+        !updatedRequest?.destination_scan_performed
       ) {
         return new Response(
           JSON.stringify({
@@ -1434,7 +1434,7 @@ async function handleTransferFormSubmission(
 }
 
 async function completeTransfer(
-  db: any,
+  db: Db,
   requestId: number,
   body: any,
   userId: number,
@@ -1555,7 +1555,7 @@ async function completeTransfer(
 
 // Sign transfer manually (without CAC)
 async function signTransferManual(
-  db: any,
+  db: Db,
   requestId: number,
   body: any,
   userId: number,
@@ -1705,7 +1705,7 @@ async function signTransferManual(
 
 // Sign transfer with CAC certificate
 async function signTransferWithCAC(
-  db: any,
+  db: Db,
   requestId: number,
   body: any,
   userId: number,

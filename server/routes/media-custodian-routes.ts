@@ -229,7 +229,7 @@ async function handleAPI(
         if (method === 'POST') {
           const body = (await request.json()) as {
             type: string;
-            params?: any;
+            params?: Record<string, unknown>;
           };
           const report = await MediaCustodianAPI.generateReport(body.type, body.params);
           return new Response(JSON.stringify(report), {

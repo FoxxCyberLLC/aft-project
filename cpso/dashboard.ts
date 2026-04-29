@@ -98,7 +98,7 @@ async function render(user: CPSOUser, _userId: number): Promise<string> {
   );
 }
 
-function buildPendingTable(rows: any[]): string {
+function buildPendingTable(rows: DbRow[]): string {
   if (rows.length === 0) {
     return `
       <div class="bg-[var(--card)] p-8 rounded-lg border border-[var(--border)] text-center">
@@ -111,16 +111,16 @@ function buildPendingTable(rows: any[]): string {
 
   // Transform for table
   const tableData = rows.map((r) => ({
-    id: r.id,
+    id: r.id as string | number,
     request_number: r.request_number,
     requestor: r.requestor_name || r.requestor_email,
     status: r.status,
-    transfer_type: r.transfer_type || 'Unknown',
-    classification: r.classification || 'UNCLASSIFIED',
+    transfer_type: String(r.transfer_type || 'Unknown'),
+    classification: String(r.classification || 'UNCLASSIFIED'),
     created_at: r.created_at,
     age_days: Math.max(
       0,
-      Math.floor((Date.now() / 1000 - (r.created_at || r.updated_at)) / (24 * 60 * 60)),
+      Math.floor((Date.now() / 1000 - Number(r.created_at || r.updated_at)) / (24 * 60 * 60)),
     ),
   }));
 
@@ -139,7 +139,7 @@ function buildPendingTable(rows: any[]): string {
     {
       key: 'requestor',
       label: 'Requestor',
-      render: (_: any, row: any) =>
+      render: (_: unknown, row: DbRow) =>
         `<div class="text-sm text-[var(--foreground)]">${row.requestor}</div>`,
     },
     {
@@ -152,13 +152,13 @@ function buildPendingTable(rows: any[]): string {
     {
       key: 'classification',
       label: 'Class',
-      render: (_: any, row: any) =>
+      render: (_: unknown, row: DbRow) =>
         `<div class="text-sm text-[var(--foreground)]">${row.classification}</div>`,
     },
     {
       key: 'age_days',
       label: 'Age (days)',
-      render: (_: any, row: any) =>
+      render: (_: unknown, row: DbRow) =>
         `<div class="text-sm text-[var(--foreground)]">${row.age_days}</div>`,
     },
     {
@@ -192,7 +192,7 @@ function buildPendingTable(rows: any[]): string {
     {
       key: 'actions',
       label: 'Actions',
-      render: (_: any, row: any) =>
+      render: (_: unknown, row: DbRow) =>
         ComponentBuilder.tableCellActions([
           { label: 'Review', onClick: `reviewRequest(${row.id})`, variant: 'secondary' },
         ]),
@@ -213,7 +213,7 @@ function buildPendingTable(rows: any[]): string {
   });
 }
 
-function buildApprovedTable(rows: any[]): string {
+function buildApprovedTable(rows: DbRow[]): string {
   if (rows.length === 0) {
     return `<div class="text-sm text-[var(--muted-foreground)]">No approvals yet</div>`;
   }
@@ -233,11 +233,11 @@ function buildApprovedTable(rows: any[]): string {
   return `<div class="bg-[var(--card)] rounded-lg border border-[var(--border)] p-4">${list}</div>`;
 }
 
-function getAgingRisk(rows: any[]): string {
+function getAgingRisk(rows: DbRow[]): string {
   if (!rows || rows.length === 0) return '0 at risk';
   const nowSec = Math.floor(Date.now() / 1000);
   const atRisk = rows.filter(
-    (r) => nowSec - (r.updated_at || r.created_at) > 5 * 24 * 60 * 60,
+    (r) => nowSec - Number(r.updated_at || r.created_at) > 5 * 24 * 60 * 60,
   ).length; // >5 days
   return `${atRisk} at risk`;
 }

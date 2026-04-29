@@ -10,7 +10,7 @@ export interface TableColumn {
 }
 
 export interface TableRow {
-  [key: string]: any;
+  [key: string]: unknown;
   id?: string | number;
 }
 
