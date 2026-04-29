@@ -2,7 +2,7 @@
 
 import { CalendarIcon, CheckCircleIcon } from '../components/icons';
 import { ComponentBuilder } from '../components/ui/server-components';
-import { getDb } from '../lib/database-bun';
+import { type DbRow, getDb } from '../lib/database-bun';
 import { ApproverNavigation, type ApproverUser } from './approver-nav';
 
 async function render(user: ApproverUser, _userId: number): Promise<string> {
@@ -11,7 +11,7 @@ async function render(user: ApproverUser, _userId: number): Promise<string> {
   // Get all requests approved by this approver (regardless of current status)
   const approvedRequests = (await db
     .query(`
-    SELECT 
+    SELECT
       r.*,
       u.email as requestor_email,
       u.first_name || ' ' || u.last_name as requestor_name,
@@ -23,23 +23,33 @@ async function render(user: ApproverUser, _userId: number): Promise<string> {
     WHERE r.approver_email = ? AND r.status NOT IN ('draft', 'submitted', 'pending_approver', 'rejected')
     ORDER BY r.updated_at DESC
   `)
-    .all(user.email)) as any[];
+    .all(user.email)) as Array<{
+    id: number;
+    request_number: string;
+    requestor_name: string;
+    requestor_email: string;
+    source_system: string | null;
+    destination_system: string | null;
+    classification: string | null;
+    updated_at: number;
+    status: string;
+  }>;
 
   // Calculate statistics
   const todayCount = approvedRequests.filter((r) => {
-    const updatedDate = new Date(r.updated_at * 1000);
+    const updatedDate = new Date((r.updated_at as number) * 1000);
     const today = new Date();
     return updatedDate.toDateString() === today.toDateString();
   }).length;
 
   const weekCount = approvedRequests.filter((r) => {
-    const updatedDate = new Date(r.updated_at * 1000);
+    const updatedDate = new Date((r.updated_at as number) * 1000);
     const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
     return updatedDate >= weekAgo;
   }).length;
 
   const tableData = approvedRequests.map((request) => ({
-    id: request.id,
+    id: request.id as string | number,
     request_number: request.request_number,
     requestor_name: request.requestor_name,
     requestor_email: request.requestor_email,
@@ -56,17 +66,18 @@ async function render(user: ApproverUser, _userId: number): Promise<string> {
     {
       key: 'systems',
       label: 'Systems',
-      render: (_value: any, row: any) => `${row.source_system} → ${row.destination_system}`,
+      render: (_value: unknown, row: DbRow) => `${row.source_system} → ${row.destination_system}`,
     },
     {
       key: 'updated_at',
       label: 'Approved Date',
-      render: (_value: any, row: any) => new Date(row.updated_at * 1000).toLocaleDateString(),
+      render: (_value: unknown, row: DbRow) =>
+        new Date((row.updated_at as number) * 1000).toLocaleDateString(),
     },
     {
       key: 'status',
       label: 'Current Status',
-      render: (_value: any, row: any) => {
+      render: (_value: unknown, row: DbRow) => {
         const statusLabels = {
           pending_cpso: 'Pending CPSO',
           pending_dta: 'Pending DTA',
@@ -85,7 +96,8 @@ async function render(user: ApproverUser, _userId: number): Promise<string> {
           cancelled: 'error',
           approved: 'success',
         } as const;
-        const label = statusLabels[row.status as keyof typeof statusLabels] || row.status;
+        const label =
+          statusLabels[row.status as keyof typeof statusLabels] || (row.status as string);
         const variant = statusVariants[row.status as keyof typeof statusVariants] || 'default';
         return ComponentBuilder.statusBadge(label, variant);
       },
@@ -93,7 +105,7 @@ async function render(user: ApproverUser, _userId: number): Promise<string> {
     {
       key: 'actions',
       label: 'Actions',
-      render: (_value: any, row: any) =>
+      render: (_value: unknown, row: DbRow) =>
         ComponentBuilder.tableCellActions([
           { label: 'View Details', onClick: `viewRequest(${row.id})`, variant: 'secondary' },
         ]),

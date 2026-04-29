@@ -23,6 +23,15 @@ import { SQL } from 'bun';
 // Enums and helper types (unchanged from the SQLite version)
 // ---------------------------------------------------------------------------
 
+/**
+ * Default shape for a row returned from a Postgres query when the call site
+ * does not supply an inline column type. Field access returns `unknown` and
+ * MUST be narrowed (or cast at the access site) before use. New code should
+ * prefer providing an inline type to `db.query<...>()` so column shapes are
+ * checked at compile time.
+ */
+export type DbRow = Record<string, unknown>;
+
 export const UserRole = {
   ADMIN: 'admin',
   REQUESTOR: 'requestor',
@@ -101,64 +110,65 @@ interface RunResult {
   changes: number;
 }
 
+type SqlParam = string | number | bigint | boolean | Date | null | undefined | Uint8Array;
+
+function extractRunResult(result: unknown): RunResult {
+  const firstRow = Array.isArray(result)
+    ? (result[0] as Record<string, unknown> | undefined)
+    : undefined;
+  let lastInsertRowid: number | undefined;
+  if (firstRow && firstRow.id !== undefined && firstRow.id !== null) {
+    lastInsertRowid = Number(firstRow.id);
+  }
+  const count = (result as { count?: unknown } | null)?.count;
+  const changes = typeof count === 'number' ? count : Array.isArray(result) ? result.length : 0;
+  return { lastInsertRowid, changes };
+}
+
 class Query {
   constructor(private text: string) {}
 
-  async get<T = any>(...params: any[]): Promise<T | undefined> {
+  async get<T = DbRow>(...params: SqlParam[]): Promise<T | undefined> {
     const text = convertPlaceholders(this.text);
-    const result = await sql.unsafe(text, params);
-    return (result as any[])[0] as T | undefined;
+    const result = (await sql.unsafe(text, params)) as unknown[];
+    return result[0] as T | undefined;
   }
 
-  async all<T = any>(...params: any[]): Promise<T[]> {
+  async all<T = DbRow>(...params: SqlParam[]): Promise<T[]> {
     const text = convertPlaceholders(this.text);
     const result = await sql.unsafe(text, params);
     return result as unknown as T[];
   }
 
-  async run(...params: any[]): Promise<RunResult> {
+  async run(...params: SqlParam[]): Promise<RunResult> {
     const text = convertPlaceholders(this.text);
-    const result = (await sql.unsafe(text, params)) as any;
-    const firstRow = Array.isArray(result) ? result[0] : undefined;
-    let lastInsertRowid: number | undefined;
-    if (firstRow && firstRow.id !== undefined && firstRow.id !== null) {
-      lastInsertRowid = Number(firstRow.id);
-    }
-    const changes =
-      typeof result?.count === 'number' ? result.count : Array.isArray(result) ? result.length : 0;
-    return { lastInsertRowid, changes };
+    const result = await sql.unsafe(text, params);
+    return extractRunResult(result);
   }
 }
 
 class TxQuery {
   constructor(
     private text: string,
-    private tx: any,
+    private tx: SQL,
   ) {}
 
-  async get<T = any>(...params: any[]): Promise<T | undefined> {
+  async get<T = DbRow>(...params: SqlParam[]): Promise<T | undefined> {
     const text = convertPlaceholders(this.text);
-    const result = await this.tx.unsafe(text, params);
-    return (result as any[])[0] as T | undefined;
+    const result = (await this.tx.unsafe(text, params)) as unknown[];
+    return result[0] as T | undefined;
   }
 
-  async all<T = any>(...params: any[]): Promise<T[]> {
+  async all<T = DbRow>(...params: SqlParam[]): Promise<T[]> {
     const text = convertPlaceholders(this.text);
     const result = await this.tx.unsafe(text, params);
     return result as unknown as T[];
   }
 
-  async run(...params: any[]): Promise<RunResult> {
+  async run(...params: SqlParam[]): Promise<RunResult> {
     const text = convertPlaceholders(this.text);
-    const result = (await this.tx.unsafe(text, params)) as any;
-    const firstRow = Array.isArray(result) ? result[0] : undefined;
-    let lastInsertRowid: number | undefined;
-    if (firstRow && firstRow.id !== undefined && firstRow.id !== null) {
-      lastInsertRowid = Number(firstRow.id);
-    }
-    const changes =
-      typeof result?.count === 'number' ? result.count : Array.isArray(result) ? result.length : 0;
-    return { lastInsertRowid, changes };
+    const result = await this.tx.unsafe(text, params);
+    return extractRunResult(result);
   }
 }
 
@@ -168,7 +178,7 @@ class TxQuery {
  * atomic and isolation guarantees apply.
  */
 export class TxDb {
-  constructor(private tx: any) {}
+  constructor(private tx: SQL) {}
 
   query(text: string): TxQuery {
     return new TxQuery(text, this.tx);
@@ -183,7 +193,7 @@ export class TxDb {
   }
 }
 
-class Db {
+export class Db {
   query(text: string): Query {
     return new Query(text);
   }
@@ -223,8 +233,8 @@ class Db {
    * Backwards-compatible wrapper for code that used the bun:sqlite
    * `db.transaction(fn)()` pattern. Prefer `withTransaction` for new code.
    */
-  transaction<T>(fn: (...args: any[]) => T | Promise<T>) {
-    return async (...args: any[]) => {
+  transaction<T, A extends unknown[]>(fn: (...args: A) => T | Promise<T>) {
+    return async (...args: A) => {
       return await sql.begin(async () => fn(...args));
     };
   }
@@ -287,7 +297,7 @@ async function initializeSchema(): Promise<void> {
       const applied = (await sql.unsafe(
         `SELECT version FROM schema_migrations WHERE version = $1`,
         [version],
-      )) as any[];
+      )) as DbRow[];
       if (applied.length > 0) continue;
 
       const content = fs.readFileSync(path.join(schemaDir, file), 'utf8');
@@ -338,7 +348,7 @@ async function initializeBootstrapAdmin(): Promise<void> {
   try {
     const existing = (await sql`
       SELECT 1 FROM users WHERE primary_role = 'admin' LIMIT 1
-    `) as any[];
+    `) as DbRow[];
     if (existing.length > 0) return;
 
     const bootstrap = process.env.AFT_ADMIN_BOOTSTRAP_PASSWORD || '';
@@ -366,7 +376,7 @@ async function initializeBootstrapAdmin(): Promise<void> {
         (${bootstrapEmail}, ${hashedPassword}, 'System', 'Administrator', 'admin',
          TRUE, 'System', 'N/A', TRUE)
       RETURNING id
-    `) as any[];
+    `) as DbRow[];
 
     const adminId = inserted[0]?.id;
     if (adminId === undefined) {
@@ -404,9 +414,9 @@ export async function getUserRoles(
 ): Promise<Array<{ role: UserRoleType; isPrimary: boolean }>> {
   const userRow = (await sql`
     SELECT primary_role FROM users WHERE id = ${userId} AND is_active = TRUE
-  `) as any[];
-  if (userRow.length === 0) return [];
+  `) as Array<{ primary_role: UserRoleType }>;
   const user = userRow[0];
+  if (!user) return [];
 
   let userRoles = (await sql`
     SELECT role FROM user_roles
@@ -423,15 +433,11 @@ export async function getUserRoles(
     isPrimary: ur.role === user.primary_role,
   }));
 
-  if (!rolesWithFlags.some((r) => r.isPrimary)) {
-    if (
-      !(user.primary_role === UserRole.REQUESTOR && user.primary_role !== UserRole.MEDIA_CUSTODIAN)
-    ) {
-      rolesWithFlags.unshift({
-        role: user.primary_role,
-        isPrimary: true,
-      });
-    }
+  if (!rolesWithFlags.some((r) => r.isPrimary) && user.primary_role !== UserRole.REQUESTOR) {
+    rolesWithFlags.unshift({
+      role: user.primary_role,
+      isPrimary: true,
+    });
   }
 
   return rolesWithFlags;
@@ -454,7 +460,7 @@ export async function backupDatabase(): Promise<string> {
 
   const proc = Bun.spawn(['pg_dump', '--format=plain', '--no-owner', '--no-privileges'], {
     env: { ...process.env, PGURL: DATABASE_URL, DATABASE_URL },
-    stdout: Bun.file(backupPath).writer() as any,
+    stdout: Bun.file(backupPath),
     stderr: 'pipe',
   });
 

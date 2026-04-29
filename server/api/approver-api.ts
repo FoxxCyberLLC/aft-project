@@ -1,7 +1,7 @@
 // Approver API Endpoints
 
 import { type CACSignatureData, CACSignatureManager } from '../../lib/cac-signature';
-import { getDb, UserRole } from '../../lib/database-bun';
+import { type DbRow, getDb, UserRole } from '../../lib/database-bun';
 import { emailService, getNextApproverEmails } from '../../lib/email-service';
 import { escapeCsv, escapeHtml } from '../../lib/formatters';
 import { auditLog } from '../../lib/security';
@@ -41,7 +41,7 @@ export async function handleApproverAPI(
           .query(
             "SELECT COUNT(*) as count FROM aft_requests WHERE status IN ('pending_approver', 'submitted')",
           )
-          .get()) as any;
+          .get()) as DbRow;
         return new Response(JSON.stringify({ count: result?.count || 0 }), {
           headers: { 'Content-Type': 'application/json' },
         });
@@ -54,7 +54,7 @@ export async function handleApproverAPI(
           WHERE status = 'approved' AND approver_email = ?
           ORDER BY updated_at DESC
         `)
-          .all(session.email)) as any[];
+          .all(session.email)) as DbRow[];
 
         // Generate CSV
         const csv = generateCSV(requests);
@@ -145,7 +145,7 @@ export async function handleApproverAPI(
 
     // POST endpoints
     if (method === 'POST') {
-      const body: any = await request.json();
+      const body = (await request.json()) as Record<string, unknown>;
 
       // Approve request with CAC signature
       if (apiPath.startsWith('approve-cac/')) {
@@ -160,7 +160,15 @@ export async function handleApproverAPI(
 
         const { signature, certificate, timestamp, algorithm, notes } = body as {
           signature: string;
-          certificate: any;
+          certificate: {
+            thumbprint: string;
+            subject: string;
+            issuer: string;
+            validFrom: string;
+            validTo: string;
+            serialNumber: string;
+            certificateData: string;
+          };
           timestamp: string;
           algorithm: string;
           notes?: string;
@@ -268,7 +276,7 @@ export async function handleApproverAPI(
         if (result.changes === 0) {
           const currentRequest = (await db
             .query('SELECT status FROM aft_requests WHERE id = ?')
-            .get(requestId)) as any;
+            .get(requestId)) as DbRow;
           let errorMessage = 'This request cannot be approved at this time.';
 
           if (currentRequest) {
@@ -306,7 +314,14 @@ export async function handleApproverAPI(
           SELECT request_number, requestor_email, transfer_type, classification
           FROM aft_requests WHERE id = ?
         `)
-          .get(requestId)) as any;
+          .get(requestId)) as
+          | {
+              request_number: string;
+              requestor_email: string;
+              transfer_type: string | null;
+              classification: string | null;
+            }
+          | undefined;
 
         // Add to history (ISSM approval)
         const historyAction = 'ISSM_APPROVED';
@@ -323,20 +338,20 @@ export async function handleApproverAPI(
         const cpsoEmails = await getNextApproverEmails(newStatus);
         for (const email of cpsoEmails) {
           await emailService.notifyNextApprover(requestIdNum, newStatus, email, {
-            requestNumber: requestData.request_number,
-            requestorName: requestData.requestor_email,
-            transferType: requestData.transfer_type || 'N/A',
-            classification: requestData.classification || 'N/A',
+            requestNumber: requestData?.request_number ?? '',
+            requestorName: requestData?.requestor_email ?? '',
+            transferType: requestData?.transfer_type || 'N/A',
+            classification: requestData?.classification || 'N/A',
             notes: notes,
           });
         }
 
         // Notify requestor of approval progress
-        await emailService.notifyRequestApproved(requestIdNum, requestData.requestor_email, {
-          requestNumber: requestData.request_number,
-          requestorName: requestData.requestor_email,
-          transferType: requestData.transfer_type || 'N/A',
-          classification: requestData.classification || 'N/A',
+        await emailService.notifyRequestApproved(requestIdNum, requestData?.requestor_email ?? '', {
+          requestNumber: requestData?.request_number ?? '',
+          requestorName: requestData?.requestor_email ?? '',
+          transferType: requestData?.transfer_type || 'N/A',
+          classification: requestData?.classification || 'N/A',
           nextApprover: 'ISSM',
           notes: notes,
         });
@@ -365,7 +380,7 @@ export async function handleApproverAPI(
             headers: { 'Content-Type': 'application/json' },
           });
         }
-        const { reason, notes }: { reason: string; notes?: string } = body;
+        const { reason, notes } = body as { reason: string; notes?: string };
 
         if (!reason) {
           return new Response(JSON.stringify({ error: 'Rejection reason is required' }), {
@@ -395,7 +410,7 @@ export async function handleApproverAPI(
         if (result.changes === 0) {
           const currentRequest = (await db
             .query('SELECT status FROM aft_requests WHERE id = ?')
-            .get(requestId)) as any;
+            .get(requestId)) as DbRow;
           let errorMessage = 'This request cannot be rejected at this time.';
 
           if (currentRequest) {
@@ -434,7 +449,14 @@ export async function handleApproverAPI(
           SELECT request_number, requestor_email, transfer_type, classification
           FROM aft_requests WHERE id = ?
         `)
-          .get(requestId)) as any;
+          .get(requestId)) as
+          | {
+              request_number: string;
+              requestor_email: string;
+              transfer_type: string | null;
+              classification: string | null;
+            }
+          | undefined;
 
         // Add to history
         await db
@@ -448,12 +470,12 @@ export async function handleApproverAPI(
         if (requestData) {
           await emailService.notifyRequestRejected(
             parseInt(requestId, 10),
-            requestData.requestor_email,
+            requestData?.requestor_email ?? '',
             {
-              requestNumber: requestData.request_number,
-              requestorName: requestData.requestor_email,
-              transferType: requestData.transfer_type || 'N/A',
-              classification: requestData.classification || 'N/A',
+              requestNumber: requestData?.request_number ?? '',
+              requestorName: requestData?.requestor_email ?? '',
+              transferType: requestData?.transfer_type || 'N/A',
+              classification: requestData?.classification || 'N/A',
               nextApprover: 'ISSM',
               rejectionReason: reason,
               notes: notes,
@@ -477,7 +499,7 @@ export async function handleApproverAPI(
 
       // Generate reports
       if (apiPath === 'reports/generate') {
-        const { type }: { type: 'monthly' | 'quarterly' | 'annual' } = body;
+        const { type } = body as { type: 'monthly' | 'quarterly' | 'annual' };
 
         // r.updated_at is unixepoch (seconds); compare as unix epoch.
         let dateFilter = '';
@@ -504,7 +526,7 @@ export async function handleApproverAPI(
           WHERE r.approver_email = ? ${dateFilter}
           ORDER BY r.updated_at DESC
         `)
-          .all(session.email)) as any[];
+          .all(session.email)) as DbRow[];
 
         // Generate a printable HTML report
         const html = generatePrintableReport(reportData, type, session.email);
@@ -538,7 +560,7 @@ export async function handleApproverAPI(
   }
 }
 
-function generateCSV(requests: any[]): string {
+function generateCSV(requests: DbRow[]): string {
   const headers = [
     'Request ID',
     'Source System',
@@ -554,7 +576,7 @@ function generateCSV(requests: any[]): string {
     r.dest_system,
     r.classification || 'UNCLASSIFIED',
     r.requestor_email,
-    r.updated_at ? new Date(r.updated_at * 1000).toLocaleDateString() : '',
+    r.updated_at ? new Date((r.updated_at as number) * 1000).toLocaleDateString() : '',
     r.status,
   ]);
 
@@ -564,7 +586,7 @@ function generateCSV(requests: any[]): string {
   ].join('\n');
 }
 
-function generatePrintableReport(requests: any[], type: string, approverEmail: string): string {
+function generatePrintableReport(requests: DbRow[], type: string, approverEmail: string): string {
   const reportTitle = `${type.charAt(0).toUpperCase() + type.slice(1)} Report`;
   const generatedDate = new Date().toLocaleString();
 
@@ -579,8 +601,8 @@ function generatePrintableReport(requests: any[], type: string, approverEmail: s
       (r) => `
     <tr>
         <td>${escapeHtml(r.id)}</td>
-        <td>${escapeHtml(r.created_at ? new Date(r.created_at * 1000).toLocaleDateString() : '')}</td>
-        <td>${escapeHtml(r.updated_at ? new Date(r.updated_at * 1000).toLocaleDateString() : '')}</td>
+        <td>${escapeHtml(r.created_at ? new Date((r.created_at as number) * 1000).toLocaleDateString() : '')}</td>
+        <td>${escapeHtml(r.updated_at ? new Date((r.updated_at as number) * 1000).toLocaleDateString() : '')}</td>
         <td>${escapeHtml(r.status)}</td>
         <td>${escapeHtml(r.source_system)} -&gt; ${escapeHtml(r.dest_system)}</td>
         <td>${escapeHtml(r.requestor_name || r.requestor_email)}</td>

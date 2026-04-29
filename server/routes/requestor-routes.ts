@@ -1,7 +1,7 @@
 // Requestor page routes
 
 import { ChevronLeftIcon } from '../../components/icons';
-import { getDb } from '../../lib/database-bun';
+import { type DbRow, getDb } from '../../lib/database-bun';
 import { RoleMiddleware } from '../../middleware/role-middleware';
 import { RequestorAllRequests } from '../../requestor/all-requests';
 import { RequestorDashboard } from '../../requestor/dashboard';
@@ -100,7 +100,7 @@ export async function handleRequestorRoutes(
 export async function handleRequestDetailPage(
   _request: Request,
   requestId: number,
-  _user: any,
+  _user: unknown,
   userId: number,
 ): Promise<Response> {
   // Get request details - ensure requestor can only view their own requests
@@ -111,7 +111,18 @@ export async function handleRequestDetailPage(
     LEFT JOIN users u ON ar.requestor_id = u.id
     WHERE ar.id = ? AND ar.requestor_id = ?
   `)
-    .get(requestId, userId)) as any;
+    .get(requestId, userId)) as
+    | (DbRow & {
+        id: number;
+        request_number: string;
+        status: string;
+        files_list: string | null;
+        rejection_reason: string | null;
+        requestor_name: string;
+        created_at: number;
+        updated_at: number;
+      })
+    | undefined;
 
   if (!requestData) {
     return new Response('Request not found or access denied', { status: 404 });
@@ -131,10 +142,29 @@ export async function handleRequestDetailPage(
     ORDER BY cs.created_at DESC
     LIMIT 1
   `)
-    .get(requestId)) as any;
+    .get(requestId)) as
+    | {
+        signer_name: string;
+        signer_email: string;
+        signature_timestamp: string;
+        signature_data: string;
+        notes: string | null;
+        certificate_subject: string;
+        certificate_issuer: string;
+        certificate_serial: string;
+        signature_algorithm: string;
+        certificate_not_before: number;
+        certificate_not_after: number;
+      }
+    | undefined;
 
   // Parse files list
-  let files = [];
+  let files: Array<{
+    name?: string;
+    size?: string | number;
+    type?: string;
+    classification?: string;
+  }> = [];
   try {
     files = JSON.parse(requestData.files_list || '[]');
   } catch (_e) {
@@ -207,7 +237,7 @@ export async function handleRequestDetailPage(
                   ? `
                 <div class="space-y-2">
                   ${files
-                    .map((file: any) => {
+                    .map((file) => {
                       const base = (file?.name || '').toString();
                       const ext = (file?.type || '').toString();
                       const fullName = base && ext ? `${base}.${ext}` : base || '(unnamed)';

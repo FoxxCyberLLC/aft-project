@@ -4,12 +4,12 @@
 
 export interface NativeMessageRequest {
   action: 'connect' | 'getStatus' | 'readCertificates' | 'signData' | 'verifyPIN';
-  data?: any;
+  data?: unknown;
 }
 
 export interface NativeMessageResponse {
   type: 'status' | 'certificates' | 'signature' | 'error';
-  data: any;
+  data: unknown;
 }
 
 // Native host manifest for Chrome/Edge

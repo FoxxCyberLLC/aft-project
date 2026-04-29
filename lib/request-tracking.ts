@@ -2,6 +2,7 @@
 // Handles request status tracking, audit trails, and timeline generation
 
 import type { TimelineStep } from '../components/ui/timeline';
+import type { DbRow } from './database-bun';
 import { AFT_STATUS_LABELS, AFTStatus, type AFTStatusType, getDb } from './database-bun';
 
 export interface RequestAuditEntry {
@@ -39,7 +40,19 @@ async function getRequestTimeline(requestId: number): Promise<RequestTimelineDat
     FROM aft_requests
     WHERE id = ?
   `)
-    .get(requestId)) as any;
+    .get(requestId)) as
+    | {
+        id: number;
+        status: AFTStatusType;
+        created_at: number;
+        updated_at: number;
+        requestor_name: string;
+        approval_date: number | null;
+        actual_start_date: number | null;
+        actual_end_date: number | null;
+        transfer_type: string | null;
+      }
+    | undefined;
 
   if (!request) return null;
 
@@ -67,13 +80,16 @@ async function getRequestTimeline(requestId: number): Promise<RequestTimelineDat
     timeline_steps: timelineSteps,
     audit_entries: auditEntries,
     estimated_completion: estimateCompletion(request.status),
-    actual_completion: request.actual_end_date,
+    actual_completion: request.actual_end_date ?? undefined,
   };
 }
 
 // Generate timeline steps from request data and audit entries
-function generateTimelineSteps(request: any, auditEntries: RequestAuditEntry[]): TimelineStep[] {
-  const statusFlow = getStatusFlow(request.status, request.transfer_type);
+function generateTimelineSteps(request: DbRow, auditEntries: RequestAuditEntry[]): TimelineStep[] {
+  const statusFlow = getStatusFlow(
+    request.status as AFTStatusType,
+    (request.transfer_type as string) ?? undefined,
+  );
   const statusEvents = new Map<AFTStatusType, RequestAuditEntry>();
 
   // The first audit entry for a request is its creation, which we map to the DRAFT status.
@@ -218,7 +234,7 @@ function getDefaultAssignee(status: string): string {
 function calculateStepDuration(
   status: string,
   auditEntries: RequestAuditEntry[],
-  request: any,
+  request: DbRow,
 ): number | undefined {
   const statusEntry = auditEntries.find((e) => e.new_status === status);
   if (!statusEntry) return undefined;
@@ -329,7 +345,7 @@ async function updateRequestStatus(
   try {
     const request = (await db
       .query('SELECT status FROM aft_requests WHERE id = ?')
-      .get(requestId)) as any;
+      .get(requestId)) as { status: AFTStatusType } | undefined;
     if (!request) return false;
 
     const oldStatus = request.status;
@@ -366,7 +382,28 @@ async function getRequestsWithTimeline(filters?: {
   dta_id?: number;
   limit?: number;
   offset?: number;
-}): Promise<Array<any>> {
+}): Promise<
+  Array<
+    DbRow & {
+      id: number;
+      request_number: string;
+      requestor_name: string;
+      status: AFTStatusType;
+      created_at: number;
+      updated_at: number;
+      transfer_type: string | null;
+      classification: string | null;
+      source_system: string | null;
+      dest_system: string | null;
+      dta_id: number | null;
+      selected_drive_id: number | null;
+      timeline_progress: number;
+      total_steps: number;
+      current_step: number;
+      is_terminal: boolean;
+    }
+  >
+> {
   const db = getDb();
 
   let query = `
@@ -381,7 +418,7 @@ async function getRequestsWithTimeline(filters?: {
   `;
 
   const conditions: string[] = [];
-  const params: any[] = [];
+  const params: Array<string | number | null> = [];
 
   if (filters?.status) {
     conditions.push('r.status = ?');
@@ -415,7 +452,34 @@ async function getRequestsWithTimeline(filters?: {
     }
   }
 
-  const requests = (await db.query(query).all(...params)) as any[];
+  const requests = (await db.query(query).all(...params)) as Array<
+    DbRow & {
+      id: number;
+      request_number: string;
+      requestor_name: string;
+      status: AFTStatusType;
+      created_at: number;
+      updated_at: number;
+      transfer_type: string | null;
+      classification: string | null;
+      source_system: string | null;
+      dest_system: string | null;
+      dta_id: number | null;
+      selected_drive_id: number | null;
+    }
+  >;
+
+  type Terminal =
+    | typeof AFTStatus.COMPLETED
+    | typeof AFTStatus.DISPOSED
+    | typeof AFTStatus.REJECTED
+    | typeof AFTStatus.CANCELLED;
+  const terminalStatuses: ReadonlyArray<Terminal> = [
+    AFTStatus.COMPLETED,
+    AFTStatus.DISPOSED,
+    AFTStatus.REJECTED,
+    AFTStatus.CANCELLED,
+  ];
 
   // Add timeline progress for each request
   return requests.map((request) => {
@@ -428,12 +492,7 @@ async function getRequestsWithTimeline(filters?: {
       timeline_progress: progress,
       total_steps: flow.length,
       current_step: currentIndex + 1,
-      is_terminal: [
-        AFTStatus.COMPLETED,
-        AFTStatus.DISPOSED,
-        AFTStatus.REJECTED,
-        AFTStatus.CANCELLED,
-      ].includes(request.status),
+      is_terminal: (terminalStatuses as ReadonlyArray<string>).includes(request.status),
     };
   });
 }

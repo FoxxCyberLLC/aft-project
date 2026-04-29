@@ -1,6 +1,7 @@
 // CAC Digital Signature Integration for AFT Requests
 // Handles the application of CAC certificate signatures to AFT request documents
 
+import type { DbRow } from './database-bun';
 import { getDb, type TxDb } from './database-bun';
 import { auditLog } from './security';
 
@@ -106,7 +107,7 @@ async function applyApproverSignature(
         FROM aft_requests
         WHERE id = ? AND status IN (${allowedStatuses.map(() => '?').join(',')})
       `)
-        .get(requestId, ...allowedStatuses)) as any;
+        .get(requestId, ...allowedStatuses)) as DbRow;
 
       if (!request) {
         return { success: false as const, error: 'Request not found or not ready for approval' };
@@ -206,7 +207,7 @@ async function applySignature(
         FROM aft_requests
         WHERE id = ? AND (status = 'pending_sme_signature' OR status = 'draft')
       `)
-        .get(requestId)) as any;
+        .get(requestId)) as DbRow;
 
       if (!request) {
         return { success: false as const, error: 'Request not found or not ready for signature' };
@@ -306,7 +307,7 @@ async function applyDTASignature(
         FROM aft_requests
         WHERE id = ? AND dta_id = ?
       `)
-        .get(requestId, signerId)) as any;
+        .get(requestId, signerId)) as DbRow;
 
       if (!request) {
         return { success: false as const, error: 'Request not found or access denied' };
@@ -406,7 +407,7 @@ async function applySMESignature(
         FROM aft_requests
         WHERE id = ? AND status = 'pending_sme_signature'
       `)
-        .get(requestId)) as any;
+        .get(requestId)) as DbRow;
 
       if (!request) {
         return {
@@ -511,7 +512,7 @@ async function applyDTASignatureOnly(
         FROM aft_requests
         WHERE id = ? AND dta_id = ?
       `)
-        .get(requestId, signerId)) as any;
+        .get(requestId, signerId)) as DbRow;
 
       if (!request) {
         return { success: false as const, error: 'Request not found or access denied' };
@@ -520,7 +521,7 @@ async function applyDTASignatureOnly(
       if (request.status !== 'active_transfer') {
         return {
           success: false as const,
-          error: `Request must be in active transfer status. Current status: ${request.status}`,
+          error: `Request must be in active transfer status. Current status: ${request.status as string}`,
         };
       }
 
@@ -647,7 +648,7 @@ async function generateSignatureHash(signatureData: CACSignatureData): Promise<s
   return Array.from(hashArray, (byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
-async function getRequestSignatures(requestId: number): Promise<any[]> {
+async function getRequestSignatures(requestId: number): Promise<DbRow[]> {
   const db = getDb();
   return (await db
     .query(`
@@ -655,7 +656,7 @@ async function getRequestSignatures(requestId: number): Promise<any[]> {
     WHERE request_id = ?
     ORDER BY created_at DESC
   `)
-    .all(requestId)) as any[];
+    .all(requestId)) as DbRow[];
 }
 
 async function verifySignatureIntegrity(
@@ -668,7 +669,19 @@ async function verifySignatureIntegrity(
       .query(`
       SELECT * FROM cac_signatures WHERE id = ?
     `)
-      .get(signatureId)) as any;
+      .get(signatureId)) as
+      | {
+          signed_data: string;
+          signature_data: string;
+          certificate_thumbprint: string;
+          certificate_subject: string;
+          certificate_issuer: string;
+          certificate_not_before: number;
+          certificate_not_after: number;
+          certificate_serial: string;
+          signature_algorithm: string;
+        }
+      | undefined;
 
     if (!signature) {
       return { isValid: false, error: 'Signature not found' };
@@ -713,14 +726,14 @@ async function verifySignatureIntegrity(
   }
 }
 
-function formatSignatureForDisplay(signature: any): {
+function formatSignatureForDisplay(signature: DbRow): {
   signerName: string;
   signedAt: string;
   certificateInfo: string;
   isValid: boolean;
 } {
   try {
-    const subject = parseCertificateSubject(signature.certificate_subject);
+    const subject = parseCertificateSubject(signature.certificate_subject as string);
     const commonName = subject.CN || 'Unknown Signer';
 
     let signerName = commonName;
@@ -764,9 +777,9 @@ function parseCertificateSubject(subject: string): Record<string, string> {
   return parsed;
 }
 
-function generateSignatureBlock(signature: any): string {
+function generateSignatureBlock(signature: DbRow): string {
   const display = formatSignatureForDisplay(signature);
-  const subject = parseCertificateSubject(signature.certificate_subject);
+  const subject = parseCertificateSubject(signature.certificate_subject as string);
   const organization = subject.OU || subject.O || 'Department of Defense';
 
   return `
@@ -799,7 +812,7 @@ function generateSignatureBlock(signature: any): string {
   `;
 }
 
-async function exportSignatureData(signatureId: number): Promise<any> {
+async function exportSignatureData(signatureId: number): Promise<unknown> {
   const db = getDb();
 
   const signature = (await db
@@ -810,11 +823,22 @@ async function exportSignatureData(signatureId: number): Promise<any> {
     LEFT JOIN users u ON cs.user_id = u.id
     WHERE cs.id = ?
   `)
-    .get(signatureId)) as any;
+    .get(signatureId)) as
+    | (DbRow & {
+        id: number;
+        request_id: number;
+        request_number: string;
+        first_name: string;
+        last_name: string;
+        email: string;
+        signature_algorithm: string;
+        signed_data: string;
+      })
+    | undefined;
 
   if (!signature) return null;
 
-  let original: any = null;
+  let original: CACSignatureData | null = null;
   try {
     original = JSON.parse(signature.signed_data);
   } catch {}

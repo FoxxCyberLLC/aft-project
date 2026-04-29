@@ -2,7 +2,7 @@
 
 import { CheckIcon } from '../components/icons';
 import { ComponentBuilder } from '../components/ui/server-components';
-import { AFT_STATUS_LABELS, getDb } from '../lib/database-bun';
+import { AFT_STATUS_LABELS, type DbRow, getDb } from '../lib/database-bun';
 import { RequestTrackingService } from '../lib/request-tracking';
 import { CPSONavigation, type CPSOUser } from './cpso-nav';
 
@@ -10,20 +10,22 @@ async function render(user: CPSOUser, viewMode: 'table' | 'timeline' = 'table'):
   const db = getDb();
 
   // Stats (optional but matches format)
-  const totalRequests = (await db.query('SELECT COUNT(*) as count FROM aft_requests').get()) as any;
+  const totalRequests = (await db
+    .query('SELECT COUNT(*) as count FROM aft_requests')
+    .get()) as DbRow;
   const pendingRequests = (await db
     .query(
       "SELECT COUNT(*) as count FROM aft_requests WHERE status NOT IN ('completed', 'rejected', 'cancelled')",
     )
-    .get()) as any;
+    .get()) as DbRow;
 
   // Get requests with timeline data (same helper used by admin page)
   const requestsWithTimeline = await RequestTrackingService.getRequestsWithTimeline({
     limit: 50,
   });
 
-  const tableData = requestsWithTimeline.map((request: any) => ({
-    id: request.id,
+  const tableData = requestsWithTimeline.map((request) => ({
+    id: request.id as string | number,
     request_number: request.request_number,
     requestor_name: request.requestor_name,
     status: request.status,
@@ -40,7 +42,7 @@ async function render(user: CPSOUser, viewMode: 'table' | 'timeline' = 'table'):
     {
       key: 'request_number',
       label: 'Request Number',
-      render: (_value: any, row: any) => `
+      render: (_value: unknown, row: DbRow) => `
         <div>
           <div class="font-medium text-[var(--foreground)]">${row.request_number}</div>
           <div class="text-sm text-[var(--muted-foreground)]">ID: ${row.id}</div>
@@ -50,21 +52,21 @@ async function render(user: CPSOUser, viewMode: 'table' | 'timeline' = 'table'):
     {
       key: 'requestor_name',
       label: 'Requestor',
-      render: (_value: any, row: any) => `
+      render: (_value: unknown, row: DbRow) => `
         <div class="text-sm text-[var(--foreground)]">${row.requestor_name}</div>
       `,
     },
     {
       key: 'transfer_type',
       label: 'Type',
-      render: (_value: any, row: any) => `
+      render: (_value: unknown, row: DbRow) => `
         <div class="text-sm text-[var(--foreground)]">${row.transfer_type}</div>
       `,
     },
     {
       key: 'classification',
       label: 'Classification',
-      render: (_value: any, row: any) => `
+      render: (_value: unknown, row: DbRow) => `
         <div class="text-xs px-2 py-1 rounded-full bg-[var(--warning)]/10 text-[var(--warning)] border border-[var(--warning)]/20 font-medium text-center">
           ${row.classification}
         </div>
@@ -73,7 +75,7 @@ async function render(user: CPSOUser, viewMode: 'table' | 'timeline' = 'table'):
     {
       key: 'status',
       label: 'Status & Progress',
-      render: (_value: any, row: any) => {
+      render: (_value: unknown, row: DbRow) => {
         const statusVariant: {
           [key: string]: 'default' | 'info' | 'success' | 'error' | 'warning';
         } = {
@@ -93,12 +95,12 @@ async function render(user: CPSOUser, viewMode: 'table' | 'timeline' = 'table'):
           disposed: 'success',
           cancelled: 'default',
         };
-        const variant = statusVariant[row.status] || 'default';
+        const variant = statusVariant[row.status as string] || 'default';
         return `
           <div class="space-y-2">
-            ${ComponentBuilder.timelineStatusBadge(row.status, variant, true, {
-              current: row.current_step,
-              total: row.total_steps,
+            ${ComponentBuilder.timelineStatusBadge(row.status as string, variant, true, {
+              current: Number(row.current_step),
+              total: Number(row.total_steps),
             })}
             <div class="w-full bg-[var(--muted)] rounded-full h-1.5">
               <div class="bg-[var(--primary)] h-1.5 rounded-full transition-all duration-300" style="width: ${row.timeline_progress}%"></div>
@@ -113,14 +115,14 @@ async function render(user: CPSOUser, viewMode: 'table' | 'timeline' = 'table'):
     {
       key: 'created_at',
       label: 'Created',
-      render: (_value: any, row: any) => `
-        <div class="text-sm text-[var(--foreground)]">${new Date(row.created_at * 1000).toLocaleDateString()}</div>
+      render: (_value: unknown, row: DbRow) => `
+        <div class="text-sm text-[var(--foreground)]">${new Date((row.created_at as number) * 1000).toLocaleDateString()}</div>
       `,
     },
     {
       key: 'actions',
       label: 'Actions',
-      render: (_value: any, row: any) =>
+      render: (_value: unknown, row: DbRow) =>
         ComponentBuilder.tableCellActions([
           { label: 'Review', onClick: `viewRequest(${row.id})`, variant: 'primary' },
           { label: 'Timeline', onClick: `viewTimeline(${row.id})`, variant: 'secondary' },
@@ -206,11 +208,11 @@ async function render(user: CPSOUser, viewMode: 'table' | 'timeline' = 'table'):
           <div class="text-sm text-[var(--muted-foreground)]">Pending Review</div>
         </div>
         <div class="bg-[var(--card)] p-4 rounded-lg border border-[var(--border)]">
-          <div class="text-2xl font-bold text-[var(--success)]">${Math.round((((totalRequests?.count || 1) - (pendingRequests?.count || 0)) / (totalRequests?.count || 1)) * 100)}%</div>
+          <div class="text-2xl font-bold text-[var(--success)]">${Math.round(((Number(totalRequests?.count || 1) - Number(pendingRequests?.count || 0)) / Number(totalRequests?.count || 1)) * 100)}%</div>
           <div class="text-sm text-[var(--muted-foreground)]">Completion Rate</div>
         </div>
         <div class="bg-[var(--card)] p-4 rounded-lg border border-[var(--border)]">
-          <div class="text-2xl font-bold text-[var(--info)]">${tableData.filter((r: any) => r.created_at > (Date.now() - 86400000) / 1000).length}</div>
+          <div class="text-2xl font-bold text-[var(--info)]">${tableData.filter((r) => r.created_at > (Date.now() - 86400000) / 1000).length}</div>
           <div class="text-sm text-[var(--muted-foreground)]">Today's Requests</div>
         </div>
       </div>
@@ -228,9 +230,9 @@ async function render(user: CPSOUser, viewMode: 'table' | 'timeline' = 'table'):
   );
 }
 
-async function renderTimelineView(tableData: any[]): Promise<string> {
+async function renderTimelineView(tableData: DbRow[]): Promise<string> {
   const timelines = await Promise.all(
-    tableData.map((r) => RequestTrackingService.getRequestTimeline(r.id)),
+    tableData.map((r) => RequestTrackingService.getRequestTimeline(Number(r.id))),
   );
   return `
     <div class="space-y-4">
@@ -248,10 +250,10 @@ async function renderTimelineView(tableData: any[]): Promise<string> {
                   <p class="text-xs text-[var(--muted-foreground)]">${request.requestor_name} • ${request.transfer_type} • ${request.classification}</p>
                 </div>
                 ${ComponentBuilder.timelineStatusBadge(
-                  request.status,
+                  request.status as string,
                   request.is_terminal ? 'success' : 'info',
                   true,
-                  { current: request.current_step, total: request.total_steps },
+                  { current: Number(request.current_step), total: Number(request.total_steps) },
                 )}
               </div>
               <div class="flex gap-1">
@@ -261,8 +263,8 @@ async function renderTimelineView(tableData: any[]): Promise<string> {
             </div>
 
             ${ComponentBuilder.statusProgress({
-              currentStatus: request.status,
-              allStatuses: timelineData.timeline_steps.map((step: any) => step.id),
+              currentStatus: request.status as string,
+              allStatuses: timelineData.timeline_steps.map((step) => step.id),
               statusLabels: AFT_STATUS_LABELS,
             })}
           </div>
@@ -340,7 +342,7 @@ function getScript(): string {
               </div>
               <div>
                 <span class="font-medium text-[var(--muted-foreground)]">Status:</span>
-                <div class="text-[var(--foreground)]">\${request.status.replace('_', ' ').toUpperCase()}</div>
+                <div class="text-[var(--foreground)]">\${String(request.status).replace('_', ' ').toUpperCase()}</div>
               </div>
               <div>
                 <span class="font-medium text-[var(--muted-foreground)]">Transfer Type:</span>
@@ -348,7 +350,7 @@ function getScript(): string {
               </div>
               <div>
                 <span class="font-medium text-[var(--muted-foreground)]">Created:</span>
-                <div class="text-[var(--foreground)]">\${new Date(request.created_at * 1000).toLocaleDateString()}</div>
+                <div class="text-[var(--foreground)]">\${new Date((request.created_at as number) * 1000).toLocaleDateString()}</div>
               </div>
             </div>
           </div>

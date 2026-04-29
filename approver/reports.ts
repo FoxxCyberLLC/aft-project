@@ -11,24 +11,24 @@ async function render(user: ApproverUser): Promise<string> {
   const stats = {
     total: (await db
       .query(`
-      SELECT COUNT(*) as count FROM aft_requests 
+      SELECT COUNT(*) as count FROM aft_requests
       WHERE approver_email = ?
     `)
-      .get(user.email)) as any,
+      .get(user.email)) as { count: number } | undefined,
 
     approved: (await db
       .query(`
-      SELECT COUNT(*) as count FROM aft_requests 
+      SELECT COUNT(*) as count FROM aft_requests
       WHERE status = 'approved' AND approver_email = ?
     `)
-      .get(user.email)) as any,
+      .get(user.email)) as { count: number } | undefined,
 
     rejected: (await db
       .query(`
-      SELECT COUNT(*) as count FROM aft_requests 
+      SELECT COUNT(*) as count FROM aft_requests
       WHERE status = 'rejected' AND approver_email = ?
     `)
-      .get(user.email)) as any,
+      .get(user.email)) as { count: number } | undefined,
 
     avgProcessingTime: (await db
       .query(`
@@ -36,7 +36,7 @@ async function render(user: ApproverUser): Promise<string> {
       FROM aft_requests
       WHERE status IN ('approved', 'rejected') AND approver_email = ?
     `)
-      .get(user.email)) as any,
+      .get(user.email)) as { hours: number } | undefined,
   };
 
   // Get monthly breakdown
@@ -52,7 +52,7 @@ async function render(user: ApproverUser): Promise<string> {
     ORDER BY month DESC
     LIMIT 6
   `)
-    .all(user.email)) as any[];
+    .all(user.email)) as Array<{ month: string; approved: number; rejected: number }>;
 
   // Get system breakdown
   const systemData = (await db
@@ -67,10 +67,14 @@ async function render(user: ApproverUser): Promise<string> {
     ORDER BY count DESC
     LIMIT 10
   `)
-    .all(user.email)) as any[];
+    .all(user.email)) as Array<{
+    source_system: string | null;
+    dest_system: string | null;
+    count: number;
+  }>;
 
   const approvalRate = stats.total?.count
-    ? Math.round((stats.approved?.count / stats.total?.count) * 100)
+    ? Math.round(((stats.approved?.count ?? 0) / stats.total.count) * 100)
     : 0;
 
   const content = `
@@ -82,9 +86,9 @@ async function render(user: ApproverUser): Promise<string> {
           Key Performance Metrics
         </h3>
         <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-          ${renderMetricCard('Total Processed', stats.total?.count || 0, 'primary')}
-          ${renderMetricCard('Approved', stats.approved?.count || 0, 'success')}
-          ${renderMetricCard('Rejected', stats.rejected?.count || 0, 'destructive')}
+          ${renderMetricCard('Total Processed', Number(stats.total?.count) || 0, 'primary')}
+          ${renderMetricCard('Approved', Number(stats.approved?.count) || 0, 'success')}
+          ${renderMetricCard('Rejected', Number(stats.rejected?.count) || 0, 'destructive')}
           ${renderMetricCard('Avg. Processing', `${Math.round(stats.avgProcessingTime?.hours || 0)}h`, 'warning')}
         </div>
       </div>
@@ -132,12 +136,12 @@ async function render(user: ApproverUser): Promise<string> {
               <tbody>
                 ${monthlyData
                   .map(
-                    (month: any) => `
+                    (month) => `
                   <tr class="border-b border-[var(--border)]">
                     <td class="py-2 text-sm text-[var(--foreground)]">${formatMonth(month.month)}</td>
                     <td class="text-right py-2 text-sm text-[var(--success)]">${month.approved}</td>
                     <td class="text-right py-2 text-sm text-[var(--destructive)]">${month.rejected}</td>
-                    <td class="text-right py-2 text-sm font-semibold text-[var(--foreground)]">${month.approved + month.rejected}</td>
+                    <td class="text-right py-2 text-sm font-semibold text-[var(--foreground)]">${(month.approved ?? 0) + (month.rejected ?? 0)}</td>
                   </tr>
                 `,
                   )
@@ -161,7 +165,7 @@ async function render(user: ApproverUser): Promise<string> {
           <div class="space-y-3">
             ${systemData
               .map(
-                (route: any) => `
+                (route) => `
               <div class="flex items-center justify-between py-2 border-b border-[var(--border)] last:border-0">
                 <div class="flex-1">
                   <span class="text-sm font-medium text-[var(--foreground)]">

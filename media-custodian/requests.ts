@@ -2,7 +2,7 @@
 
 import { ShieldIcon } from '../components/icons';
 import { ComponentBuilder } from '../components/ui/server-components';
-import { getDb } from '../lib/database-bun';
+import { type DbRow, getDb } from '../lib/database-bun';
 import { RequestTrackingService } from '../lib/request-tracking';
 import { MediaCustodianNavigation, type MediaCustodianUser } from './media-custodian-nav';
 
@@ -14,12 +14,14 @@ async function renderRequestsPage(
   const db = getDb();
 
   // Get request statistics for all requests (media custodian sees all)
-  const totalRequests = (await db.query('SELECT COUNT(*) as count FROM aft_requests').get()) as any;
+  const totalRequests = (await db
+    .query('SELECT COUNT(*) as count FROM aft_requests')
+    .get()) as DbRow;
   const pendingRequests = (await db
     .query(
       "SELECT COUNT(*) as count FROM aft_requests WHERE status NOT IN ('completed', 'rejected', 'cancelled')",
     )
-    .get()) as any;
+    .get()) as DbRow;
 
   // Get all requests with timeline data
   const requestsWithTimeline = await RequestTrackingService.getRequestsWithTimeline({
@@ -27,8 +29,8 @@ async function renderRequestsPage(
   });
 
   // Transform requests data for table
-  const tableData = requestsWithTimeline.map((request: any) => ({
-    id: request.id,
+  const tableData = requestsWithTimeline.map((request) => ({
+    id: request.id as string | number,
     request_number: request.request_number,
     requestor_name: request.requestor_name,
     requestor_email: request.requestor_email,
@@ -48,7 +50,7 @@ async function renderRequestsPage(
     {
       key: 'request_number',
       label: 'Request Number',
-      render: (_value: any, row: any) => `
+      render: (_value: unknown, row: DbRow) => `
         <div>
           <div class="font-medium text-[var(--foreground)]">${row.request_number}</div>
           <div class="text-sm text-[var(--muted-foreground)]">ID: ${row.id}</div>
@@ -58,7 +60,7 @@ async function renderRequestsPage(
     {
       key: 'requestor_info',
       label: 'Requestor',
-      render: (_value: any, row: any) => `
+      render: (_value: unknown, row: DbRow) => `
         <div>
           <div class="font-medium text-[var(--foreground)]">${row.requestor_name || 'Unknown'}</div>
           <div class="text-sm text-[var(--muted-foreground)]">${row.requestor_email || 'No email'}</div>
@@ -68,21 +70,21 @@ async function renderRequestsPage(
     {
       key: 'updated_at',
       label: 'Last Updated',
-      render: (_value: any, row: any) => `
-        <div class="text-sm text-[var(--foreground)]">${new Date(row.updated_at * 1000).toLocaleDateString()}</div>
+      render: (_value: unknown, row: DbRow) => `
+        <div class="text-sm text-[var(--foreground)]">${new Date((row.updated_at as number) * 1000).toLocaleDateString()}</div>
       `,
     },
     {
       key: 'transfer_type',
       label: 'Type',
-      render: (_value: any, row: any) => `
+      render: (_value: unknown, row: DbRow) => `
         <div class="text-sm text-[var(--foreground)]">${row.transfer_type}</div>
       `,
     },
     {
       key: 'classification',
       label: 'Classification',
-      render: (_value: any, row: any) => `
+      render: (_value: unknown, row: DbRow) => `
         <div class="text-xs px-2 py-1 rounded-full bg-[var(--warning)]/10 text-[var(--warning)] border border-[var(--warning)]/20 font-medium text-center">
           ${row.classification}
         </div>
@@ -91,7 +93,7 @@ async function renderRequestsPage(
     {
       key: 'status',
       label: 'Status & Progress',
-      render: (_value: any, row: any) => {
+      render: (_value: unknown, row: DbRow) => {
         const statusVariant: {
           [key: string]: 'default' | 'info' | 'success' | 'error' | 'warning';
         } = {
@@ -112,13 +114,13 @@ async function renderRequestsPage(
           cancelled: 'default',
         };
 
-        const variant = statusVariant[row.status] || 'default';
+        const variant = statusVariant[row.status as string] || 'default';
 
         return `
           <div class="space-y-2">
-            ${ComponentBuilder.timelineStatusBadge(row.status, variant, true, {
-              current: row.current_step,
-              total: row.total_steps,
+            ${ComponentBuilder.timelineStatusBadge(row.status as string, variant, true, {
+              current: Number(row.current_step),
+              total: Number(row.total_steps),
             })}
             <div class="w-full bg-[var(--muted)] rounded-full h-1.5">
               <div class="bg-[var(--primary)] h-1.5 rounded-full transition-all duration-300" style="width: ${row.timeline_progress}%"></div>
@@ -130,7 +132,7 @@ async function renderRequestsPage(
     {
       key: 'actions',
       label: 'Actions',
-      render: (_value: any, row: any) => {
+      render: (_value: unknown, row: DbRow) => {
         const actions: Array<{
           label: string;
           onClick: string;
@@ -148,7 +150,7 @@ async function renderRequestsPage(
             'pending_approver',
             'pending_cpso',
             'pending_media_custodian',
-          ].includes(row.status)
+          ].includes(row.status as string)
         ) {
           actions.push({
             label: 'Process',
@@ -172,8 +174,8 @@ async function renderRequestsPage(
 
   // Build statistics cards
   const statsCards = buildStatsCards(
-    totalRequests?.count || 0,
-    pendingRequests?.count || 0,
+    Number(totalRequests?.count) || 0,
+    Number(pendingRequests?.count) || 0,
     tableData,
   );
 
@@ -199,7 +201,7 @@ async function renderRequestsPage(
   );
 }
 
-function buildStatsCards(total: number, pending: number, requests: any[]): string {
+function buildStatsCards(total: number, pending: number, requests: DbRow[]): string {
   const approved = requests.filter((r) => r.status === 'approved').length;
   const _rejected = requests.filter((r) => r.status === 'rejected').length;
   const completed = requests.filter((r) => r.status === 'completed').length;
@@ -258,7 +260,7 @@ async function renderRequestProcessPage(
     LEFT JOIN media_drives md ON r.selected_drive_id = md.id
     WHERE r.id = ?
   `)
-    .get(requestId)) as any;
+    .get(requestId)) as DbRow;
 
   if (!request) {
     return `
@@ -276,13 +278,13 @@ async function renderRequestProcessPage(
   }
 
   // Check if request is in the right state for processing
-  if (!['pending_media_custodian', 'completed'].includes(request.status)) {
+  if (!['pending_media_custodian', 'completed'].includes(request.status as string)) {
     return `
       ${MediaCustodianNavigation.renderPageHeader('Cannot Process Request', 'Request is not ready for media custodian processing', user, '/media-custodian/requests')}
       <div class="max-w-4xl mx-auto px-3 sm:px-5 lg:px-6 py-6">
         <div class="text-center">
           <h2 class="text-2xl font-bold text-[var(--foreground)] mb-4">Request Not Ready</h2>
-          <p class="text-[var(--muted-foreground)] mb-6">This request is currently in "${request.status}" status and cannot be processed by media custodian at this time.</p>
+          <p class="text-[var(--muted-foreground)] mb-6">This request is currently in "${request.status as string}" status and cannot be processed by media custodian at this time.</p>
           <button onclick="window.location.href='/media-custodian/requests/${requestId}'" class="px-4 py-2 bg-[var(--primary)] text-[var(--primary-foreground)] rounded-md">
             View Request Details
           </button>
@@ -296,14 +298,14 @@ async function renderRequestProcessPage(
   let additionalSystems = [];
   if (request.files_list) {
     try {
-      files = JSON.parse(request.files_list);
+      files = JSON.parse(String(request.files_list));
     } catch {
       files = [];
     }
   }
   if (request.additional_systems) {
     try {
-      additionalSystems = JSON.parse(request.additional_systems);
+      additionalSystems = JSON.parse(String(request.additional_systems));
     } catch {
       additionalSystems = [];
     }
@@ -346,7 +348,7 @@ async function renderRequestDetail(user: MediaCustodianUser, requestId: number):
     LEFT JOIN media_drives md ON r.selected_drive_id = md.id
     WHERE r.id = ?
   `)
-    .get(requestId)) as any;
+    .get(requestId)) as DbRow;
 
   if (!request) {
     return `
@@ -367,7 +369,7 @@ async function renderRequestDetail(user: MediaCustodianUser, requestId: number):
   let files = [];
   if (request.files_list) {
     try {
-      files = JSON.parse(request.files_list);
+      files = JSON.parse(String(request.files_list));
     } catch {
       files = [];
     }
@@ -383,11 +385,13 @@ async function renderRequestDetail(user: MediaCustodianUser, requestId: number):
     WHERE request_id = ? 
     ORDER BY created_at DESC
   `)
-    .all(requestId)) as any[];
+    .all(requestId)) as DbRow[];
 
   // Build request details view
   const requestDetails = buildRequestDetailsView(request, files);
-  const timelineView = buildTimelineView(timeline?.timeline_steps || []);
+  const timelineView = buildTimelineView(
+    (timeline?.timeline_steps || []) as unknown as Array<Record<string, unknown>>,
+  );
   const historyView = buildHistoryView(history);
 
   return `
@@ -412,9 +416,15 @@ async function renderRequestDetail(user: MediaCustodianUser, requestId: number):
 }
 
 function buildDispositionForm(
-  request: any,
-  files: any[],
-  additionalSystems: any[],
+  request: DbRow,
+  files: Array<{
+    name: string;
+    size: number;
+    type: string;
+    hash?: string;
+    classification?: string;
+  }>,
+  additionalSystems: Array<Record<string, unknown>>,
   user: MediaCustodianUser,
 ): string {
   return `
@@ -686,7 +696,16 @@ function buildDispositionForm(
   `;
 }
 
-function buildRequestDetailsView(request: any, files: any[]): string {
+function buildRequestDetailsView(
+  request: DbRow,
+  files: Array<{
+    name: string;
+    size: number;
+    type: string;
+    hash?: string;
+    classification?: string;
+  }>,
+): string {
   const statusVariant = {
     draft: 'default',
     submitted: 'info',
@@ -708,7 +727,7 @@ function buildRequestDetailsView(request: any, files: any[]): string {
           <h2 class="text-2xl font-bold text-[var(--foreground)]">${request.request_number}</h2>
           <p class="text-[var(--muted-foreground)]">Submitted by ${request.requestor_name || request.requestor_email}</p>
         </div>
-        ${ComponentBuilder.statusBadge(request.status.replace('_', ' ').toUpperCase(), variant)}
+        ${ComponentBuilder.statusBadge(String(request.status).replace('_', ' ').toUpperCase(), variant)}
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -784,16 +803,16 @@ function buildRequestDetailsView(request: any, files: any[]): string {
 
       <div class="flex justify-between items-center pt-4 border-t border-[var(--border)]">
         <div class="text-sm text-[var(--muted-foreground)]">
-          Created: ${new Date(request.created_at * 1000).toLocaleString()}
+          Created: ${new Date((request.created_at as number) * 1000).toLocaleString()}
           <br>
-          Updated: ${new Date(request.updated_at * 1000).toLocaleString()}
+          Updated: ${new Date((request.updated_at as number) * 1000).toLocaleString()}
         </div>
         <div class="flex space-x-2">
           <button onclick="window.location.href='/media-custodian/requests'" class="px-4 py-2 text-sm border border-[var(--border)] rounded-md hover:bg-[var(--muted)]">
             Back to Requests
           </button>
           ${
-            request.drive_id && ['completed', 'disposed'].includes(request.status)
+            request.drive_id && ['completed', 'disposed'].includes(request.status as string)
               ? `
             <button 
               onclick="returnDriveToInventory(${request.drive_id}, '${request.drive_serial}', ${request.id})"
@@ -811,7 +830,7 @@ function buildRequestDetailsView(request: any, files: any[]): string {
   `;
 }
 
-function buildHistoryView(history: any[]): string {
+function buildHistoryView(history: DbRow[]): string {
   if (!history || history.length === 0) {
     return '';
   }
@@ -828,7 +847,7 @@ function buildHistoryView(history: any[]): string {
             <div class="flex-1">
               <div class="flex items-center gap-2 mb-1">
                 <span class="text-sm font-medium text-[var(--foreground)]">${entry.action}</span>
-                <span class="text-xs text-[var(--muted-foreground)]">${new Date(entry.created_at * 1000).toLocaleString()}</span>
+                <span class="text-xs text-[var(--muted-foreground)]">${new Date((entry.created_at as number) * 1000).toLocaleString()}</span>
               </div>
               ${entry.notes ? `<p class="text-sm text-[var(--muted-foreground)]">${entry.notes}</p>` : ''}
               <p class="text-xs text-[var(--muted-foreground)]">by ${entry.user_email}</p>
@@ -842,7 +861,7 @@ function buildHistoryView(history: any[]): string {
   `;
 }
 
-function buildTimelineView(timeline: any[]): string {
+function buildTimelineView(timeline: Array<Record<string, unknown>>): string {
   return `
     <div class="bg-[var(--card)] rounded-lg border border-[var(--border)] p-6">
       <h3 class="font-semibold text-[var(--foreground)] mb-4">Request Timeline</h3>
@@ -859,7 +878,7 @@ function buildTimelineView(timeline: any[]): string {
                 event.timestamp
                   ? `
                 <p class="text-xs text-[var(--muted-foreground)] mt-1">
-                  ${new Date(event.timestamp * 1000).toLocaleString()}
+                  ${new Date((event.timestamp as number) * 1000).toLocaleString()}
                 </p>
               `
                   : ''

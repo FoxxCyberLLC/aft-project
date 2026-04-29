@@ -1,6 +1,6 @@
 // CPSO Dashboard - Main CPSO landing page
 import { ComponentBuilder } from '../components/ui/server-components';
-import { getDb } from '../lib/database-bun';
+import { type DbRow, getDb } from '../lib/database-bun';
 import { CPSONavigation, type CPSOUser } from './cpso-nav';
 
 async function render(user: CPSOUser, _userId: number): Promise<string> {
@@ -12,21 +12,21 @@ async function render(user: CPSOUser, _userId: number): Promise<string> {
     SELECT COUNT(*) as count FROM aft_requests 
     WHERE status = 'pending_cpso'
   `)
-    .get()) as any;
+    .get()) as DbRow;
 
   const approved7d = (await db
     .query(`
     SELECT COUNT(*) as count FROM aft_requests 
     WHERE status = 'approved' AND approver_email = ? AND updated_at >= (EXTRACT(EPOCH FROM NOW())::BIGINT - 7*24*60*60)
   `)
-    .get(user.email)) as any;
+    .get(user.email)) as DbRow;
 
   const rejected7d = (await db
     .query(`
     SELECT COUNT(*) as count FROM aft_requests 
     WHERE status = 'rejected' AND approver_email = ? AND updated_at >= (EXTRACT(EPOCH FROM NOW())::BIGINT - 7*24*60*60)
   `)
-    .get(user.email)) as any;
+    .get(user.email)) as DbRow;
 
   // Pending queue - only requests awaiting CPSO approval
   const pendingQueue = (await db
@@ -40,7 +40,7 @@ async function render(user: CPSOUser, _userId: number): Promise<string> {
     ORDER BY r.updated_at DESC
     LIMIT 25
   `)
-    .all()) as any[];
+    .all()) as DbRow[];
 
   // Recently approved by this CPSO
   const recentApproved = (await db
@@ -51,17 +51,17 @@ async function render(user: CPSOUser, _userId: number): Promise<string> {
     ORDER BY r.updated_at DESC
     LIMIT 10
   `)
-    .all(user.email)) as any[];
+    .all(user.email)) as DbRow[];
 
   // KPI stats
   const statsCard = CPSONavigation.renderQuickStats([
     {
       label: 'Pending CPSO Review',
-      value: pendingCount?.count || 0,
-      status: (pendingCount?.count || 0) > 0 ? 'warning' : 'operational',
+      value: Number(pendingCount?.count) || 0,
+      status: (Number(pendingCount?.count) || 0) > 0 ? 'warning' : 'operational',
     },
-    { label: 'Approved (7d)', value: approved7d?.count || 0, status: 'operational' },
-    { label: 'Rejected (7d)', value: rejected7d?.count || 0, status: 'operational' },
+    { label: 'Approved (7d)', value: Number(approved7d?.count) || 0, status: 'operational' },
+    { label: 'Rejected (7d)', value: Number(rejected7d?.count) || 0, status: 'operational' },
     { label: 'SLA Risk', value: getAgingRisk(pendingQueue), status: 'warning' },
   ]);
 
@@ -98,7 +98,7 @@ async function render(user: CPSOUser, _userId: number): Promise<string> {
   );
 }
 
-function buildPendingTable(rows: any[]): string {
+function buildPendingTable(rows: DbRow[]): string {
   if (rows.length === 0) {
     return `
       <div class="bg-[var(--card)] p-8 rounded-lg border border-[var(--border)] text-center">
@@ -111,16 +111,16 @@ function buildPendingTable(rows: any[]): string {
 
   // Transform for table
   const tableData = rows.map((r) => ({
-    id: r.id,
+    id: r.id as string | number,
     request_number: r.request_number,
     requestor: r.requestor_name || r.requestor_email,
     status: r.status,
-    transfer_type: r.transfer_type || 'Unknown',
-    classification: r.classification || 'UNCLASSIFIED',
+    transfer_type: String(r.transfer_type || 'Unknown'),
+    classification: String(r.classification || 'UNCLASSIFIED'),
     created_at: r.created_at,
     age_days: Math.max(
       0,
-      Math.floor((Date.now() / 1000 - (r.created_at || r.updated_at)) / (24 * 60 * 60)),
+      Math.floor((Date.now() / 1000 - Number(r.created_at || r.updated_at)) / (24 * 60 * 60)),
     ),
   }));
 
@@ -129,7 +129,7 @@ function buildPendingTable(rows: any[]): string {
     {
       key: 'request_number',
       label: 'Request Number',
-      render: (_value: any, row: any) => `
+      render: (_value: unknown, row: DbRow) => `
         <div>
           <div class="font-medium text-[var(--foreground)]">${row.request_number}</div>
           <div class="text-xs text-[var(--muted-foreground)]">ID: ${row.id}</div>
@@ -139,32 +139,32 @@ function buildPendingTable(rows: any[]): string {
     {
       key: 'requestor',
       label: 'Requestor',
-      render: (_: any, row: any) =>
+      render: (_: unknown, row: DbRow) =>
         `<div class="text-sm text-[var(--foreground)]">${row.requestor}</div>`,
     },
     {
       key: 'transfer_type',
       label: 'Type',
-      render: (_value: any, row: any) => `
+      render: (_value: unknown, row: DbRow) => `
         <div class="text-sm text-[var(--foreground)]">${row.transfer_type}</div>
       `,
     },
     {
       key: 'classification',
       label: 'Class',
-      render: (_: any, row: any) =>
+      render: (_: unknown, row: DbRow) =>
         `<div class="text-sm text-[var(--foreground)]">${row.classification}</div>`,
     },
     {
       key: 'age_days',
       label: 'Age (days)',
-      render: (_: any, row: any) =>
+      render: (_: unknown, row: DbRow) =>
         `<div class="text-sm text-[var(--foreground)]">${row.age_days}</div>`,
     },
     {
       key: 'status',
       label: 'Status',
-      render: (_value: any, row: any) => {
+      render: (_value: unknown, row: DbRow) => {
         const statusVariant = {
           draft: 'default',
           submitted: 'info',
@@ -179,20 +179,23 @@ function buildPendingTable(rows: any[]): string {
 
         const variant = statusVariant[row.status as keyof typeof statusVariant] || 'default';
 
-        return ComponentBuilder.statusBadge(row.status.replace('_', ' ').toUpperCase(), variant);
+        return ComponentBuilder.statusBadge(
+          String(row.status).replace('_', ' ').toUpperCase(),
+          variant,
+        );
       },
     },
     {
       key: 'created_at',
       label: 'Submitted',
-      render: (_value: any, row: any) => `
-        <div class="text-sm text-[var(--foreground)]">${new Date(row.created_at * 1000).toLocaleDateString()}</div>
+      render: (_value: unknown, row: DbRow) => `
+        <div class="text-sm text-[var(--foreground)]">${new Date((row.created_at as number) * 1000).toLocaleDateString()}</div>
       `,
     },
     {
       key: 'actions',
       label: 'Actions',
-      render: (_: any, row: any) =>
+      render: (_: unknown, row: DbRow) =>
         ComponentBuilder.tableCellActions([
           { label: 'Review', onClick: `reviewRequest(${row.id})`, variant: 'secondary' },
         ]),
@@ -213,7 +216,7 @@ function buildPendingTable(rows: any[]): string {
   });
 }
 
-function buildApprovedTable(rows: any[]): string {
+function buildApprovedTable(rows: DbRow[]): string {
   if (rows.length === 0) {
     return `<div class="text-sm text-[var(--muted-foreground)]">No approvals yet</div>`;
   }
@@ -225,7 +228,7 @@ function buildApprovedTable(rows: any[]): string {
         <div class="font-medium">${r.request_number}</div>
         <div class="text-xs text-[var(--muted-foreground)]">${r.transfer_type || 'Unknown'} • ${r.classification || ''}</div>
       </div>
-      <div class="text-xs text-[var(--muted-foreground)]">${new Date(r.updated_at * 1000).toLocaleDateString()}</div>
+      <div class="text-xs text-[var(--muted-foreground)]">${new Date((r.updated_at as number) * 1000).toLocaleDateString()}</div>
     </div>
   `,
     )
@@ -233,11 +236,11 @@ function buildApprovedTable(rows: any[]): string {
   return `<div class="bg-[var(--card)] rounded-lg border border-[var(--border)] p-4">${list}</div>`;
 }
 
-function getAgingRisk(rows: any[]): string {
+function getAgingRisk(rows: DbRow[]): string {
   if (!rows || rows.length === 0) return '0 at risk';
   const nowSec = Math.floor(Date.now() / 1000);
   const atRisk = rows.filter(
-    (r) => nowSec - (r.updated_at || r.created_at) > 5 * 24 * 60 * 60,
+    (r) => nowSec - Number(r.updated_at || r.created_at) > 5 * 24 * 60 * 60,
   ).length; // >5 days
   return `${atRisk} at risk`;
 }

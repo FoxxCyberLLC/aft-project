@@ -1,8 +1,10 @@
 // Media Custodian Routes - Handle all media custodian-related requests
 
-import { UserRole } from '../../lib/database-bun';
+import { type DbRow, UserRole } from '../../lib/database-bun';
+import type { SecureSession } from '../../lib/security';
 import { MediaCustodianDashboard } from '../../media-custodian/dashboard';
 import { MediaCustodianInventory } from '../../media-custodian/inventory';
+import type { MediaCustodianUser } from '../../media-custodian/media-custodian-nav';
 import { MediaCustodianReports } from '../../media-custodian/reports';
 import { MediaCustodianRequests } from '../../media-custodian/requests';
 import { RoleMiddleware } from '../../middleware/role-middleware';
@@ -54,7 +56,7 @@ export async function handleMediaCustodianRoutes(
 }
 
 // Dashboard route
-async function handleDashboard(_request: Request, user: any): Promise<Response> {
+async function handleDashboard(_request: Request, user: MediaCustodianUser): Promise<Response> {
   try {
     const content = await MediaCustodianDashboard.render(user, user.id);
     const script = MediaCustodianDashboard.getScript();
@@ -69,7 +71,7 @@ async function handleDashboard(_request: Request, user: any): Promise<Response> 
 }
 
 // Inventory route
-async function handleInventory(_request: Request, user: any): Promise<Response> {
+async function handleInventory(_request: Request, user: MediaCustodianUser): Promise<Response> {
   try {
     const content = await MediaCustodianInventory.render(user, user.id);
     const script = MediaCustodianInventory.getScript();
@@ -84,7 +86,7 @@ async function handleInventory(_request: Request, user: any): Promise<Response> 
 }
 
 // All requests page
-async function handleRequestsPage(request: Request, user: any): Promise<Response> {
+async function handleRequestsPage(request: Request, user: MediaCustodianUser): Promise<Response> {
   try {
     const url = new URL(request.url);
     const viewMode = (url.searchParams.get('view') as 'table' | 'timeline') || 'table';
@@ -104,7 +106,7 @@ async function handleRequestsPage(request: Request, user: any): Promise<Response
 // Individual request detail page
 async function handleRequestDetailPage(
   _request: Request,
-  user: any,
+  user: MediaCustodianUser,
   requestId: string,
 ): Promise<Response> {
   try {
@@ -128,7 +130,7 @@ async function handleRequestDetailPage(
 // Request disposition processing page
 async function handleRequestProcessPage(
   _request: Request,
-  user: any,
+  user: MediaCustodianUser,
   requestId: string,
 ): Promise<Response> {
   try {
@@ -150,7 +152,7 @@ async function handleRequestProcessPage(
 }
 
 // Reports page
-async function handleReportsPage(_request: Request, user: any): Promise<Response> {
+async function handleReportsPage(_request: Request, user: MediaCustodianUser): Promise<Response> {
   try {
     const content = await MediaCustodianReports.renderReportsPage(user);
     const script = MediaCustodianReports.getScript();
@@ -167,9 +169,9 @@ async function handleReportsPage(_request: Request, user: any): Promise<Response
 // API endpoints for media custodian operations
 async function handleAPI(
   request: Request,
-  user: any,
+  user: MediaCustodianUser,
   endpoint: string,
-  session?: any,
+  session?: SecureSession,
 ): Promise<Response> {
   try {
     const method = request.method;
@@ -228,7 +230,7 @@ async function handleAPI(
         if (method === 'POST') {
           const body = (await request.json()) as {
             type: string;
-            params?: any;
+            params?: Record<string, unknown>;
           };
           const report = await MediaCustodianAPI.generateReport(body.type, body.params);
           return new Response(JSON.stringify(report), {
@@ -244,7 +246,7 @@ async function handleAPI(
             headers: { 'Content-Type': 'application/json' },
           });
         } else if (method === 'POST') {
-          const body = (await request.json()) as any;
+          const body = (await request.json()) as DbRow;
           const newDrive = await MediaCustodianAPI.createMediaDrive(body);
           return new Response(JSON.stringify({ success: true, drive: newDrive }), {
             status: 201,
@@ -357,7 +359,7 @@ async function handleAPI(
                   headers: { 'Content-Type': 'application/json' },
                 });
               } else if (method === 'PUT') {
-                const body = (await request.json()) as any;
+                const body = (await request.json()) as DbRow;
                 const success = await MediaCustodianAPI.updateMediaDrive(driveId, body);
                 return new Response(JSON.stringify({ success }), {
                   headers: { 'Content-Type': 'application/json' },
@@ -369,7 +371,11 @@ async function handleAPI(
               const action = pathParts[2];
 
               if (action === 'issue' && method === 'POST') {
-                const body = (await request.json()) as any;
+                const body = (await request.json()) as {
+                  userId?: string;
+                  user_id?: string;
+                  purpose: string;
+                };
                 const userId = parseInt((body.userId ?? body.user_id) as string, 10);
                 const result = await MediaCustodianAPI.issueDrive(driveId, userId, body.purpose);
                 return new Response(JSON.stringify(result), {
@@ -393,7 +399,12 @@ async function handleAPI(
     console.error('Media custodian API error:', error);
     return new Response(
       JSON.stringify({
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error:
+          error instanceof Error
+            ? error instanceof Error
+              ? error.message
+              : String(error)
+            : 'Unknown error',
       }),
       {
         status: 500,

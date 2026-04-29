@@ -1,6 +1,6 @@
 // Media Custodian Inventory Management - Full CRUD operations for media drives
 import { ComponentBuilder } from '../components/ui/server-components';
-import { getDb } from '../lib/database-bun';
+import { type DbRow, getDb } from '../lib/database-bun';
 import { MediaCustodianNavigation, type MediaCustodianUser } from './media-custodian-nav';
 
 async function render(user: MediaCustodianUser, _userId: number): Promise<string> {
@@ -14,7 +14,7 @@ async function render(user: MediaCustodianUser, _userId: number): Promise<string
     LEFT JOIN users u ON md.issued_to_user_id = u.id
     ORDER BY md.created_at DESC
   `)
-    .all()) as any[];
+    .all()) as DbRow[];
 
   // Get only DTAs for drive assignment dropdown
   const users = (await db
@@ -25,7 +25,7 @@ async function render(user: MediaCustodianUser, _userId: number): Promise<string
     WHERE u.is_active = TRUE AND ur.role = 'dta'
     ORDER BY u.last_name, u.first_name
   `)
-    .all()) as any[];
+    .all()) as DbRow[];
 
   // Build drives table
   const drivesTable = buildDrivesTable(drives);
@@ -97,7 +97,7 @@ async function render(user: MediaCustodianUser, _userId: number): Promise<string
   );
 }
 
-function buildStatsCards(drives: any[]): string {
+function buildStatsCards(drives: DbRow[]): string {
   const total = drives.length;
   const available = drives.filter((d) => d.status === 'available').length;
   const issued = drives.filter((d) => d.status === 'issued').length;
@@ -123,7 +123,7 @@ function buildStatsCards(drives: any[]): string {
   `;
 }
 
-function buildDrivesTable(drives: any[]): string {
+function buildDrivesTable(drives: DbRow[]): string {
   if (drives.length === 0) {
     return `
       <div class="text-center py-8">
@@ -139,7 +139,7 @@ function buildDrivesTable(drives: any[]): string {
 
   // Transform drives data for table
   const tableData = drives.map((drive) => ({
-    id: drive.id,
+    id: drive.id as string | number,
     serial_number: drive.serial_number,
     media_control_number: drive.media_control_number,
     type: drive.type,
@@ -161,7 +161,7 @@ function buildDrivesTable(drives: any[]): string {
     {
       key: 'serial_number',
       label: 'Serial Number',
-      render: (_value: any, row: any) => `
+      render: (_value: unknown, row: DbRow) => `
         <div>
           <div class="font-medium text-[var(--foreground)]">${row.serial_number}</div>
           <div class="text-sm text-[var(--muted-foreground)]">ID: ${row.id}</div>
@@ -171,14 +171,14 @@ function buildDrivesTable(drives: any[]): string {
     {
       key: 'media_control_number',
       label: 'Media Control #',
-      render: (_value: any, row: any) => `
+      render: (_value: unknown, row: DbRow) => `
         <div class="text-sm text-[var(--foreground)]">${row.media_control_number || '-'}</div>
       `,
     },
     {
       key: 'type',
       label: 'Type & Model',
-      render: (_value: any, row: any) => `
+      render: (_value: unknown, row: DbRow) => `
         <div>
           <div class="font-medium text-[var(--foreground)]">${row.type}</div>
           <div class="text-sm text-[var(--muted-foreground)]">${row.model}</div>
@@ -188,14 +188,14 @@ function buildDrivesTable(drives: any[]): string {
     {
       key: 'capacity',
       label: 'Capacity',
-      render: (_value: any, row: any) => `
+      render: (_value: unknown, row: DbRow) => `
         <div class="text-sm text-[var(--foreground)]">${row.capacity}</div>
       `,
     },
     {
       key: 'status',
       label: 'Status',
-      render: (_value: any, row: any) => {
+      render: (_value: unknown, row: DbRow) => {
         const statusVariant = {
           available: 'success',
           issued: 'warning',
@@ -206,28 +206,33 @@ function buildDrivesTable(drives: any[]): string {
 
         const variant = statusVariant[row.status as keyof typeof statusVariant] || 'default';
 
-        return ComponentBuilder.statusBadge(row.status.replace('_', ' ').toUpperCase(), variant);
+        return ComponentBuilder.statusBadge(
+          String(row.status).replace('_', ' ').toUpperCase(),
+          variant,
+        );
       },
     },
     {
       key: 'location',
       label: 'Location',
-      render: (_value: any, row: any) => `
+      render: (_value: unknown, row: DbRow) => `
         <div class="text-sm text-[var(--foreground)]">${row.location || 'Not specified'}</div>
       `,
     },
     {
       key: 'issued_to',
       label: 'Issued To',
-      render: (_value: any, row: any) => `
+      render: (_value: unknown, row: DbRow) => `
         <div class="text-sm text-[var(--foreground)]">${row.issued_to || 'Not issued'}</div>
       `,
     },
     {
       key: 'last_activity',
       label: 'Last Activity',
-      render: (_value: any, row: any) => {
-        const ts = row.issued_at || row.returned_at || row.last_used || row.created_at;
+      render: (_value: unknown, row: DbRow) => {
+        const ts = (row.issued_at || row.returned_at || row.last_used || row.created_at) as
+          | number
+          | undefined;
         const label = row.issued_at
           ? 'Issued'
           : row.returned_at
@@ -246,7 +251,7 @@ function buildDrivesTable(drives: any[]): string {
     {
       key: 'actions',
       label: 'Actions',
-      render: (_value: any, row: any) => `
+      render: (_value: unknown, row: DbRow) => `
         <div class="flex gap-2">
           ${
             row.status === 'available'
@@ -355,7 +360,7 @@ function buildAddDriveForm(): string {
   `;
 }
 
-function buildIssueDriveModal(users: any[]): string {
+function buildIssueDriveModal(users: DbRow[]): string {
   const userOptions = users
     .map(
       (user) =>

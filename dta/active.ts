@@ -1,6 +1,6 @@
 // DTA Active Transfers - Enhanced Professional UI
 
-import { getDb } from '../lib/database-bun';
+import { type DbRow, getDb } from '../lib/database-bun';
 import { DTANavigation, type DTAUser } from './dta-nav';
 
 async function render(user: DTAUser, _userId: number): Promise<string> {
@@ -20,7 +20,7 @@ async function render(user: DTAUser, _userId: number): Promise<string> {
     WHERE status = 'active_transfer'
     ORDER BY updated_at DESC
   `)
-    .all()) as any[];
+    .all()) as DbRow[];
 
   const content = `
     <div class="dashboard-main">
@@ -45,7 +45,7 @@ async function render(user: DTAUser, _userId: number): Promise<string> {
   );
 }
 
-function buildActiveTransfersTable(transfers: any[]): string {
+function buildActiveTransfersTable(transfers: DbRow[]): string {
   if (transfers.length === 0) {
     return `
       <div class="status-card text-center">
@@ -77,7 +77,7 @@ function buildActiveTransfersTable(transfers: any[]): string {
     {
       key: 'request_number',
       label: 'Request Details',
-      render: (_value: any, row: any) => `
+      render: (_value: unknown, row: DbRow) => `
         <div class="flex flex-col space-y-1">
           <div class="font-semibold text-sm text-[var(--foreground)]">${row.request_number}</div>
           <div class="text-xs text-[var(--muted-foreground)]">${row.requestor_name}</div>
@@ -87,7 +87,7 @@ function buildActiveTransfersTable(transfers: any[]): string {
     {
       key: 'systems',
       label: 'Transfer Route',
-      render: (_value: any, row: any) => `
+      render: (_value: unknown, row: DbRow) => `
         <div class="flex flex-col space-y-1">
           <div class="text-sm font-medium">${row.source_system || 'Source'} → ${row.source_location || 'Destination'}</div>
           <div class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-[var(--accent)] text-[var(--accent-foreground)]">
@@ -99,7 +99,7 @@ function buildActiveTransfersTable(transfers: any[]): string {
     {
       key: 'av_scan_workflow',
       label: 'AV Scan Status',
-      render: (_value: any, row: any) => {
+      render: (_value: unknown, row: DbRow) => {
         return `
           <div class="space-y-3">
             <div class="grid grid-cols-1 gap-2">
@@ -144,7 +144,7 @@ function buildActiveTransfersTable(transfers: any[]): string {
     {
       key: 'transfer_workflow',
       label: 'Transfer Actions',
-      render: (_value: any, row: any) => {
+      render: (_value: unknown, row: DbRow) => {
         const canTransfer = !!row.origination_scan_status && !!row.destination_scan_status;
         const transferComplete = row.transfer_completed;
         const dtaSigned = row.dta_signature;
@@ -215,7 +215,10 @@ function buildActiveTransfersTable(transfers: any[]): string {
   `;
 }
 
-function buildProfessionalTable(columns: any[], data: any[]): string {
+function buildProfessionalTable(
+  columns: Array<{ key: string; label: string; render?: (value: unknown, row: DbRow) => string }>,
+  data: DbRow[],
+): string {
   if (data.length === 0) {
     return `
       <div class="text-center py-12">

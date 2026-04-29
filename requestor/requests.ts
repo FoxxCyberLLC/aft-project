@@ -2,7 +2,7 @@
 
 import { ArrowRightIcon } from '../components/icons';
 import { ComponentBuilder } from '../components/ui/server-components';
-import { AFT_STATUS_LABELS, getDb } from '../lib/database-bun';
+import { AFT_STATUS_LABELS, type DbRow, getDb } from '../lib/database-bun';
 import { RequestorNavigation, type RequestorUser } from './requestor-nav';
 
 async function render(
@@ -21,10 +21,19 @@ async function render(
     WHERE r.requestor_id = ?
     ORDER BY r.created_at DESC
   `)
-    .all(userId || 0)) as any[];
+    .all(userId || 0)) as Array<{
+    id: number;
+    request_number: string;
+    status: string;
+    transfer_type: string | null;
+    classification: string | null;
+    created_at: number;
+    source_system: string | null;
+    dest_system: string | null;
+  }>;
 
-  const tableData = userRequests.map((request: any) => ({
-    id: request.id,
+  const tableData = userRequests.map((request) => ({
+    id: request.id as string | number,
     request_number: request.request_number,
     status: request.status,
     transfer_type: request.transfer_type || 'Unknown',
@@ -38,13 +47,13 @@ async function render(
     {
       key: 'request_number',
       label: 'Request #',
-      render: (_value: any, row: any) =>
+      render: (_value: unknown, row: DbRow) =>
         `<div><div class="font-medium text-[var(--foreground)]">${row.request_number}</div><div class="text-sm text-[var(--muted-foreground)]">ID: ${row.id}</div></div>`,
     },
     {
       key: 'systems',
       label: 'Systems',
-      render: (_value: any, row: any) => `
+      render: (_value: unknown, row: DbRow) => `
             <div>
               <p class="font-medium flex items-center gap-1">
                 <span>${row.source_system || 'N/A'}</span>
@@ -57,27 +66,27 @@ async function render(
     {
       key: 'transfer_type',
       label: 'Type',
-      render: (_value: any, row: any) => `<div class="text-sm">${row.transfer_type}</div>`,
+      render: (_value: unknown, row: DbRow) => `<div class="text-sm">${row.transfer_type}</div>`,
     },
     {
       key: 'status',
       label: 'Status',
-      render: (_value: any, row: any) =>
+      render: (_value: unknown, row: DbRow) =>
         ComponentBuilder.statusBadge(
-          AFT_STATUS_LABELS[row.status as keyof typeof AFT_STATUS_LABELS] || row.status,
-          getStatusVariant(row.status),
+          AFT_STATUS_LABELS[row.status as keyof typeof AFT_STATUS_LABELS] || (row.status as string),
+          getStatusVariant(row.status as string),
         ),
     },
     {
       key: 'created_at',
       label: 'Created',
-      render: (_value: any, row: any) =>
-        `<div class="text-sm">${new Date(row.created_at * 1000).toLocaleDateString()}</div>`,
+      render: (_value: unknown, row: DbRow) =>
+        `<div class="text-sm">${new Date((row.created_at as number) * 1000).toLocaleDateString()}</div>`,
     },
     {
       key: 'actions',
       label: 'Actions',
-      render: (_value: any, row: any) => {
+      render: (_value: unknown, row: DbRow) => {
         const actions: {
           label: string;
           onClick: string;

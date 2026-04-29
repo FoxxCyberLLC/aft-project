@@ -1,9 +1,9 @@
 // DTA API endpoints
 
 import { type CACSignatureData, CACSignatureManager } from '../../lib/cac-signature';
-import { getDb, UserRole } from '../../lib/database-bun';
+import { type Db, type DbRow, getDb, UserRole } from '../../lib/database-bun';
 import { RequestTrackingService } from '../../lib/request-tracking';
-import { auditLog } from '../../lib/security';
+import { auditLog, type SecureSession } from '../../lib/security';
 import { RoleMiddleware } from '../../middleware/role-middleware';
 
 export async function handleDTAAPI(
@@ -54,11 +54,11 @@ export async function handleDTAAPI(
 
 async function handleDTAGet(
   segments: string[],
-  db: any,
+  db: Db,
   userId: number,
   _userEmail: string,
   _ipAddress: string,
-  session?: any,
+  session?: SecureSession,
 ): Promise<Response> {
   const [resource, id, action] = segments;
 
@@ -104,13 +104,13 @@ async function handleDTAGet(
 async function handleDTAPost(
   segments: string[],
   request: Request,
-  db: any,
+  db: Db,
   userId: number,
   userEmail: string,
   ipAddress: string,
 ): Promise<Response> {
   const [resource, id, action] = segments;
-  const body = await request.json().catch(() => ({}));
+  const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
 
   switch (resource) {
     case 'requests':
@@ -176,13 +176,13 @@ async function handleDTAPost(
 async function handleDTAPut(
   segments: string[],
   request: Request,
-  db: any,
+  db: Db,
   userId: number,
   userEmail: string,
   ipAddress: string,
 ): Promise<Response> {
   const [resource, id] = segments;
-  const body = await request.json().catch(() => ({}));
+  const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
 
   switch (resource) {
     case 'requests':
@@ -205,7 +205,7 @@ async function handleDTAPut(
 }
 
 // GET endpoint implementations
-async function getDashboardData(db: any): Promise<Response> {
+async function getDashboardData(db: Db): Promise<Response> {
   const stats = {
     totalRequests: await db.query('SELECT COUNT(*) as count FROM aft_requests').get(),
     pendingDTA: await db
@@ -227,7 +227,7 @@ async function getDashboardData(db: any): Promise<Response> {
   });
 }
 
-async function getAllRequests(db: any, userId?: number): Promise<Response> {
+async function getAllRequests(db: Db, userId?: number): Promise<Response> {
   // For DTA, show assigned requests
   const requests = (await db
     .query(`
@@ -243,14 +243,14 @@ async function getAllRequests(db: any, userId?: number): Promise<Response> {
       updated_at DESC
     LIMIT 100
   `)
-    .all(userId)) as any[];
+    .all(userId)) as DbRow[];
 
   return new Response(JSON.stringify({ success: true, requests }), {
     headers: { 'Content-Type': 'application/json' },
   });
 }
 
-async function getRequestDetails(db: any, requestId: number, userId?: number): Promise<Response> {
+async function getRequestDetails(db: Db, requestId: number, userId?: number): Promise<Response> {
   // DTA can only access details of their assigned requests
   const request = await db
     .query('SELECT * FROM aft_requests WHERE id = ? AND dta_id = ?')
@@ -267,7 +267,7 @@ async function getRequestDetails(db: any, requestId: number, userId?: number): P
   });
 }
 
-async function getRequestTimeline(db: any, requestId: number): Promise<Response> {
+async function getRequestTimeline(db: Db, requestId: number): Promise<Response> {
   const request = await db.query('SELECT * FROM aft_requests WHERE id = ?').get(requestId);
   if (!request) {
     return new Response(JSON.stringify({ error: 'Request not found' }), {
@@ -282,7 +282,7 @@ async function getRequestTimeline(db: any, requestId: number): Promise<Response>
   });
 }
 
-async function getActiveTransfers(db: any): Promise<Response> {
+async function getActiveTransfers(db: Db): Promise<Response> {
   const transfers = await db
     .query(`
     SELECT * FROM aft_requests 
@@ -296,7 +296,7 @@ async function getActiveTransfers(db: any): Promise<Response> {
   });
 }
 
-async function getAllTransfers(db: any): Promise<Response> {
+async function getAllTransfers(db: Db): Promise<Response> {
   const transfers = await db
     .query(`
     SELECT * FROM aft_requests 
@@ -311,7 +311,7 @@ async function getAllTransfers(db: any): Promise<Response> {
   });
 }
 
-async function getTransferStatus(db: any, requestId: number): Promise<Response> {
+async function getTransferStatus(db: Db, requestId: number): Promise<Response> {
   const request = await db.query('SELECT * FROM aft_requests WHERE id = ?').get(requestId);
 
   if (!request) {
@@ -344,7 +344,7 @@ async function getTransferStatus(db: any, requestId: number): Promise<Response> 
   );
 }
 
-async function getDTAStatistics(db: any): Promise<Response> {
+async function getDTAStatistics(db: Db): Promise<Response> {
   const stats = {
     totalProcessed: await db
       .query(
@@ -370,7 +370,7 @@ async function getDTAStatistics(db: any): Promise<Response> {
   });
 }
 
-async function getSMEUsers(db: any): Promise<Response> {
+async function getSMEUsers(db: Db): Promise<Response> {
   // Get all users with SME role
   const smeUsers = (await db
     .query(`
@@ -385,7 +385,7 @@ async function getSMEUsers(db: any): Promise<Response> {
     )
     ORDER BY name
   `)
-    .all()) as any[];
+    .all()) as DbRow[];
 
   return new Response(
     JSON.stringify({
@@ -400,9 +400,9 @@ async function getSMEUsers(db: any): Promise<Response> {
 
 // POST endpoint implementations
 async function approveRequest(
-  db: any,
+  db: Db,
   requestId: number,
-  body: any,
+  body: Record<string, unknown>,
   userId: number,
   userEmail: string,
   ipAddress: string,
@@ -465,9 +465,9 @@ async function approveRequest(
 }
 
 async function rejectRequest(
-  db: any,
+  db: Db,
   requestId: number,
-  body: any,
+  body: Record<string, unknown>,
   userId: number,
   userEmail: string,
   ipAddress: string,
@@ -528,7 +528,7 @@ async function rejectRequest(
 }
 
 async function pauseTransfer(
-  db: any,
+  db: Db,
   requestId: number,
   userId: number,
   userEmail: string,
@@ -575,7 +575,7 @@ async function pauseTransfer(
 }
 
 async function resumeTransfer(
-  db: any,
+  db: Db,
   requestId: number,
   userId: number,
   userEmail: string,
@@ -618,9 +618,9 @@ async function resumeTransfer(
 }
 
 async function cancelTransfer(
-  db: any,
+  db: Db,
   requestId: number,
-  body: any,
+  body: Record<string, unknown>,
   userId: number,
   userEmail: string,
   ipAddress: string,
@@ -675,13 +675,17 @@ async function cancelTransfer(
 }
 
 async function bulkProcessRequests(
-  db: any,
-  body: any,
+  db: Db,
+  body: Record<string, unknown>,
   userId: number,
   userEmail: string,
   ipAddress: string,
 ): Promise<Response> {
-  const { action, requestIds, reason } = body;
+  const { action, requestIds, reason } = body as {
+    action?: string;
+    requestIds?: number[];
+    reason?: string;
+  };
 
   if (!action || !requestIds || !Array.isArray(requestIds)) {
     return new Response(JSON.stringify({ error: 'Invalid bulk request data' }), {
@@ -738,7 +742,7 @@ async function bulkProcessRequests(
       }
     } catch (error) {
       errors.push(
-        `Error processing request ${requestId}: ${error instanceof Error ? error.message : String(error)}`,
+        `Error processing request ${requestId}: ${error instanceof Error ? (error instanceof Error ? error.message : String(error)) : String(error)}`,
       );
     }
   }
@@ -747,7 +751,7 @@ async function bulkProcessRequests(
   await auditLog(
     userId,
     'BULK_PROCESS',
-    `Bulk ${body.action} for ${body.requestIds.length} requests`,
+    `Bulk ${action} for ${requestIds?.length ?? 0} requests`,
     ipAddress,
     {
       action,
@@ -772,9 +776,9 @@ async function bulkProcessRequests(
 }
 
 async function updateRequest(
-  db: any,
+  db: Db,
   requestId: number,
-  body: any,
+  body: Record<string, unknown>,
   userId: number,
   userEmail: string,
   _ipAddress: string,
@@ -789,13 +793,13 @@ async function updateRequest(
 
   // Update allowed fields
   const allowedFields = ['priority', 'notes', 'transfer_window'];
-  const updates = [];
-  const values = [];
+  const updates: string[] = [];
+  const values: Array<string | number | null> = [];
 
   for (const [field, value] of Object.entries(body)) {
     if (allowedFields.includes(field)) {
       updates.push(`${field} = ?`);
-      values.push(value);
+      values.push(value as string | number | null);
     }
   }
 
@@ -830,9 +834,9 @@ async function updateRequest(
 }
 
 async function updateTransferSettings(
-  _db: any,
+  _db: Db,
   _requestId: number,
-  _body: any,
+  _body: Record<string, unknown>,
   _userId: number,
   _userEmail: string,
   _ipAddress: string,
@@ -846,9 +850,9 @@ async function updateTransferSettings(
 // Section 4 AFT Form Functions - Anti-Virus Scan and Transfer Process
 
 async function recordAntivirusScan(
-  db: any,
+  db: Db,
   requestId: number,
-  body: any,
+  body: Record<string, unknown>,
   userId: number,
   _userEmail: string,
   ipAddress: string,
@@ -868,7 +872,13 @@ async function recordAntivirusScan(
     });
   }
 
-  const { scanType, result, notes, filesScanned, threatsFound } = body;
+  const { scanType, result, notes, filesScanned, threatsFound } = body as {
+    scanType?: string;
+    result?: string;
+    notes?: string;
+    filesScanned?: number;
+    threatsFound?: number;
+  };
 
   if (!scanType || !['origination', 'destination'].includes(scanType)) {
     return new Response(
@@ -976,9 +986,9 @@ async function recordAntivirusScan(
 }
 
 async function activateTransfer(
-  db: any,
+  db: Db,
   requestId: number,
-  _body: any,
+  _body: Record<string, unknown>,
   userId: number,
   userEmail: string,
   ipAddress: string,
@@ -990,7 +1000,7 @@ async function activateTransfer(
   console.log(`[DEBUG] DTA Activation - Request ${requestId}, User ${userId}`);
   console.log(`[DEBUG] Request found:`, request ? 'YES' : 'NO');
   if (request) {
-    console.log(`[DEBUG] Request status: ${request.status}, Expected: pending_dta`);
+    console.log(`[DEBUG] Request status: ${request.status as string}, Expected: pending_dta`);
     console.log(`[DEBUG] Request DTA ID: ${request.dta_id}, User ID: ${userId}`);
   }
 
@@ -1005,7 +1015,7 @@ async function activateTransfer(
   if (request.status !== 'pending_dta' && request.status !== 'approved') {
     return new Response(
       JSON.stringify({
-        error: `Request is not ready for DTA activation. Current status: ${request.status}`,
+        error: `Request is not ready for DTA activation. Current status: ${request.status as string}`,
       }),
       {
         status: 400,
@@ -1058,9 +1068,9 @@ async function activateTransfer(
 }
 
 async function signDTARequest(
-  db: any,
+  db: Db,
   requestId: number,
-  body: any,
+  body: Record<string, unknown>,
   userId: number,
   userEmail: string,
   ipAddress: string,
@@ -1100,7 +1110,7 @@ async function signDTARequest(
   }
 
   // Extract SME assignment from body
-  const { smeUserId, notes } = body;
+  const { smeUserId, notes } = body as { smeUserId?: number; notes?: string };
 
   if (!smeUserId) {
     return new Response(JSON.stringify({ error: 'SME user must be assigned when signing' }), {
@@ -1175,13 +1185,17 @@ async function signDTARequest(
 }
 
 async function handleTransferFormSubmission(
-  db: any,
-  body: any,
+  db: Db,
+  body: Record<string, unknown>,
   userId: number,
   _userEmail: string,
   ipAddress: string,
 ): Promise<Response> {
-  const { requestId, saveOnly, ...formData } = body;
+  const { requestId, saveOnly, ...formData } = body as {
+    requestId?: number;
+    saveOnly?: boolean;
+    [key: string]: unknown;
+  };
 
   if (!requestId) {
     return new Response(JSON.stringify({ error: 'Request ID is required' }), {
@@ -1224,8 +1238,8 @@ async function handleTransferFormSubmission(
           WHERE id = ?
         `)
           .run(
-            formData.originationScanResult,
-            parseInt(formData.originationFilesScanned, 10),
+            formData.originationScanResult as string,
+            parseInt(String(formData.originationFilesScanned), 10),
             requestId,
           );
 
@@ -1236,7 +1250,7 @@ async function handleTransferFormSubmission(
           undefined,
           'active_transfer',
           JSON.stringify({
-            result: formData.originationScanResult,
+            result: formData.originationScanResult as string,
             filesScanned: formData.originationFilesScanned,
           }),
           `Origination scan updated: ${formData.originationScanResult} (${formData.originationFilesScanned} files)`,
@@ -1254,8 +1268,8 @@ async function handleTransferFormSubmission(
           WHERE id = ?
         `)
           .run(
-            formData.destinationScanResult,
-            parseInt(formData.destinationFilesScanned, 10),
+            formData.destinationScanResult as string,
+            parseInt(String(formData.destinationFilesScanned), 10),
             requestId,
           );
 
@@ -1266,7 +1280,7 @@ async function handleTransferFormSubmission(
           undefined,
           'active_transfer',
           JSON.stringify({
-            result: formData.destinationScanResult,
+            result: formData.destinationScanResult as string,
             filesScanned: formData.destinationFilesScanned,
           }),
           `Destination scan updated: ${formData.destinationScanResult} (${formData.destinationFilesScanned} files)`,
@@ -1281,7 +1295,7 @@ async function handleTransferFormSubmission(
         .query('SELECT * FROM aft_requests WHERE id = ?')
         .get(requestId);
       const canTransfer =
-        !!latestRequest.origination_scan_performed && !!latestRequest.destination_scan_performed;
+        !!latestRequest?.origination_scan_performed && !!latestRequest?.destination_scan_performed;
       if (!canTransfer) {
         return new Response(
           JSON.stringify({ error: 'Both scans must be recorded before completing transfer' }),
@@ -1293,7 +1307,7 @@ async function handleTransferFormSubmission(
       }
 
       const transferDateTime = formData.transferDateTime
-        ? new Date(formData.transferDateTime).getTime() / 1000
+        ? new Date(formData.transferDateTime as string).getTime() / 1000
         : Math.floor(Date.now() / 1000);
 
       await db
@@ -1304,7 +1318,7 @@ async function handleTransferFormSubmission(
             updated_at = EXTRACT(EPOCH FROM NOW())::BIGINT
         WHERE id = ?
       `)
-        .run(transferDateTime, parseInt(formData.filesTransferred, 10), requestId);
+        .run(transferDateTime, parseInt(String(formData.filesTransferred), 10), requestId);
 
       RequestTrackingService.addAuditEntry(
         requestId,
@@ -1328,8 +1342,8 @@ async function handleTransferFormSubmission(
         .query('SELECT * FROM aft_requests WHERE id = ?')
         .get(requestId);
       if (
-        !updatedRequest.origination_scan_performed ||
-        !updatedRequest.destination_scan_performed
+        !updatedRequest?.origination_scan_performed ||
+        !updatedRequest?.destination_scan_performed
       ) {
         return new Response(
           JSON.stringify({
@@ -1352,7 +1366,7 @@ async function handleTransferFormSubmission(
           SELECT user_id FROM user_roles WHERE role = 'sme'
         ))
       `)
-        .get(formData.smeUserId);
+        .get(formData.smeUserId as number);
 
       if (!smeUser) {
         return new Response(JSON.stringify({ error: 'Invalid SME user selected' }), {
@@ -1361,7 +1375,7 @@ async function handleTransferFormSubmission(
         });
       }
 
-      const signatureDateTime = new Date(formData.dtaSignatureDateTime).getTime() / 1000;
+      const signatureDateTime = new Date(formData.dtaSignatureDateTime as string).getTime() / 1000;
 
       await db
         .query(`
@@ -1373,7 +1387,12 @@ async function handleTransferFormSubmission(
             updated_at = EXTRACT(EPOCH FROM NOW())::BIGINT
         WHERE id = ?
       `)
-        .run(signatureDateTime, formData.smeUserId, formData.smeUserId, requestId);
+        .run(
+          signatureDateTime,
+          formData.smeUserId as number,
+          formData.smeUserId as number,
+          requestId,
+        );
 
       RequestTrackingService.addAuditEntry(
         requestId,
@@ -1434,9 +1453,9 @@ async function handleTransferFormSubmission(
 }
 
 async function completeTransfer(
-  db: any,
+  db: Db,
   requestId: number,
-  body: any,
+  body: Record<string, unknown>,
   userId: number,
   userEmail: string,
   ipAddress: string,
@@ -1477,7 +1496,12 @@ async function completeTransfer(
     );
   }
 
-  const { filesTransferred, smeUserId, tpiMaintained, notes } = body;
+  const { filesTransferred, smeUserId, tpiMaintained, notes } = body as {
+    filesTransferred?: number;
+    smeUserId?: number;
+    tpiMaintained?: boolean;
+    notes?: string;
+  };
 
   // Validate required fields
   if (!filesTransferred) {
@@ -1555,14 +1579,20 @@ async function completeTransfer(
 
 // Sign transfer manually (without CAC)
 async function signTransferManual(
-  db: any,
+  db: Db,
   requestId: number,
-  body: any,
+  body: Record<string, unknown>,
   userId: number,
   userEmail: string,
   ipAddress: string,
 ): Promise<Response> {
-  const { smeUserId, notes, filesTransferred, transferDateTime, transferNotes } = body;
+  const { smeUserId, notes, filesTransferred, transferDateTime, transferNotes } = body as {
+    smeUserId?: number;
+    notes?: string;
+    filesTransferred?: number;
+    transferDateTime?: string;
+    transferNotes?: string;
+  };
 
   try {
     // Verify request exists and DTA has access
@@ -1572,7 +1602,7 @@ async function signTransferManual(
       FROM aft_requests 
       WHERE id = ? AND dta_id = ?
     `)
-      .get(requestId, userId)) as any;
+      .get(requestId, userId)) as DbRow;
 
     if (!request) {
       return new Response(
@@ -1627,7 +1657,7 @@ async function signTransferManual(
           updated_at = EXTRACT(EPOCH FROM NOW())::BIGINT
       WHERE id = ?
     `)
-      .run(transferTimestamp, parseInt(filesTransferred, 10), requestId);
+      .run(transferTimestamp, parseInt(String(filesTransferred), 10), requestId);
 
     // Add transfer completion to audit trail
     if (transferNotes) {
@@ -1705,9 +1735,9 @@ async function signTransferManual(
 
 // Sign transfer with CAC certificate
 async function signTransferWithCAC(
-  db: any,
+  db: Db,
   requestId: number,
-  body: any,
+  body: Record<string, unknown>,
   userId: number,
   userEmail: string,
   ipAddress: string,
@@ -1722,7 +1752,25 @@ async function signTransferWithCAC(
     filesTransferred,
     transferDateTime,
     transferNotes,
-  } = body;
+  } = body as {
+    signature?: string;
+    certificate?: {
+      thumbprint: string;
+      subject: string;
+      issuer: string;
+      validFrom: string;
+      validTo: string;
+      serialNumber: string;
+      certificateData: string;
+    };
+    timestamp?: string;
+    algorithm?: string;
+    smeUserId?: number;
+    notes?: string;
+    filesTransferred?: number;
+    transferDateTime?: string;
+    transferNotes?: string;
+  };
 
   try {
     // Verify request exists and DTA has access
@@ -1732,7 +1780,7 @@ async function signTransferWithCAC(
       FROM aft_requests 
       WHERE id = ? AND dta_id = ?
     `)
-      .get(requestId, userId)) as any;
+      .get(requestId, userId)) as DbRow;
 
     if (!request) {
       return new Response(
@@ -1801,7 +1849,7 @@ async function signTransferWithCAC(
           updated_at = EXTRACT(EPOCH FROM NOW())::BIGINT
       WHERE id = ?
     `)
-      .run(transferTimestamp, parseInt(filesTransferred, 10), requestId);
+      .run(transferTimestamp, parseInt(String(filesTransferred), 10), requestId);
 
     // Add transfer completion to audit trail
     if (transferNotes) {
@@ -1887,7 +1935,7 @@ async function signTransferWithCAC(
 }
 
 // Get client certificate information for CAC authentication
-function getCACInfo(session?: any): Response {
+function getCACInfo(session?: SecureSession): Response {
   try {
     // First check if we have CAC info stored in the session
     let hasCACCert = false;

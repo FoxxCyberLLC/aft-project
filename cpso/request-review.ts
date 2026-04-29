@@ -14,7 +14,7 @@ import {
 } from '../components/icons';
 import { ComponentBuilder } from '../components/ui/server-components';
 import { CACSignatureManager } from '../lib/cac-signature';
-import { getDb } from '../lib/database-bun';
+import { type DbRow, getDb } from '../lib/database-bun';
 import { CPSONavigation, type CPSOUser } from './cpso-nav';
 
 async function render(user: CPSOUser, requestId: string): Promise<string> {
@@ -42,7 +42,7 @@ async function render(user: CPSOUser, requestId: string): Promise<string> {
     LEFT JOIN media_drives md ON r.selected_drive_id = md.id
     WHERE r.id = ?
   `)
-    .get(requestId)) as any;
+    .get(requestId)) as DbRow;
 
   if (!request) {
     return renderNotFound(user);
@@ -55,7 +55,7 @@ async function render(user: CPSOUser, requestId: string): Promise<string> {
     WHERE request_id = ?
     ORDER BY created_at DESC
   `)
-    .all(requestId)) as any[];
+    .all(requestId)) as DbRow[];
 
   // Get existing CAC signatures for this request
   const cacSignatures = await CACSignatureManager.getRequestSignatures(parseInt(requestId, 10));
@@ -99,7 +99,7 @@ async function render(user: CPSOUser, requestId: string): Promise<string> {
   );
 }
 
-function renderStatusBanner(request: any): string {
+function renderStatusBanner(request: DbRow): string {
   const statusConfig = {
     pending_approver: {
       icon: ClockIcon({ size: 20 }),
@@ -130,8 +130,8 @@ function renderStatusBanner(request: any): string {
   };
 
   const statusKey = (
-    ['pending_approver', 'pending_cpso', 'submitted', 'approved', 'rejected'] as const
-  ).includes(request.status)
+    ['pending_approver', 'pending_cpso', 'submitted', 'approved', 'rejected'] as readonly string[]
+  ).includes(request.status as string)
     ? (request.status as
         | 'pending_approver'
         | 'pending_cpso'
@@ -163,7 +163,7 @@ function renderStatusBanner(request: any): string {
   `;
 }
 
-function renderRequestDetails(request: any): string {
+function renderRequestDetails(request: DbRow): string {
   return ComponentBuilder.card({
     children: `
       <div class="p-6 pb-4">
@@ -205,11 +205,16 @@ function renderRequestDetails(request: any): string {
   });
 }
 
-function renderDestinations(request: any): string {
+function renderDestinations(request: DbRow): string {
   // Parse transfer_data.destinations if present
-  let destinations: any[] = [];
+  let destinations: Array<{
+    is?: string;
+    classification?: string;
+    location?: string;
+    contact?: string;
+  }> = [];
   try {
-    const td = request.transfer_data ? JSON.parse(request.transfer_data) : null;
+    const td = request.transfer_data ? JSON.parse(String(request.transfer_data)) : null;
     destinations = Array.isArray(td?.destinations) ? td.destinations : [];
   } catch {}
 
@@ -219,7 +224,7 @@ function renderDestinations(request: any): string {
   const list = [] as Array<{ is: string; classification?: string; primary?: boolean }>;
   if (request.dest_system) {
     list.push({
-      is: request.dest_system,
+      is: request.dest_system as string,
       classification: destinations[0]?.classification,
       primary: true,
     });
@@ -254,10 +259,16 @@ function renderDestinations(request: any): string {
   });
 }
 
-function renderFileInformation(request: any): string {
-  let files: any[] = [];
+function renderFileInformation(request: DbRow): string {
+  let files: Array<{
+    name: string;
+    size: number;
+    type: string;
+    hash?: string;
+    classification?: string;
+  }> = [];
   try {
-    files = request.files_list ? JSON.parse(request.files_list) : [];
+    files = request.files_list ? JSON.parse(String(request.files_list)) : [];
     if (!Array.isArray(files)) files = [];
   } catch {
     files = [];
@@ -275,7 +286,7 @@ function renderFileInformation(request: any): string {
         ${
           files.length > 0
             ? files
-                .map((file: any) => {
+                .map((file) => {
                   const base = (file?.name || '').toString();
                   const ext = (file?.type || '').toString().replace(/^\./, '');
                   const fullName = base && ext ? `${base}.${ext}` : base || '(unnamed)';
@@ -300,7 +311,7 @@ function renderFileInformation(request: any): string {
   });
 }
 
-function renderJustification(request: any): string {
+function renderJustification(request: DbRow): string {
   return ComponentBuilder.card({
     children: `
       <div class="p-6 pb-4">
@@ -315,7 +326,7 @@ function renderJustification(request: any): string {
   });
 }
 
-function renderHistory(history: any[]): string {
+function renderHistory(history: DbRow[]): string {
   if (!history || history.length === 0) {
     return '';
   }
@@ -334,7 +345,7 @@ function renderHistory(history: any[]): string {
             <div class="flex-1">
               <div class="flex items-center gap-2 mb-1">
                 <span class="text-sm font-medium text-[var(--foreground)]">${entry.action}</span>
-                <span class="text-xs text-[var(--muted-foreground)]">${new Date(entry.created_at).toLocaleString()}</span>
+                <span class="text-xs text-[var(--muted-foreground)]">${new Date(entry.created_at as number).toLocaleString()}</span>
               </div>
               ${entry.notes ? `<p class="text-sm text-[var(--muted-foreground)]">${entry.notes}</p>` : ''}
               <p class="text-xs text-[var(--muted-foreground)]">by ${entry.user_email}</p>
@@ -348,10 +359,10 @@ function renderHistory(history: any[]): string {
   });
 }
 
-function renderApprovalActions(request: any): string {
+function renderApprovalActions(request: DbRow): string {
   if (
     ['approved', 'rejected', 'completed', 'cancelled', 'pending_dta', 'active_transfer'].includes(
-      request.status,
+      request.status as string,
     )
   ) {
     return ComponentBuilder.card({
@@ -433,7 +444,7 @@ function renderApprovalActions(request: any): string {
   });
 }
 
-function renderRequestorInfo(request: any): string {
+function renderRequestorInfo(request: DbRow): string {
   return ComponentBuilder.card({
     children: `
       <div class="p-6 pb-4">
@@ -466,13 +477,13 @@ function renderRequestorInfo(request: any): string {
             <label class="text-xs text-[var(--muted-foreground)] uppercase tracking-wide">Assigned DTA</label>
             <div class="flex items-center gap-3 mt-2">
               <div class="w-8 h-8 rounded-full bg-[var(--primary)] text-[var(--primary-foreground)] flex items-center justify-center text-xs font-medium">
-                ${request.dta_name
+                ${(request.dta_name as string)
                   .split(' ')
                   .map((n: string) => n[0])
                   .join('')}
               </div>
               <div>
-                <p class="text-sm font-medium text-[var(--foreground)]">${request.dta_name}</p>
+                <p class="text-sm font-medium text-[var(--foreground)]">${request.dta_name as string}</p>
                 <p class="text-xs text-[var(--muted-foreground)]">${request.dta_email || 'No email available'}</p>
               </div>
             </div>
@@ -500,7 +511,7 @@ function renderRequestorInfo(request: any): string {
   });
 }
 
-function renderMetadata(request: any): string {
+function renderMetadata(request: DbRow): string {
   return ComponentBuilder.card({
     children: `
       <div class="p-6 pb-4">
@@ -515,7 +526,7 @@ function renderMetadata(request: any): string {
           <label class="text-xs text-[var(--muted-foreground)] uppercase tracking-wide">Created</label>
           <p class="text-sm text-[var(--foreground)] mt-1 flex items-center gap-2">
             ${CalendarIcon({ size: 14 })}
-            ${new Date(request.created_at).toLocaleString()}
+            ${new Date(request.created_at as number).toLocaleString()}
           </p>
         </div>
         ${
@@ -523,7 +534,7 @@ function renderMetadata(request: any): string {
             ? `
           <div>
             <label class="text-xs text-[var(--muted-foreground)] uppercase tracking-wide">Last Updated</label>
-            <p class="text-sm text-[var(--foreground)] mt-1">${new Date(request.updated_at).toLocaleString()}</p>
+            <p class="text-sm text-[var(--foreground)] mt-1">${new Date(request.updated_at as number).toLocaleString()}</p>
           </div>
         `
             : ''
@@ -533,7 +544,7 @@ function renderMetadata(request: any): string {
   });
 }
 
-function renderExistingSignatures(signatures: any[]): string {
+function renderExistingSignatures(signatures: DbRow[]): string {
   if (!signatures || signatures.length === 0) {
     return '';
   }
@@ -565,7 +576,7 @@ function renderExistingSignatures(signatures: any[]): string {
                   </div>
                   <div>
                     <label class="text-sm font-medium text-gray-600">Signature Date</label>
-                    <div class="text-gray-900">${new Date(sig.signature_timestamp).toLocaleString()}</div>
+                    <div class="text-gray-900">${new Date(sig.signature_timestamp as string).toLocaleString()}</div>
                   </div>
                   <div>
                     <label class="text-sm font-medium text-gray-600">Certificate Subject</label>
@@ -585,11 +596,11 @@ function renderExistingSignatures(signatures: any[]): string {
                   </div>
                   <div>
                     <label class="text-sm font-medium text-gray-600">Certificate Valid From</label>
-                    <div class="text-gray-900">${new Date(sig.certificate_not_before * 1000).toLocaleDateString()}</div>
+                    <div class="text-gray-900">${new Date((sig.certificate_not_before as number) * 1000).toLocaleDateString()}</div>
                   </div>
                   <div>
                     <label class="text-sm font-medium text-gray-600">Certificate Valid To</label>
-                    <div class="text-gray-900">${new Date(sig.certificate_not_after * 1000).toLocaleDateString()}</div>
+                    <div class="text-gray-900">${new Date((sig.certificate_not_after as number) * 1000).toLocaleDateString()}</div>
                   </div>
                 </div>
                 <div class="mt-4 pt-4 border-t border-green-200">

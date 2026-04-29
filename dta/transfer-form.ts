@@ -3,7 +3,7 @@
 import { CACPinModal } from '../components/cac-pin-modal';
 import { ShieldIcon } from '../components/icons';
 import { CACSignatureManager } from '../lib/cac-signature';
-import { getDb } from '../lib/database-bun';
+import { type DbRow, getDb } from '../lib/database-bun';
 import { DTANavigation, type DTAUser } from './dta-nav';
 
 async function render(user: DTAUser, requestId: string, userId: number): Promise<string> {
@@ -23,7 +23,7 @@ async function render(user: DTAUser, requestId: string, userId: number): Promise
     FROM aft_requests
     WHERE id = ? AND dta_id = ?
   `)
-    .get(requestId, userId)) as any;
+    .get(requestId, userId)) as DbRow;
 
   if (!request) {
     return renderNotFound(user);
@@ -38,7 +38,7 @@ async function render(user: DTAUser, requestId: string, userId: number): Promise
     WHERE ur.role = 'sme' AND u.is_active = TRUE
     ORDER BY u.last_name, u.first_name
   `)
-    .all()) as any[];
+    .all()) as DbRow[];
 
   // Get existing CAC signatures for this request
   const cacSignatures = await CACSignatureManager.getRequestSignatures(parseInt(requestId, 10));
@@ -54,7 +54,7 @@ async function render(user: DTAUser, requestId: string, userId: number): Promise
   );
 }
 
-function buildTransferForm(request: any, smeUsers: any[], cacSignatures: any[]): string {
+function buildTransferForm(request: DbRow, smeUsers: DbRow[], cacSignatures: DbRow[]): string {
   const currentStep = getCurrentStep(request);
   const submitText = getSubmitButtonText(currentStep, request);
   const submitButton = submitText
@@ -128,13 +128,13 @@ function buildTransferForm(request: any, smeUsers: any[], cacSignatures: any[]):
   `;
 }
 
-function getCurrentStep(request: any): number {
+function getCurrentStep(request: DbRow): number {
   if (!request.origination_scan_status || !request.destination_scan_status) return 1;
   if (!request.dta_signature_date) return 2;
   return 3; // Complete
 }
 
-function isStepAccessible(stepNumber: number, request: any): boolean {
+function isStepAccessible(stepNumber: number, request: DbRow): boolean {
   const currentStep = getCurrentStep(request);
   // Unlock signature step as soon as both AV scans are recorded
   const scansRecorded = !!request.origination_scan_status && !!request.destination_scan_status;
@@ -193,7 +193,7 @@ function buildProgressSteps(currentStep: number): string {
   `;
 }
 
-function buildAVScanSection(request: any, currentStep: number): string {
+function buildAVScanSection(request: DbRow, currentStep: number): string {
   const isActive = currentStep === 1;
   const isComplete = currentStep > 1;
 
@@ -230,7 +230,7 @@ function buildAVScanSection(request: any, currentStep: number): string {
             request.origination_scan_status
               ? `
             <div class="text-xs p-2 rounded ${request.origination_scan_status === 'clean' ? 'bg-[var(--success)]/10 text-[var(--success)]' : 'bg-[var(--destructive)]/10 text-[var(--destructive)]'}">
-              Status: ${request.origination_scan_status.toUpperCase()} ${request.origination_files_scanned ? `(${request.origination_files_scanned} files)` : ''}
+              Status: ${(request.origination_scan_status as string).toUpperCase()} ${request.origination_files_scanned ? `(${request.origination_files_scanned} files)` : ''}
             </div>
           `
               : ''
@@ -254,7 +254,7 @@ function buildAVScanSection(request: any, currentStep: number): string {
             request.destination_scan_status
               ? `
             <div class="text-xs p-2 rounded ${request.destination_scan_status === 'clean' ? 'bg-[var(--success)]/10 text-[var(--success)]' : 'bg-[var(--destructive)]/10 text-[var(--destructive)]'}">
-              Status: ${request.destination_scan_status.toUpperCase()} ${request.destination_files_scanned ? `(${request.destination_files_scanned} files)` : ''}
+              Status: ${(request.destination_scan_status as string).toUpperCase()} ${request.destination_files_scanned ? `(${request.destination_files_scanned} files)` : ''}
             </div>
           `
               : ''
@@ -271,7 +271,7 @@ function buildAVScanSection(request: any, currentStep: number): string {
   `;
 }
 
-function buildSignatureSection(request: any, smeUsers: any[], currentStep: number): string {
+function buildSignatureSection(request: DbRow, smeUsers: DbRow[], currentStep: number): string {
   const _isActive = currentStep === 2;
   const isComplete = currentStep > 2;
   const isAccessible = isStepAccessible(2, request);
@@ -350,7 +350,7 @@ function buildSignatureSection(request: any, smeUsers: any[], currentStep: numbe
             <label class="text-sm font-medium text-[var(--foreground)]">DTA Signature Date/Time</label>
             <input type="datetime-local" name="dtaSignatureDateTime"
                    class="w-full p-2 border border-[var(--border)] rounded-md mt-1"
-                   ${!isAccessible ? 'disabled' : ''} value="${request.dta_signature_date ? new Date(request.dta_signature_date * 1000).toISOString().slice(0, 16) : ''}">
+                   ${!isAccessible ? 'disabled' : ''} value="${request.dta_signature_date ? new Date((request.dta_signature_date as number) * 1000).toISOString().slice(0, 16) : ''}">
           </div>
         </div>
 
@@ -406,7 +406,7 @@ function buildSignatureSection(request: any, smeUsers: any[], currentStep: numbe
           isComplete
             ? `
           <div class="text-xs p-2 rounded bg-[var(--success)]/10 text-[var(--success)]">
-            ✓ Transfer completed and signed on ${new Date(request.dta_signature_date * 1000).toLocaleString()}. Forwarded to SME for verification.
+            ✓ Transfer completed and signed on ${new Date((request.dta_signature_date as number) * 1000).toLocaleString()}. Forwarded to SME for verification.
           </div>
         `
             : ''
@@ -416,7 +416,7 @@ function buildSignatureSection(request: any, smeUsers: any[], currentStep: numbe
   `;
 }
 
-function getSubmitButtonText(currentStep: number, _request: any): string {
+function getSubmitButtonText(currentStep: number, _request: DbRow): string {
   switch (currentStep) {
     case 1:
       return 'Record AV Scan Results';
@@ -427,7 +427,7 @@ function getSubmitButtonText(currentStep: number, _request: any): string {
   }
 }
 
-function renderExistingSignatures(signatures: any[]): string {
+function renderExistingSignatures(signatures: DbRow[]): string {
   if (!signatures || signatures.length === 0) {
     return '';
   }

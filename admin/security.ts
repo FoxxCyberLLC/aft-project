@@ -287,7 +287,7 @@ function getAuditLogScript(): string {
             </thead>
             <tbody class="divide-y divide-[var(--border)]">
               \${logs.map(log => {
-                const date = new Date(log.timestamp * 1000);
+                const date = new Date((log.timestamp as number) * 1000);
                 const statusClass = log.action.includes('SUCCESS') ? 'bg-green-100 text-green-800' :
                                    log.action.includes('FAILED') || log.action.includes('RATE_LIMITED') ? 'bg-red-100 text-red-800' :
                                    'bg-yellow-100 text-yellow-800';
@@ -325,7 +325,7 @@ function getAuditLogScript(): string {
           const csv = [
             'Timestamp,User,Action,Description,IP Address,Status',
             ...logs.map(log => {
-              const date = new Date(log.timestamp * 1000);
+              const date = new Date((log.timestamp as number) * 1000);
               const status = log.action.includes('SUCCESS') ? 'SUCCESS' :
                             log.action.includes('FAILED') ? 'FAILED' : 'INFO';
               return [

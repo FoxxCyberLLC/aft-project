@@ -12,7 +12,7 @@ import {
   XCircleIcon,
 } from '../components/icons';
 import { ComponentBuilder } from '../components/ui/server-components';
-import { getDb } from '../lib/database-bun';
+import { type DbRow, getDb } from '../lib/database-bun';
 import { DTANavigation, type DTAUser } from './dta-nav';
 
 async function render(user: DTAUser, requestId: string, userId: number): Promise<string> {
@@ -40,7 +40,7 @@ async function render(user: DTAUser, requestId: string, userId: number): Promise
     LEFT JOIN media_drives md ON r.selected_drive_id = md.id
     WHERE r.id = ? AND r.dta_id = ?
   `)
-    .get(requestId, userId)) as any;
+    .get(requestId, userId)) as DbRow;
 
   if (!request) {
     return renderNotFound(user);
@@ -53,7 +53,7 @@ async function render(user: DTAUser, requestId: string, userId: number): Promise
     WHERE request_id = ? 
     ORDER BY created_at DESC
   `)
-    .all(requestId)) as any[];
+    .all(requestId)) as DbRow[];
 
   const content = `
     <div class="space-y-6">
@@ -90,7 +90,7 @@ async function render(user: DTAUser, requestId: string, userId: number): Promise
   );
 }
 
-function renderStatusBanner(request: any): string {
+function renderStatusBanner(request: DbRow): string {
   const statusConfig = {
     pending_dta: {
       icon: ClockIcon({ size: 20 }),
@@ -121,8 +121,14 @@ function renderStatusBanner(request: any): string {
   };
 
   const statusKey = (
-    ['pending_dta', 'active_transfer', 'pending_sme_signature', 'completed', 'cancelled'] as const
-  ).includes(request.status)
+    [
+      'pending_dta',
+      'active_transfer',
+      'pending_sme_signature',
+      'completed',
+      'cancelled',
+    ] as readonly string[]
+  ).includes(request.status as string)
     ? (request.status as
         | 'pending_dta'
         | 'active_transfer'
@@ -154,7 +160,7 @@ function renderStatusBanner(request: any): string {
   `;
 }
 
-function renderRequestDetails(request: any): string {
+function renderRequestDetails(request: DbRow): string {
   return ComponentBuilder.card({
     children: `
       <div class="p-6 pb-4">
@@ -207,11 +213,16 @@ function renderRequestDetails(request: any): string {
   });
 }
 
-function renderDestinations(request: any): string {
+function renderDestinations(request: DbRow): string {
   // Parse transfer_data.destinations if present
-  let destinations: any[] = [];
+  let destinations: Array<{
+    is?: string;
+    classification?: string;
+    location?: string;
+    contact?: string;
+  }> = [];
   try {
-    const td = request.transfer_data ? JSON.parse(request.transfer_data) : null;
+    const td = request.transfer_data ? JSON.parse(String(request.transfer_data)) : null;
     destinations = Array.isArray(td?.destinations) ? td.destinations : [];
   } catch {}
 
@@ -221,7 +232,7 @@ function renderDestinations(request: any): string {
   const list = [] as Array<{ is: string; classification?: string; primary?: boolean }>;
   if (request.dest_system) {
     list.push({
-      is: request.dest_system,
+      is: request.dest_system as string,
       classification: destinations[0]?.classification,
       primary: true,
     });
@@ -253,10 +264,16 @@ function renderDestinations(request: any): string {
   });
 }
 
-function renderFileInformation(request: any): string {
-  let files: any[] = [];
+function renderFileInformation(request: DbRow): string {
+  let files: Array<{
+    name: string;
+    size: number;
+    type: string;
+    hash?: string;
+    classification?: string;
+  }> = [];
   try {
-    files = request.files_list ? JSON.parse(request.files_list) : [];
+    files = request.files_list ? JSON.parse(String(request.files_list)) : [];
     if (!Array.isArray(files)) files = [];
   } catch {
     files = [];
@@ -271,7 +288,7 @@ function renderFileInformation(request: any): string {
         ${
           files.length > 0
             ? files
-                .map((file: any) => {
+                .map((file) => {
                   const base = (file?.name || '').toString();
                   const ext = (file?.type || '').toString().replace(/^\./, '');
                   const fullName = base && ext ? `${base}.${ext}` : base || '(unnamed)';
@@ -296,7 +313,7 @@ function renderFileInformation(request: any): string {
   });
 }
 
-function renderJustification(request: any): string {
+function renderJustification(request: DbRow): string {
   return ComponentBuilder.card({
     children: `
       <div class="p-6 pb-4">
@@ -311,7 +328,7 @@ function renderJustification(request: any): string {
   });
 }
 
-function renderHistory(history: any[]): string {
+function renderHistory(history: DbRow[]): string {
   if (!history || history.length === 0) {
     return '';
   }
@@ -330,7 +347,7 @@ function renderHistory(history: any[]): string {
             <div class="flex-1">
               <div class="flex items-center gap-2 mb-1">
                 <span class="text-sm font-medium text-[var(--foreground)]">${entry.action}</span>
-                <span class="text-xs text-[var(--muted-foreground)]">${new Date(entry.created_at).toLocaleString()}</span>
+                <span class="text-xs text-[var(--muted-foreground)]">${new Date(entry.created_at as number).toLocaleString()}</span>
               </div>
               ${entry.notes ? `<p class="text-sm text-[var(--muted-foreground)]">${entry.notes}</p>` : ''}
               <p class="text-xs text-[var(--muted-foreground)]">by ${entry.user_email}</p>
@@ -344,8 +361,8 @@ function renderHistory(history: any[]): string {
   });
 }
 
-function renderDTAActions(request: any): string {
-  if (['completed', 'cancelled', 'pending_sme_signature'].includes(request.status)) {
+function renderDTAActions(request: DbRow): string {
+  if (['completed', 'cancelled', 'pending_sme_signature'].includes(request.status as string)) {
     return ComponentBuilder.card({
       children: `
         <div class="p-6 pb-0">
@@ -414,7 +431,7 @@ function renderDTAActions(request: any): string {
   });
 }
 
-function renderRequestorInfo(request: any): string {
+function renderRequestorInfo(request: DbRow): string {
   return ComponentBuilder.card({
     children: `
       <div class="p-6 pb-4">
@@ -447,13 +464,13 @@ function renderRequestorInfo(request: any): string {
             <label class="text-xs text-[var(--muted-foreground)] uppercase tracking-wide">Assigned DTA</label>
             <div class="flex items-center gap-3 mt-2">
               <div class="w-8 h-8 rounded-full bg-[var(--primary)] text-[var(--primary-foreground)] flex items-center justify-center text-xs font-medium">
-                ${request.dta_name
+                ${(request.dta_name as string)
                   .split(' ')
                   .map((n: string) => n[0])
                   .join('')}
               </div>
               <div>
-                <p class="text-sm font-medium text-[var(--foreground)]">${request.dta_name}</p>
+                <p class="text-sm font-medium text-[var(--foreground)]">${request.dta_name as string}</p>
                 <p class="text-xs text-[var(--muted-foreground)]">${request.dta_email || 'No email available'}</p>
               </div>
             </div>
@@ -481,7 +498,7 @@ function renderRequestorInfo(request: any): string {
   });
 }
 
-function renderMetadata(request: any): string {
+function renderMetadata(request: DbRow): string {
   return ComponentBuilder.card({
     children: `
       <div class="p-6 pb-4">
@@ -496,7 +513,7 @@ function renderMetadata(request: any): string {
           <label class="text-xs text-[var(--muted-foreground)] uppercase tracking-wide">Created</label>
           <p class="text-sm text-[var(--foreground)] mt-1 flex items-center gap-2">
             ${CalendarIcon({ size: 14 })}
-            ${new Date(request.created_at).toLocaleString()}
+            ${new Date(request.created_at as number).toLocaleString()}
           </p>
         </div>
         ${
@@ -504,7 +521,7 @@ function renderMetadata(request: any): string {
             ? `
           <div>
             <label class="text-xs text-[var(--muted-foreground)] uppercase tracking-wide">Last Updated</label>
-            <p class="text-sm text-[var(--foreground)] mt-1">${new Date(request.updated_at).toLocaleString()}</p>
+            <p class="text-sm text-[var(--foreground)] mt-1">${new Date(request.updated_at as number).toLocaleString()}</p>
           </div>
         `
             : ''

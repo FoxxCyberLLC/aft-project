@@ -1,7 +1,7 @@
 // Requestor API routes
 
 import { type CACSignatureData, CACSignatureManager } from '../../lib/cac-signature';
-import { generateRequestNumber, getDb, UserRole } from '../../lib/database-bun';
+import { type DbRow, generateRequestNumber, getDb, UserRole } from '../../lib/database-bun';
 import { emailService, getNextApproverEmails } from '../../lib/email-service';
 import { auditLog } from '../../lib/security';
 import { RoleMiddleware } from '../../middleware/role-middleware';
@@ -31,7 +31,7 @@ export async function handleRequestorAPI(
         WHERE u.is_active = TRUE AND ur.role = ?
         ORDER BY u.last_name, u.first_name
       `)
-        .all(UserRole.DTA)) as any[];
+        .all(UserRole.DTA)) as DbRow[];
       return new Response(JSON.stringify(dtas), {
         headers: { 'Content-Type': 'application/json' },
       });
@@ -70,7 +70,7 @@ export async function handleRequestorAPI(
         ORDER BY issued_at DESC
         LIMIT 1
       `)
-        .get(dtaId)) as any;
+        .get(dtaId)) as DbRow;
       return new Response(JSON.stringify({ hasDrive: !!drive, drive: drive || null }), {
         headers: { 'Content-Type': 'application/json' },
       });
@@ -91,13 +91,35 @@ export async function handleRequestorAPI(
     if (csrfFail) return csrfFail;
 
     try {
-      const requestData = (await request.json()) as any;
+      const requestData = (await request.json()) as {
+        additional_file_list_attached?: string;
+        dest_location?: string;
+        dest_system?: string;
+        destination_poc?: string;
+        destinations_json?: string;
+        draft_id?: string;
+        dta_id?: string;
+        files?: Array<{ name?: string; size?: number; type?: string; hash?: string }>;
+        justification?: string;
+        media_control_number?: string;
+        media_encrypted?: boolean;
+        media_type?: string;
+        overall_classification?: string;
+        source_classification?: string;
+        source_is?: string;
+        transfer_type?: string;
+      };
 
       // Parse multi-destination payload and prepare transfer_data JSON
-      let destinations: Array<any> = [];
+      let destinations: Array<{
+        is?: string;
+        classification?: string;
+        location?: string;
+        contact?: string;
+      }> = [];
       try {
         if (requestData.destinations_json) {
-          const parsed = JSON.parse(requestData.destinations_json);
+          const parsed = JSON.parse(String(requestData.destinations_json));
           if (Array.isArray(parsed)) destinations = parsed;
         }
       } catch {}
@@ -126,7 +148,7 @@ export async function handleRequestorAPI(
         while (true) {
           const existing = (await db
             .query('SELECT id FROM aft_requests WHERE request_number = ? LIMIT 1')
-            .get(candidate)) as any;
+            .get(candidate)) as DbRow;
           if (!existing || (excludeId && existing.id === excludeId)) {
             return candidate;
           }
@@ -151,7 +173,7 @@ export async function handleRequestorAPI(
           .query(`
           SELECT status FROM aft_requests WHERE id = ? AND requestor_id = ?
         `)
-          .get(requestId, authResult.session.userId)) as any;
+          .get(requestId, authResult.session.userId)) as DbRow;
 
         if (existingRequest?.status === 'rejected') {
           return new Response(
@@ -181,7 +203,7 @@ export async function handleRequestorAPI(
             WHERE issued_to_user_id = ? AND status = 'issued'
             ORDER BY issued_at DESC LIMIT 1
           `)
-            .get(parseInt(requestData.dta_id, 10))) as any;
+            .get(parseInt(requestData.dta_id, 10))) as { id: number } | undefined;
           selectedDriveId = dtaDrive?.id || null;
         }
 
@@ -230,7 +252,7 @@ export async function handleRequestorAPI(
             requestData.dest_system || '',
             requestData.dest_location || '',
             requestData.destination_poc || '',
-            requestData.files || '[]',
+            JSON.stringify(requestData.files || []),
             !!requestData.additional_file_list_attached,
             !!requestData.media_encrypted,
             requestData.media_encrypted ? 'Yes' : 'No',
@@ -254,11 +276,11 @@ export async function handleRequestorAPI(
             WHERE issued_to_user_id = ? AND status = 'issued'
             ORDER BY issued_at DESC LIMIT 1
           `)
-            .get(parseInt(requestData.dta_id, 10))) as any;
+            .get(parseInt(requestData.dta_id, 10))) as { id: number } | undefined;
           selectedDriveId = dtaDrive?.id || null;
         }
 
-        const result = (await db
+        const result = await db
           .query(`
           INSERT INTO aft_requests (
             request_number, status, requestor_id, requestor_name, requestor_org, requestor_phone, requestor_email,
@@ -286,12 +308,12 @@ export async function handleRequestorAPI(
             requestData.dest_system || '',
             requestData.dest_location || '',
             requestData.destination_poc || '',
-            requestData.files || '[]',
+            JSON.stringify(requestData.files || []),
             !!requestData.additional_file_list_attached,
             !!requestData.media_encrypted,
             requestData.media_encrypted ? 'Yes' : 'No',
             transferDataJson,
-          )) as any;
+          );
 
         requestId = Number(result.lastInsertRowid);
       }
@@ -304,7 +326,9 @@ export async function handleRequestorAPI(
           FROM users
           WHERE id = ?
         `)
-          .get(parseInt(requestData.dta_id, 10))) as any;
+          .get(parseInt(requestData.dta_id, 10))) as
+          | { email: string; first_name: string; last_name: string }
+          | undefined;
 
         if (dtaUser) {
           await emailService.notifyDTASelection(requestId, dtaUser.email, {
@@ -334,12 +358,12 @@ export async function handleRequestorAPI(
           headers: { 'Content-Type': 'application/json' },
         },
       );
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error saving AFT draft:', error);
       return new Response(
         JSON.stringify({
           success: false,
-          message: `Failed to save draft: ${error.message}`,
+          message: `Failed to save draft: ${error instanceof Error ? error.message : String(error)}`,
         }),
         {
           status: 500,
@@ -358,7 +382,24 @@ export async function handleRequestorAPI(
     if (csrfFail) return csrfFail;
 
     try {
-      const requestData = (await request.json()) as any;
+      const requestData = (await request.json()) as {
+        requestId?: number;
+        signatureMethod?: 'cac' | 'manual';
+        manualSignature?: string;
+        cacCertificate?: {
+          signature: string;
+          thumbprint: string;
+          subject: string;
+          issuer: string;
+          serialNumber: string;
+          validFrom: string;
+          validTo: string;
+          certificateData: string;
+          timestamp: string;
+          algorithm: string;
+          notes?: string;
+        };
+      };
       const { requestId, signatureMethod, manualSignature, cacCertificate } = requestData;
 
       if (!requestId) {
@@ -393,7 +434,15 @@ export async function handleRequestorAPI(
         SELECT id, status, request_number, transfer_type FROM aft_requests 
         WHERE id = ? AND requestor_id = ?
       `)
-        .get(requestId, authResult.session.userId)) as any;
+        .get(requestId, authResult.session.userId)) as
+        | {
+            id: number;
+            status: string;
+            request_number: string;
+            transfer_type: string | null;
+            classification: string | null;
+          }
+        | undefined;
 
       console.log('Submit request - Request ID:', requestId, 'User ID:', authResult.session.userId);
       console.log('Found request:', existingRequest);
@@ -599,12 +648,12 @@ export async function handleRequestorAPI(
           headers: { 'Content-Type': 'application/json' },
         },
       );
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error submitting AFT request:', error);
       return new Response(
         JSON.stringify({
           success: false,
-          message: `Failed to submit request: ${error.message}`,
+          message: `Failed to submit request: ${error instanceof Error ? error.message : String(error)}`,
         }),
         {
           status: 500,

@@ -1,6 +1,7 @@
 // Admin API routes
 import {
   backupDatabase,
+  type DbRow,
   getDb,
   getRoleDescription,
   getRoleDisplayName,
@@ -39,22 +40,22 @@ export async function handleAdminAPI(
 
     const userCount = (await db
       .query('SELECT COUNT(*) as count FROM users WHERE is_active = TRUE')
-      .get()) as any;
+      .get()) as DbRow;
     const requestCount = (await db
       .query('SELECT COUNT(*) as count FROM aft_requests')
-      .get()) as any;
+      .get()) as DbRow;
     const recentLogins = (await db
       .query(`
       SELECT COUNT(*) as count FROM security_audit_log 
       WHERE action = 'LOGIN_SUCCESS' AND timestamp > (EXTRACT(EPOCH FROM NOW())::BIGINT - 86400)
     `)
-      .get()) as any;
+      .get()) as DbRow;
 
     return new Response(
       JSON.stringify({
-        activeUsers: userCount?.count || 0,
-        totalRequests: requestCount?.count || 0,
-        todayLogins: recentLogins?.count || 0,
+        activeUsers: Number(userCount?.count) || 0,
+        totalRequests: Number(requestCount?.count) || 0,
+        todayLogins: Number(recentLogins?.count) || 0,
         systemStatus: 'operational',
       }),
       {
@@ -92,7 +93,16 @@ export async function handleAdminAPI(
     if (authResult.response) return authResult.response;
 
     try {
-      const userData = (await request.json()) as any;
+      const userData = (await request.json()) as {
+        email: string;
+        password: string;
+        first_name: string;
+        last_name: string;
+        primary_role: string;
+        organization?: string;
+        phone?: string;
+        is_active?: boolean;
+      };
       const hashedPassword = await Bun.password.hash(userData.password, {
         algorithm: 'bcrypt',
         cost: 12,
@@ -113,7 +123,7 @@ export async function handleAdminAPI(
           userData.organization || null,
           userData.phone || null,
           !!userData.is_active,
-        )) as any;
+        )) as { id: number } | undefined;
 
       // Add primary role to user_roles table
       await db
@@ -121,7 +131,7 @@ export async function handleAdminAPI(
         INSERT INTO user_roles (user_id, role, is_active, assigned_by)
         VALUES (?, ?, 1, ?)
       `)
-        .run(result.id, userData.primary_role, authResult.session.userId);
+        .run(result?.id ?? 0, userData.primary_role, authResult.session.userId);
 
       await auditLog(
         authResult.session.userId,
@@ -133,11 +143,11 @@ export async function handleAdminAPI(
       return new Response(JSON.stringify({ success: true }), {
         headers: { 'Content-Type': 'application/json' },
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       return new Response(
         JSON.stringify({
           success: false,
-          message: error.message,
+          message: error instanceof Error ? error.message : String(error),
         }),
         {
           status: 400,
@@ -160,7 +170,7 @@ export async function handleAdminAPI(
     }
 
     // Get user info
-    const user = (await db.query('SELECT * FROM users WHERE id = ?').get(userId)) as any;
+    const user = (await db.query('SELECT * FROM users WHERE id = ?').get(userId)) as DbRow;
     if (!user) {
       return new Response(JSON.stringify({ error: 'User not found' }), {
         status: 404,
@@ -209,7 +219,9 @@ export async function handleAdminAPI(
     const { roles } = (await request.json()) as { roles: string[] };
 
     // Get user's primary role (cannot be removed)
-    const user = (await db.query('SELECT primary_role FROM users WHERE id = ?').get(userId)) as any;
+    const user = (await db.query('SELECT primary_role FROM users WHERE id = ?').get(userId)) as
+      | { primary_role: string }
+      | undefined;
     if (!user) {
       return new Response(JSON.stringify({ error: 'User not found' }), {
         status: 404,
@@ -256,7 +268,7 @@ export async function handleAdminAPI(
         headers: { 'Content-Type': 'application/json' },
       });
     }
-    const user = (await db.query('SELECT * FROM users WHERE id = ?').get(userId)) as any;
+    const user = (await db.query('SELECT * FROM users WHERE id = ?').get(userId)) as DbRow;
 
     if (!user) {
       return new Response(JSON.stringify({ error: 'User not found' }), {
@@ -288,7 +300,16 @@ export async function handleAdminAPI(
           },
         );
       }
-      const userData = (await request.json()) as any;
+      const userData = (await request.json()) as {
+        email: string;
+        password?: string;
+        first_name?: string;
+        last_name?: string;
+        primary_role?: string;
+        organization?: string;
+        phone?: string;
+        is_active?: boolean;
+      };
 
       let updateQuery = `
         UPDATE users 
@@ -344,11 +365,11 @@ export async function handleAdminAPI(
       return new Response(JSON.stringify({ success: true }), {
         headers: { 'Content-Type': 'application/json' },
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       return new Response(
         JSON.stringify({
           success: false,
-          message: error.message,
+          message: error instanceof Error ? error.message : String(error),
         }),
         {
           status: 400,
@@ -383,18 +404,18 @@ export async function handleAdminAPI(
           headers: { 'Content-Type': 'application/json' },
         },
       );
-    } catch (error: any) {
+    } catch (error: unknown) {
       await auditLog(
         authResult.session.userId,
         'DB_BACKUP_FAILED',
-        `Failed to create database backup: ${error.message}`,
+        `Failed to create database backup: ${error instanceof Error ? error.message : String(error)}`,
         ipAddress,
       );
 
       return new Response(
         JSON.stringify({
           success: false,
-          message: `Failed to create backup: ${error.message}`,
+          message: `Failed to create backup: ${error instanceof Error ? error.message : String(error)}`,
         }),
         {
           status: 500,
@@ -428,18 +449,18 @@ export async function handleAdminAPI(
           headers: { 'Content-Type': 'application/json' },
         },
       );
-    } catch (error: any) {
+    } catch (error: unknown) {
       await auditLog(
         authResult.session.userId,
         'DB_MAINTENANCE_FAILED',
-        `Failed to run database maintenance: ${error.message}`,
+        `Failed to run database maintenance: ${error instanceof Error ? error.message : String(error)}`,
         ipAddress,
       );
 
       return new Response(
         JSON.stringify({
           success: false,
-          message: `Failed to run maintenance: ${error.message}`,
+          message: `Failed to run maintenance: ${error instanceof Error ? error.message : String(error)}`,
         }),
         {
           status: 500,
@@ -471,11 +492,15 @@ export async function handleAdminAPI(
     if (authResult.response) return authResult.response;
 
     try {
-      const body = (await request.json()) as any;
-      const settingsToSave = {
-        'email.smtpServer': body.smtpServer,
-        'email.smtpPort': body.smtpPort,
-        'email.smtpSecurity': body.smtpSecurity,
+      const body = (await request.json()) as {
+        smtpServer?: string;
+        smtpPort?: string | number;
+        smtpSecurity?: string;
+      };
+      const settingsToSave: Record<string, string> = {
+        'email.smtpServer': body.smtpServer ?? '',
+        'email.smtpPort': String(body.smtpPort ?? ''),
+        'email.smtpSecurity': body.smtpSecurity ?? '',
       };
 
       await saveSystemSettings(settingsToSave);
@@ -493,11 +518,17 @@ export async function handleAdminAPI(
           headers: { 'Content-Type': 'application/json' },
         },
       );
-    } catch (error: any) {
-      return new Response(JSON.stringify({ success: false, message: error.message }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' },
-      });
+    } catch (error: unknown) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          message: error instanceof Error ? error.message : String(error),
+        }),
+        {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' },
+        },
+      );
     }
   }
 
@@ -506,7 +537,7 @@ export async function handleAdminAPI(
     if (authResult.response) return authResult.response;
 
     try {
-      const body = (await request.json()) as any;
+      const body = (await request.json()) as { smtpServer?: string };
 
       // In a real app, you'd use a library like Nodemailer to send a test email.
       // For now, we'll just simulate it by checking if the server is configured.
@@ -540,11 +571,17 @@ export async function handleAdminAPI(
           },
         );
       }
-    } catch (error: any) {
-      return new Response(JSON.stringify({ success: false, message: error.message }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' },
-      });
+    } catch (error: unknown) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          message: error instanceof Error ? error.message : String(error),
+        }),
+        {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' },
+        },
+      );
     }
   }
 
@@ -566,7 +603,7 @@ export async function handleAdminAPI(
         LEFT JOIN users u ON sal.user_id = u.id
         ORDER BY sal.timestamp DESC
       `)
-        .all()) as any[];
+        .all()) as DbRow[];
 
       // Convert to CSV with proper quoting and CSV-injection scrubbing.
       const header =
@@ -574,7 +611,7 @@ export async function handleAdminAPI(
         '\n';
       const csvRows = logs
         .map((log) => {
-          const timestamp = new Date(log.timestamp * 1000).toISOString();
+          const timestamp = new Date((log.timestamp as number) * 1000).toISOString();
           const user = log.user_email || 'System';
           return [log.id, timestamp, user, log.action, log.description || '', log.ip_address || '']
             .map(escapeCsv)
@@ -597,11 +634,17 @@ export async function handleAdminAPI(
           'Content-Disposition': `attachment; filename="aft-security-logs-${Date.now()}.csv"`,
         },
       });
-    } catch (error: any) {
-      return new Response(JSON.stringify({ success: false, message: error.message }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' },
-      });
+    } catch (error: unknown) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          message: error instanceof Error ? error.message : String(error),
+        }),
+        {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' },
+        },
+      );
     }
   }
 
@@ -629,21 +672,25 @@ export async function handleAdminAPI(
       return new Response(JSON.stringify({ success: true, status: healthStatus }), {
         headers: { 'Content-Type': 'application/json' },
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       const healthStatus = {
         overall: 'ERROR',
-        database: `ERROR: ${error.message}`,
+        database: `ERROR: ${error instanceof Error ? error.message : String(error)}`,
       };
 
       await auditLog(
         authResult.session.userId,
         'HEALTH_CHECK_FAILED',
-        `System health check failed: ${error.message}`,
+        `System health check failed: ${error instanceof Error ? error.message : String(error)}`,
         ipAddress,
       );
 
       return new Response(
-        JSON.stringify({ success: false, status: healthStatus, message: error.message }),
+        JSON.stringify({
+          success: false,
+          status: healthStatus,
+          message: error instanceof Error ? error.message : String(error),
+        }),
         {
           status: 500,
           headers: { 'Content-Type': 'application/json' },
@@ -684,11 +731,17 @@ export async function handleAdminAPI(
           headers: { 'Content-Type': 'application/json' },
         },
       );
-    } catch (error: any) {
-      return new Response(JSON.stringify({ success: false, message: error.message }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' },
-      });
+    } catch (error: unknown) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          message: error instanceof Error ? error.message : String(error),
+        }),
+        {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' },
+        },
+      );
     }
   }
 
@@ -767,11 +820,17 @@ export async function handleAdminAPI(
           headers: { 'Content-Type': 'application/json' },
         },
       );
-    } catch (error: any) {
-      return new Response(JSON.stringify({ success: false, message: error.message }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' },
-      });
+    } catch (error: unknown) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          message: error instanceof Error ? error.message : String(error),
+        }),
+        {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' },
+        },
+      );
     }
   }
 
@@ -830,16 +889,19 @@ export async function handleAdminAPI(
           headers: { 'Content-Type': 'application/json' },
         },
       );
-    } catch (error: any) {
+    } catch (error: unknown) {
       await auditLog(
         authResult.session.userId,
         'REQUEST_DELETE_FAILED',
-        `Failed to delete request ID ${requestId}: ${error.message}`,
+        `Failed to delete request ID ${requestId}: ${error instanceof Error ? error.message : String(error)}`,
         ipAddress,
       );
 
       return new Response(
-        JSON.stringify({ success: false, message: `Failed to delete request: ${error.message}` }),
+        JSON.stringify({
+          success: false,
+          message: `Failed to delete request: ${error instanceof Error ? error.message : String(error)}`,
+        }),
         {
           status: 500,
           headers: { 'Content-Type': 'application/json' },

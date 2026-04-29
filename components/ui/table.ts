@@ -1,3 +1,4 @@
+import type { DbRow } from '../../lib/database-bun';
 // Reusable Table Component with consistent styling
 export interface TableColumn {
   key: string;
@@ -5,11 +6,11 @@ export interface TableColumn {
   sortable?: boolean;
   width?: string;
   align?: 'left' | 'center' | 'right';
-  render?: (value: any, row: any) => string;
+  render?: (value: unknown, row: DbRow) => string;
 }
 
 export interface TableRow {
-  [key: string]: any;
+  [key: string]: unknown;
   id?: string | number;
 }
 

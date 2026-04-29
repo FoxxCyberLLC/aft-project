@@ -1,6 +1,6 @@
 // AFT Server - Modular implementation
 
-import { waitForReady } from './lib/database-bun';
+import { type DbRow, waitForReady } from './lib/database-bun';
 import { applySecurityHeaders, initializeSecurity } from './lib/security';
 import { handleAPI } from './server/api/index';
 import { handleAdminRoutes } from './server/routes/admin-routes';
@@ -84,8 +84,8 @@ function sanitizeRequest(request: Request): Request {
   // Request()`. For other methods we forward the original body. duplex:'half'
   // is required by the Fetch spec when supplying a streaming body.
   if (request.method !== 'GET' && request.method !== 'HEAD') {
-    (init as any).body = request.body;
-    (init as any).duplex = 'half';
+    (init as DbRow).body = request.body;
+    (init as DbRow).duplex = 'half';
   }
   return new Request(request.url, init);
 }
@@ -95,7 +95,7 @@ Bun.serve({
   port: 3001,
   hostname: '127.0.0.1', // Loopback only - nginx is the public entry point.
 
-  async fetch(originalRequest: Request, server: any): Promise<Response> {
+  async fetch(originalRequest: Request, server: Bun.Server<unknown>): Promise<Response> {
     // Liveness probe - exempt from the proxy-secret check so it can be hit
     // from inside the container by HEALTHCHECK without needing the secret.
     {

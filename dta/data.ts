@@ -1,6 +1,6 @@
 // DTA Data Tracking - Section 4 transfer history and anti-virus scan records
 import { ComponentBuilder, Templates } from '../components/ui/server-components';
-import { getDb } from '../lib/database-bun';
+import { type Db, type DbRow, getDb } from '../lib/database-bun';
 import { DTANavigation, type DTAUser } from './dta-nav';
 
 async function render(user: DTAUser, userId: number): Promise<string> {
@@ -101,7 +101,7 @@ async function render(user: DTAUser, userId: number): Promise<string> {
   );
 }
 
-async function getTransferHistory(db: any, userId?: number) {
+async function getTransferHistory(db: Db, userId?: number) {
   // Get actual DTA transfer statistics with file and data size accumulation
   const baseQuery = userId
     ? `SELECT
@@ -119,9 +119,16 @@ async function getTransferHistory(db: any, userId?: number) {
     FROM aft_requests
     WHERE status IN ('active_transfer', 'pending_sme_signature', 'pending_media_custodian', 'completed', 'disposed')`;
 
-  const stats = userId
-    ? await db.query(baseQuery).get(userId)
-    : ((await db.query(baseQuery).get()) as any);
+  const stats = (
+    userId ? await db.query(baseQuery).get(userId) : await db.query(baseQuery).get()
+  ) as
+    | {
+        total_transfers: number;
+        total_files_transferred: number;
+        completed_transfers: number;
+        signed_transfers: number;
+      }
+    | undefined;
 
   return {
     totalTransfers: stats?.total_transfers || 0,
@@ -131,7 +138,7 @@ async function getTransferHistory(db: any, userId?: number) {
   };
 }
 
-async function getScanStatistics(db: any, userId?: number) {
+async function getScanStatistics(db: Db, userId?: number) {
   // Get actual anti-virus scan statistics from Section 4 data
   const baseQuery = userId
     ? `SELECT
@@ -149,9 +156,16 @@ async function getScanStatistics(db: any, userId?: number) {
     FROM aft_requests
     WHERE status IN ('active_transfer', 'pending_sme_signature', 'pending_media_custodian', 'completed', 'disposed')`;
 
-  const scanStats = userId
-    ? await db.query(baseQuery).get(userId)
-    : ((await db.query(baseQuery).get()) as any);
+  const scanStats = (
+    userId ? await db.query(baseQuery).get(userId) : await db.query(baseQuery).get()
+  ) as
+    | {
+        origination_scans: number;
+        destination_scans: number;
+        total_threats: number;
+        total_files_scanned: number;
+      }
+    | undefined;
 
   return {
     totalScans: (scanStats?.origination_scans || 0) + (scanStats?.destination_scans || 0),
@@ -162,7 +176,7 @@ async function getScanStatistics(db: any, userId?: number) {
   };
 }
 
-async function getRecentDTATransfers(db: any, userId?: number) {
+async function getRecentDTATransfers(db: Db, userId?: number) {
   // Get recent transfers that DTA has handled
   const baseQuery = userId
     ? `SELECT
@@ -212,10 +226,10 @@ async function getRecentDTATransfers(db: any, userId?: number) {
 
   return userId
     ? await db.query(baseQuery).all(userId)
-    : ((await db.query(baseQuery).all()) as any[]);
+    : ((await db.query(baseQuery).all()) as DbRow[]);
 }
 
-function buildTransferTrackingTable(transfers: any[]): string {
+function buildTransferTrackingTable(transfers: DbRow[]): string {
   if (transfers.length === 0) {
     return `
       <div class="bg-[var(--card)] p-8 rounded-lg border border-[var(--border)] text-center">
@@ -228,7 +242,7 @@ function buildTransferTrackingTable(transfers: any[]): string {
 
   // Transform transfers data for table
   const tableData = transfers.map((transfer) => ({
-    id: transfer.id,
+    id: transfer.id as string | number,
     request_number: transfer.request_number,
     requestor_name: transfer.requestor_name,
     status: transfer.status,
@@ -251,7 +265,7 @@ function buildTransferTrackingTable(transfers: any[]): string {
     {
       key: 'request_number',
       label: 'Request',
-      render: (_value: any, row: any) => `
+      render: (_value: unknown, row: DbRow) => `
         <div>
           <div class="font-medium text-[var(--foreground)]">${row.request_number}</div>
           <div class="text-sm text-[var(--muted-foreground)]">ID: ${row.id}</div>
@@ -261,26 +275,26 @@ function buildTransferTrackingTable(transfers: any[]): string {
     {
       key: 'requestor_name',
       label: 'Requestor',
-      render: (_value: any, row: any) => `
+      render: (_value: unknown, row: DbRow) => `
         <div class="text-sm text-[var(--foreground)]">${row.requestor_name}</div>
       `,
     },
     {
       key: 'av_scans',
       label: 'Anti-Virus Scans',
-      render: (_value: any, row: any) => `
+      render: (_value: unknown, row: DbRow) => `
         <div class="space-y-1">
           <div class="flex items-center gap-2 text-xs">
             <span class="${row.origination_scan_performed ? 'text-[var(--success)]' : 'text-[var(--muted-foreground)]'}">
               ${row.origination_scan_performed ? '✓' : '○'} Origin
             </span>
-            ${row.origination_threats_found > 0 ? `<span class="text-[var(--destructive)]">${row.origination_threats_found} threats</span>` : ''}
+            ${Number(row.origination_threats_found) > 0 ? `<span class="text-[var(--destructive)]">${row.origination_threats_found} threats</span>` : ''}
           </div>
           <div class="flex items-center gap-2 text-xs">
             <span class="${row.destination_scan_performed ? 'text-[var(--success)]' : 'text-[var(--muted-foreground)]'}">
               ${row.destination_scan_performed ? '✓' : '○'} Dest
             </span>
-            ${row.destination_threats_found > 0 ? `<span class="text-[var(--destructive)]">${row.destination_threats_found} threats</span>` : ''}
+            ${Number(row.destination_threats_found) > 0 ? `<span class="text-[var(--destructive)]">${row.destination_threats_found} threats</span>` : ''}
           </div>
         </div>
       `,
@@ -288,25 +302,25 @@ function buildTransferTrackingTable(transfers: any[]): string {
     {
       key: 'files_scanned',
       label: 'Files Scanned',
-      render: (_value: any, row: any) => `
+      render: (_value: unknown, row: DbRow) => `
         <div class="text-sm text-[var(--foreground)]">
-          ${(row.origination_files_scanned || 0) + (row.destination_files_scanned || 0)} files
+          ${Number(row.origination_files_scanned || 0) + Number(row.destination_files_scanned || 0)} files
         </div>
       `,
     },
     {
       key: 'files_transferred',
       label: 'Files Transferred',
-      render: (_value: any, row: any) => `
+      render: (_value: unknown, row: DbRow) => `
         <div class="text-sm text-[var(--foreground)]">
-          ${row.files_transferred_count > 0 ? `${row.files_transferred_count.toLocaleString()} files` : 'Not completed'}
+          ${Number(row.files_transferred_count) > 0 ? `${Number(row.files_transferred_count).toLocaleString()} files` : 'Not completed'}
         </div>
       `,
     },
     {
       key: 'file_size',
       label: 'Data Size',
-      render: (_value: any, row: any) => `
+      render: (_value: unknown, row: DbRow) => `
         <div class="text-sm text-[var(--foreground)]">
           ${row.file_size !== 'Unknown' ? row.file_size : 'N/A'}
         </div>
@@ -315,7 +329,7 @@ function buildTransferTrackingTable(transfers: any[]): string {
     {
       key: 'status',
       label: 'Status',
-      render: (_value: any, row: any) => {
+      render: (_value: unknown, row: DbRow) => {
         const statusVariant = {
           active_transfer: 'info',
           pending_sme_signature: 'warning',
@@ -325,13 +339,16 @@ function buildTransferTrackingTable(transfers: any[]): string {
 
         const variant = statusVariant[row.status as keyof typeof statusVariant] || 'default';
 
-        return ComponentBuilder.statusBadge(row.status.replace('_', ' ').toUpperCase(), variant);
+        return ComponentBuilder.statusBadge(
+          String(row.status).replace('_', ' ').toUpperCase(),
+          variant,
+        );
       },
     },
     {
       key: 'actions',
       label: 'Actions',
-      render: (_value: any, row: any) => {
+      render: (_value: unknown, row: DbRow) => {
         const actions = [
           {
             label: 'View Details',

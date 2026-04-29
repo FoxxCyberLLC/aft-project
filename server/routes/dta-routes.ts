@@ -133,7 +133,7 @@ export async function handleDTARoutes(
   }
 }
 
-function _renderDataManagementPage(_user: any): Response {
+function _renderDataManagementPage(_user: unknown): Response {
   const content = `
     <!DOCTYPE html>
     <html lang="en">
@@ -208,7 +208,7 @@ function _renderDataManagementPage(_user: any): Response {
   });
 }
 
-function _renderReportsPage(_user: any): Response {
+function _renderReportsPage(_user: unknown): Response {
   const content = `
     <!DOCTYPE html>
     <html lang="en">
@@ -285,7 +285,7 @@ function _renderReportsPage(_user: any): Response {
   });
 }
 
-function renderTransferMonitorPage(_user: any, requestId?: number): Response {
+function renderTransferMonitorPage(_user: unknown, requestId?: number): Response {
   const title = requestId ? `Transfer Monitor - Request ${requestId}` : 'Transfer Monitor';
   const content = `
     <!DOCTYPE html>
@@ -391,7 +391,7 @@ function renderTransferMonitorPage(_user: any, requestId?: number): Response {
   });
 }
 
-function _renderRequestDetailsPage(_user: any, requestId: number): Response {
+function _renderRequestDetailsPage(_user: unknown, requestId: number): Response {
   const content = `
     <!DOCTYPE html>
     <html lang="en">

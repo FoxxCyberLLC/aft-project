@@ -1,6 +1,12 @@
 // Admin User Management Interface
 import { ComponentBuilder } from '../components/ui/server-components';
-import { getDb, getRoleDisplayName, UserRole } from '../lib/database-bun';
+import {
+  type DbRow,
+  getDb,
+  getRoleDisplayName,
+  UserRole,
+  type UserRoleType,
+} from '../lib/database-bun';
 import { escapeHtml } from '../lib/formatters';
 import { AdminNavigation, type AdminUser } from './admin-nav';
 
@@ -10,7 +16,7 @@ async function renderUsersPage(user: AdminUser): Promise<string> {
   // Get all users with their role information
   const users = (await db
     .query(`
-    SELECT 
+    SELECT
       u.*,
       COUNT(ur.id) as role_count,
       GROUP_CONCAT(ur.role) as roles
@@ -19,7 +25,19 @@ async function renderUsersPage(user: AdminUser): Promise<string> {
     GROUP BY u.id
     ORDER BY u.created_at DESC
   `)
-    .all()) as any[];
+    .all()) as Array<{
+    id: number;
+    first_name: string;
+    last_name: string;
+    email: string;
+    organization: string | null;
+    phone: string | null;
+    primary_role: UserRoleType;
+    role_count: number;
+    is_active: boolean;
+    created_at: number;
+    roles?: string;
+  }>;
 
   // Transform users data for table
   const tableData = users.map((dbUser) => ({
@@ -41,37 +59,37 @@ async function renderUsersPage(user: AdminUser): Promise<string> {
     {
       key: 'name',
       label: 'User',
-      render: (_value: any, row: any) => `
+      render: (_value: unknown, row: DbRow) => `
         <div>
-          <div class="font-medium text-[var(--foreground)]">${escapeHtml(row.name)}</div>
-          <div class="text-sm text-[var(--muted-foreground)]">${escapeHtml(row.email)}</div>
+          <div class="font-medium text-[var(--foreground)]">${escapeHtml(String(row.name))}</div>
+          <div class="text-sm text-[var(--muted-foreground)]">${escapeHtml(String(row.email))}</div>
         </div>
       `,
     },
     {
       key: 'organization',
       label: 'Organization',
-      render: (_value: any, row: any) => `
+      render: (_value: unknown, row: DbRow) => `
         <div>
-          <div class="text-sm">${escapeHtml(row.organization)}</div>
-          <div class="text-xs text-[var(--muted-foreground)]">${escapeHtml(row.phone)}</div>
+          <div class="text-sm">${escapeHtml(String(row.organization))}</div>
+          <div class="text-xs text-[var(--muted-foreground)]">${escapeHtml(String(row.phone))}</div>
         </div>
       `,
     },
     {
       key: 'primary_role',
       label: 'Primary Role',
-      render: (_value: any, row: any) => `
+      render: (_value: unknown, row: DbRow) => `
         <div>
-          <div class="text-sm font-medium text-[var(--primary)]">${escapeHtml(getRoleDisplayName(row.primary_role))}</div>
-          <div class="text-xs text-[var(--muted-foreground)]">+${Math.max(0, (row.role_count || 1) - 1)} additional</div>
+          <div class="text-sm font-medium text-[var(--primary)]">${escapeHtml(getRoleDisplayName(row.primary_role as UserRoleType))}</div>
+          <div class="text-xs text-[var(--muted-foreground)]">+${Math.max(0, (Number(row.role_count) || 1) - 1)} additional</div>
         </div>
       `,
     },
     {
       key: 'is_active',
       label: 'Status',
-      render: (_value: any, row: any) =>
+      render: (_value: unknown, row: DbRow) =>
         ComponentBuilder.statusBadge(
           row.is_active ? 'Active' : 'Inactive',
           row.is_active ? 'success' : 'error',
@@ -80,14 +98,14 @@ async function renderUsersPage(user: AdminUser): Promise<string> {
     {
       key: 'created_at',
       label: 'Created',
-      render: (_value: any, row: any) => `
-        <div class="text-sm">${new Date(row.created_at * 1000).toLocaleDateString()}</div>
+      render: (_value: unknown, row: DbRow) => `
+        <div class="text-sm">${new Date((row.created_at as number) * 1000).toLocaleDateString()}</div>
       `,
     },
     {
       key: 'actions',
       label: 'Actions',
-      render: (_value: any, row: any) =>
+      render: (_value: unknown, row: DbRow) =>
         ComponentBuilder.tableCellActions([
           { label: 'Edit', onClick: `editUser(${row.id})`, variant: 'secondary' },
           { label: 'Roles', onClick: `manageRoles(${row.id})`, variant: 'secondary' },
@@ -352,7 +370,7 @@ function getScript(): string {
           document.getElementById('user-modal').classList.add('flex');
         })
         .catch(error => {
-          alert('Error loading user data: ' + error.message);
+          alert('Error loading user data: ' + (error instanceof Error ? error.message : String(error)));
         });
     }
     
@@ -387,7 +405,7 @@ function getScript(): string {
         }
       })
       .catch(error => {
-        alert('Network error: ' + error.message);
+        alert('Network error: ' + (error instanceof Error ? error.message : String(error)));
       });
     }
     
@@ -402,7 +420,7 @@ function getScript(): string {
           document.getElementById('roles-modal').classList.add('flex');
         })
         .catch(error => {
-          alert('Error loading roles: ' + error.message);
+          alert('Error loading roles: ' + (error instanceof Error ? error.message : String(error)));
         });
     }
     
@@ -481,7 +499,7 @@ function getScript(): string {
         }
       })
       .catch(error => {
-        alert('Network error: ' + error.message);
+        alert('Network error: ' + (error instanceof Error ? error.message : String(error)));
       });
     }
     

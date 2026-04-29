@@ -1,5 +1,5 @@
 // Authentication page routes
-import { getDb } from '../../lib/database-bun';
+import { type DbRow, getDb, type UserRoleType } from '../../lib/database-bun';
 import { buildClearAuthCookies, destroySession } from '../../lib/security';
 import { LoginPage } from '../../login/login-page';
 import { RoleMiddleware } from '../../middleware/role-middleware';
@@ -13,7 +13,10 @@ export async function handleLoginPage(request: Request, ipAddress: string): Prom
   const auth = await checkAuth(request, ipAddress);
   if (auth) {
     if (auth.roleSelected) {
-      return Response.redirect(RoleMiddleware.getRoleDashboardUrl(auth.activeRole as any), 302);
+      return Response.redirect(
+        RoleMiddleware.getRoleDashboardUrl(auth.activeRole as UserRoleType),
+        302,
+      );
     } else {
       return Response.redirect('/select-role', 302);
     }
@@ -35,18 +38,21 @@ export async function handleRoleSelectionPage(
   }
 
   if (auth.roleSelected) {
-    return Response.redirect(RoleMiddleware.getRoleDashboardUrl(auth.activeRole as any), 302);
+    return Response.redirect(
+      RoleMiddleware.getRoleDashboardUrl(auth.activeRole as UserRoleType),
+      302,
+    );
   }
 
   // Get user details
   const user = (await db
     .query('SELECT first_name, last_name FROM users WHERE id = ?')
-    .get(auth.userId)) as any;
+    .get(auth.userId)) as DbRow;
   const userName = user ? `${user.first_name} ${user.last_name}` : auth.email;
 
   // Map available roles to UserRole objects
   const availableRoles = auth.availableRoles.map((role) => ({
-    role: role as any,
+    role: role as UserRoleType,
     isPrimary: role === auth.primaryRole,
   }));
 
@@ -65,7 +71,7 @@ export async function handleDashboardRoutes(
 
   // Redirect to role-specific dashboard
   const activeRole = authResult.session.activeRole || authResult.session.primaryRole;
-  return Response.redirect(RoleMiddleware.getRoleDashboardUrl(activeRole as any), 302);
+  return Response.redirect(RoleMiddleware.getRoleDashboardUrl(activeRole as UserRoleType), 302);
 }
 
 // Logout Handler
