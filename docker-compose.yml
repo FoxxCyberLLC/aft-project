@@ -8,17 +8,16 @@
 #   2. (optional) place TLS material in ./ssl/cert.pem and ./ssl/key.pem
 #      (otherwise the container will generate a self-signed cert on first
 #      boot for local testing).
-#   3. docker compose up -d --build
+#   3. docker compose pull && docker compose up -d
 #
 # The first boot bootstraps Postgres and seeds the admin user. Subsequent
-# boots are just `docker compose up -d`.
+# boots are `docker compose pull && docker compose up -d` to pick up the
+# latest GHCR image. To build from local source instead, override with:
+#   docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
 
 services:
   aft:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: aft:latest
+    image: ghcr.io/foxxcyberllc/aft-app:latest-main
     container_name: aft
     restart: unless-stopped
     ports:

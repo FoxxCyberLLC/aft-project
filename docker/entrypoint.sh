@@ -39,7 +39,7 @@ if [ ! -s "$PGDATA/PG_VERSION" ]; then
     chown postgres:postgres "$PGDATA"
     chmod 700 "$PGDATA"
 
-    gosu postgres /usr/lib/postgresql/17/bin/initdb \
+    gosu postgres /usr/lib/postgresql/18/bin/initdb \
         -D "$PGDATA" \
         --encoding=UTF8 \
         --locale=C.UTF-8 \
@@ -65,7 +65,7 @@ host    all             all             ::1/128                 scram-sha-256
 EOF
 
     echo "[entrypoint] Starting temporary Postgres to create role/database"
-    gosu postgres /usr/lib/postgresql/17/bin/pg_ctl \
+    gosu postgres /usr/lib/postgresql/18/bin/pg_ctl \
         -D "$PGDATA" -l /tmp/pg-bootstrap.log -w start
 
     gosu postgres psql -v ON_ERROR_STOP=1 --username postgres <<-SQL
@@ -74,7 +74,7 @@ EOF
         CREATE DATABASE ${POSTGRES_DB} OWNER ${POSTGRES_USER};
 SQL
 
-    gosu postgres /usr/lib/postgresql/17/bin/pg_ctl \
+    gosu postgres /usr/lib/postgresql/18/bin/pg_ctl \
         -D "$PGDATA" -m fast -w stop
 
     echo "[entrypoint] Postgres bootstrap complete"

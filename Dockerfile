@@ -2,7 +2,7 @@
 # AFT - all-in-one container
 #
 # Bundles:
-#   - PostgreSQL 17  (data dir: /var/lib/postgresql/data)
+#   - PostgreSQL 18  (data dir: /var/lib/postgresql/data)
 #   - nginx          (front door, terminates TLS, proxies to Bun on 127.0.0.1:3001)
 #   - Bun + AFT app  (loopback only, gated by X-AFT-Proxy-Secret)
 #
@@ -41,7 +41,7 @@ COPY package.json bun.lock ./
 RUN bun install --frozen-lockfile
 
 ###############################################################################
-# Stage 2: runtime - postgres:17 + nginx + supervisord + bun + app
+# Stage 2: runtime - postgres:18 + nginx + supervisord + bun + app
 ###############################################################################
 FROM postgres:18
 

@@ -1,4 +1,4 @@
-# CLAUDE.md — aft-project
+# CLAUDE.md — aft-app
 
 Guidance for Claude Code working in this repo. Read this first; the workspace-level `CLAUDE.md` covers cross-project context.
 
@@ -6,7 +6,7 @@ Guidance for Claude Code working in this repo. Read this first; the workspace-le
 
 **AFT (Assured File Transfer)** — a Foxx Cyber LLC product. DoD-style cross-domain transfer workflow with multi-role approvals, CAC client-cert authentication, and digital signatures on every state transition. Licensed **AGPL**, intended to ship to production. Public host: `https://aft.foxxcyber.com`.
 
-The whole product is a single all-in-one container: nginx (TLS + CAC) → Bun app (loopback only) → PostgreSQL 17, supervised by supervisord under tini.
+The whole product is a single all-in-one container: nginx (TLS + CAC) → Bun app (loopback only) → PostgreSQL 18, supervised by supervisord under tini.
 
 ## Stack
 
@@ -14,7 +14,7 @@ The whole product is a single all-in-one container: nginx (TLS + CAC) → Bun ap
 |---|---|---|
 | Runtime | Bun 1.3 | `Bun.serve()` on `127.0.0.1:3001`, loopback only |
 | HTTP front door | nginx | TLS termination, optional CAC client-cert verify, injects `X-AFT-Proxy-Secret` header |
-| Database | PostgreSQL 17 | `Bun.SQL` (`Bun.sql`), no ORM, parameterized queries |
+| Database | PostgreSQL 18 | `Bun.SQL` (`Bun.sql`), no ORM, parameterized queries |
 | Frontend | Server-rendered HTML + small inline scripts | No React/Next; pages assembled via `lib/component-builder.ts` |
 | Styles | Tailwind 4 utilities + bundled `globals.css` | No CDN; `<style>` inline allowed (CSP `unsafe-inline` for now) |
 | Auth | Manual password login + CAC via nginx headers | Sessions in Postgres + in-memory map |

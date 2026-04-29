@@ -16,7 +16,7 @@ jobs:
 
     services:
       db:
-        image: postgres:17-alpine
+        image: postgres:18-alpine
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: ci_password
@@ -77,5 +77,5 @@ jobs:
           file: Dockerfile
           push: ${{ github.ref == 'refs/heads/main' && github.event_name == 'push' }}
           tags: |
-            ghcr.io/foxxcyberllc/aft-project:${{ github.sha }}
-            ghcr.io/foxxcyberllc/aft-project:latest-main
+            ghcr.io/foxxcyberllc/aft-app:${{ github.sha }}
+            ghcr.io/foxxcyberllc/aft-app:latest-main

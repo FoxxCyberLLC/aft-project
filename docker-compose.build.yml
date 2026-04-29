@@ -1,0 +1,14 @@
+# Override: build from local source instead of pulling from GHCR.
+#
+# Use:
+#   docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
+#
+# Useful when iterating locally before opening a PR. Production should
+# always use the GHCR image (the default in docker-compose.yml).
+
+services:
+  aft:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: aft:local
