@@ -9,7 +9,7 @@ export interface NativeMessageRequest {
 
 export interface NativeMessageResponse {
   type: 'status' | 'certificates' | 'signature' | 'error';
-  data: any;
+  data: unknown;
 }
 
 // Native host manifest for Chrome/Edge

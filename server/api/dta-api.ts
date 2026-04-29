@@ -110,7 +110,7 @@ async function handleDTAPost(
   ipAddress: string,
 ): Promise<Response> {
   const [resource, id, action] = segments;
-  const body = await request.json().catch(() => ({}));
+  const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
 
   switch (resource) {
     case 'requests':
@@ -182,7 +182,7 @@ async function handleDTAPut(
   ipAddress: string,
 ): Promise<Response> {
   const [resource, id] = segments;
-  const body = await request.json().catch(() => ({}));
+  const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
 
   switch (resource) {
     case 'requests':
@@ -402,7 +402,7 @@ async function getSMEUsers(db: Db): Promise<Response> {
 async function approveRequest(
   db: Db,
   requestId: number,
-  body: any,
+  body: Record<string, unknown>,
   userId: number,
   userEmail: string,
   ipAddress: string,
@@ -467,7 +467,7 @@ async function approveRequest(
 async function rejectRequest(
   db: Db,
   requestId: number,
-  body: any,
+  body: Record<string, unknown>,
   userId: number,
   userEmail: string,
   ipAddress: string,
@@ -620,7 +620,7 @@ async function resumeTransfer(
 async function cancelTransfer(
   db: Db,
   requestId: number,
-  body: any,
+  body: Record<string, unknown>,
   userId: number,
   userEmail: string,
   ipAddress: string,
@@ -676,7 +676,7 @@ async function cancelTransfer(
 
 async function bulkProcessRequests(
   db: Db,
-  body: any,
+  body: Record<string, unknown>,
   userId: number,
   userEmail: string,
   ipAddress: string,
@@ -774,7 +774,7 @@ async function bulkProcessRequests(
 async function updateRequest(
   db: Db,
   requestId: number,
-  body: any,
+  body: Record<string, unknown>,
   userId: number,
   userEmail: string,
   _ipAddress: string,
@@ -848,7 +848,7 @@ async function updateTransferSettings(
 async function recordAntivirusScan(
   db: Db,
   requestId: number,
-  body: any,
+  body: Record<string, unknown>,
   userId: number,
   _userEmail: string,
   ipAddress: string,
@@ -1060,7 +1060,7 @@ async function activateTransfer(
 async function signDTARequest(
   db: Db,
   requestId: number,
-  body: any,
+  body: Record<string, unknown>,
   userId: number,
   userEmail: string,
   ipAddress: string,
@@ -1176,7 +1176,7 @@ async function signDTARequest(
 
 async function handleTransferFormSubmission(
   db: Db,
-  body: any,
+  body: Record<string, unknown>,
   userId: number,
   _userEmail: string,
   ipAddress: string,
@@ -1436,7 +1436,7 @@ async function handleTransferFormSubmission(
 async function completeTransfer(
   db: Db,
   requestId: number,
-  body: any,
+  body: Record<string, unknown>,
   userId: number,
   userEmail: string,
   ipAddress: string,
@@ -1557,7 +1557,7 @@ async function completeTransfer(
 async function signTransferManual(
   db: Db,
   requestId: number,
-  body: any,
+  body: Record<string, unknown>,
   userId: number,
   userEmail: string,
   ipAddress: string,
@@ -1707,7 +1707,7 @@ async function signTransferManual(
 async function signTransferWithCAC(
   db: Db,
   requestId: number,
-  body: any,
+  body: Record<string, unknown>,
   userId: number,
   userEmail: string,
   ipAddress: string,

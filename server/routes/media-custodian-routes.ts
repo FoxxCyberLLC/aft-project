@@ -55,7 +55,7 @@ export async function handleMediaCustodianRoutes(
 }
 
 // Dashboard route
-async function handleDashboard(_request: Request, user: any): Promise<Response> {
+async function handleDashboard(_request: Request, user: { email: string; [key: string]: unknown }): Promise<Response> {
   try {
     const content = await MediaCustodianDashboard.render(user, user.id);
     const script = MediaCustodianDashboard.getScript();
@@ -70,7 +70,7 @@ async function handleDashboard(_request: Request, user: any): Promise<Response> 
 }
 
 // Inventory route
-async function handleInventory(_request: Request, user: any): Promise<Response> {
+async function handleInventory(_request: Request, user: { email: string; [key: string]: unknown }): Promise<Response> {
   try {
     const content = await MediaCustodianInventory.render(user, user.id);
     const script = MediaCustodianInventory.getScript();
@@ -85,7 +85,7 @@ async function handleInventory(_request: Request, user: any): Promise<Response> 
 }
 
 // All requests page
-async function handleRequestsPage(request: Request, user: any): Promise<Response> {
+async function handleRequestsPage(request: Request, user: { email: string; [key: string]: unknown }): Promise<Response> {
   try {
     const url = new URL(request.url);
     const viewMode = (url.searchParams.get('view') as 'table' | 'timeline') || 'table';
@@ -151,7 +151,7 @@ async function handleRequestProcessPage(
 }
 
 // Reports page
-async function handleReportsPage(_request: Request, user: any): Promise<Response> {
+async function handleReportsPage(_request: Request, user: { email: string; [key: string]: unknown }): Promise<Response> {
   try {
     const content = await MediaCustodianReports.renderReportsPage(user);
     const script = MediaCustodianReports.getScript();

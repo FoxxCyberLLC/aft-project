@@ -49,7 +49,7 @@ async function render(user: ApproverUser, _userId: number): Promise<string> {
   }).length;
 
   const tableData = approvedRequests.map((request) => ({
-    id: request.id,
+    id: request.id as string | number,
     request_number: request.request_number,
     requestor_name: request.requestor_name,
     requestor_email: request.requestor_email,

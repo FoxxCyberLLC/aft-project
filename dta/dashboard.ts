@@ -158,7 +158,7 @@ async function render(user: DTAUser, userId: number): Promise<string> {
   );
 }
 
-function buildRecentRequestsTable(requests: any[]): string {
+function buildRecentRequestsTable(requests: DbRow[]): string {
   if (requests.length === 0) {
     return `
       <div class="bg-[var(--card)] p-8 rounded-lg border border-[var(--border)] text-center">
@@ -171,7 +171,7 @@ function buildRecentRequestsTable(requests: any[]): string {
 
   // Transform requests data for table
   const tableData = requests.map((request) => ({
-    id: request.id,
+    id: request.id as string | number,
     request_number: request.request_number,
     status: request.status,
     transfer_type: request.transfer_type || 'Unknown',

@@ -77,7 +77,7 @@ async function render(user: SMEUser, _userId: number): Promise<string> {
   return SMENavigation.renderLayout('Dashboard', 'SME Signature Portal', user, '/sme', content);
 }
 
-function buildRecentActivityTable(requests: any[]): string {
+function buildRecentActivityTable(requests: DbRow[]): string {
   if (requests.length === 0) {
     return `<div class="bg-[var(--card)] p-8 rounded-lg border border-[var(--border)] text-center">
               <div class="text-4xl mb-4">✍️</div>
@@ -87,7 +87,7 @@ function buildRecentActivityTable(requests: any[]): string {
   }
 
   const tableData = requests.map((request) => ({
-    id: request.id,
+    id: request.id as string | number,
     request_number: request.request_number,
     status: request.status,
     updated_at: request.updated_at,
@@ -188,7 +188,7 @@ async function renderSignatureQueue(user: SMEUser, _userId: number): Promise<str
   );
 }
 
-function buildSignatureQueueTable(requests: any[]): string {
+function buildSignatureQueueTable(requests: DbRow[]): string {
   if (requests.length === 0) {
     return `<div class="bg-[var(--card)] p-8 rounded-lg border border-[var(--border)] text-center">
               <div class="text-4xl mb-4">✅</div>
@@ -198,7 +198,7 @@ function buildSignatureQueueTable(requests: any[]): string {
   }
 
   const tableData = requests.map((request) => ({
-    id: request.id,
+    id: request.id as string | number,
     request_number: request.request_number,
     requestor_email: request.requestor_email,
     updated_at: request.updated_at,

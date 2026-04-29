@@ -100,7 +100,7 @@ export async function handleRequestorRoutes(
 export async function handleRequestDetailPage(
   _request: Request,
   requestId: number,
-  _user: any,
+  _user: unknown,
   userId: number,
 ): Promise<Response> {
   // Get request details - ensure requestor can only view their own requests

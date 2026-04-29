@@ -418,7 +418,7 @@ export async function handleCPSOAPI(
   }
 }
 
-function generateCSV(requests: any[]): string {
+function generateCSV(requests: DbRow[]): string {
   const headers = [
     'Request ID',
     'Source System',

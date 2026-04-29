@@ -24,7 +24,7 @@ async function render(user: ApproverUser, _userId: number): Promise<string> {
 
   // Transform requests data for table
   const tableData = pendingRequests.map((request) => ({
-    id: request.id,
+    id: request.id as string | number,
     request_number: request.request_number,
     requestor_name: request.requestor_name,
     transfer_type: request.transfer_type || 'Unknown',

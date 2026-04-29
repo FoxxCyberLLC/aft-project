@@ -133,7 +133,7 @@ async function render(user: MediaCustodianUser, _userId: number): Promise<string
   );
 }
 
-function buildRecentRequestsTable(requests: any[]): string {
+function buildRecentRequestsTable(requests: DbRow[]): string {
   if (requests.length === 0) {
     return `
       <div class="bg-[var(--card)] p-8 rounded-lg border border-[var(--border)] text-center">
@@ -146,7 +146,7 @@ function buildRecentRequestsTable(requests: any[]): string {
 
   // Transform requests data for table
   const tableData = requests.map((request) => ({
-    id: request.id,
+    id: request.id as string | number,
     request_number: request.request_number,
     status: request.status,
     transfer_type: request.transfer_type || 'Unknown',
@@ -234,13 +234,13 @@ function buildRecentRequestsTable(requests: any[]): string {
   });
 }
 
-function getThisMonthCount(requests: any[]): number {
+function getThisMonthCount(requests: DbRow[]): number {
   const now = new Date();
   const thisMonth = now.getMonth();
   const thisYear = now.getFullYear();
 
   return requests.filter((request) => {
-    const requestDate = new Date(request.created_at * 1000);
+    const requestDate = new Date((request.created_at as number) * 1000);
     return requestDate.getMonth() === thisMonth && requestDate.getFullYear() === thisYear;
   }).length;
 }

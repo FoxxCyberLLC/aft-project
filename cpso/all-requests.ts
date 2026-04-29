@@ -23,7 +23,7 @@ async function render(user: CPSOUser, viewMode: 'table' | 'timeline' = 'table'):
   });
 
   const tableData = requestsWithTimeline.map((request) => ({
-    id: request.id,
+    id: request.id as string | number,
     request_number: request.request_number,
     requestor_name: request.requestor_name,
     status: request.status,
@@ -348,7 +348,7 @@ function getScript(): string {
               </div>
               <div>
                 <span class="font-medium text-[var(--muted-foreground)]">Created:</span>
-                <div class="text-[var(--foreground)]">\${new Date(request.created_at * 1000).toLocaleDateString()}</div>
+                <div class="text-[var(--foreground)]">\${new Date((request.created_at as number) * 1000).toLocaleDateString()}</div>
               </div>
             </div>
           </div>

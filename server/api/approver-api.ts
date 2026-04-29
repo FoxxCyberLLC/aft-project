@@ -538,7 +538,7 @@ export async function handleApproverAPI(
   }
 }
 
-function generateCSV(requests: any[]): string {
+function generateCSV(requests: DbRow[]): string {
   const headers = [
     'Request ID',
     'Source System',

@@ -28,7 +28,7 @@ async function renderRequestsPage(
 
   // Transform requests data for table
   const tableData = requestsWithTimeline.map((request) => ({
-    id: request.id,
+    id: request.id as string | number,
     request_number: request.request_number,
     requestor_name: request.requestor_name,
     requestor_email: request.requestor_email,
@@ -784,7 +784,7 @@ function buildRequestDetailsView(request: any, files: any[]): string {
 
       <div class="flex justify-between items-center pt-4 border-t border-[var(--border)]">
         <div class="text-sm text-[var(--muted-foreground)]">
-          Created: ${new Date(request.created_at * 1000).toLocaleString()}
+          Created: ${new Date((request.created_at as number) * 1000).toLocaleString()}
           <br>
           Updated: ${new Date(request.updated_at * 1000).toLocaleString()}
         </div>

@@ -97,7 +97,7 @@ async function render(user: MediaCustodianUser, _userId: number): Promise<string
   );
 }
 
-function buildStatsCards(drives: any[]): string {
+function buildStatsCards(drives: DbRow[]): string {
   const total = drives.length;
   const available = drives.filter((d) => d.status === 'available').length;
   const issued = drives.filter((d) => d.status === 'issued').length;
@@ -123,7 +123,7 @@ function buildStatsCards(drives: any[]): string {
   `;
 }
 
-function buildDrivesTable(drives: any[]): string {
+function buildDrivesTable(drives: DbRow[]): string {
   if (drives.length === 0) {
     return `
       <div class="text-center py-8">
@@ -139,7 +139,7 @@ function buildDrivesTable(drives: any[]): string {
 
   // Transform drives data for table
   const tableData = drives.map((drive) => ({
-    id: drive.id,
+    id: drive.id as string | number,
     serial_number: drive.serial_number,
     media_control_number: drive.media_control_number,
     type: drive.type,

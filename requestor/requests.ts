@@ -33,7 +33,7 @@ async function render(
   }>;
 
   const tableData = userRequests.map((request) => ({
-    id: request.id,
+    id: request.id as string | number,
     request_number: request.request_number,
     status: request.status,
     transfer_type: request.transfer_type || 'Unknown',

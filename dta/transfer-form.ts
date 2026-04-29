@@ -128,7 +128,7 @@ function buildTransferForm(request: any, smeUsers: any[], cacSignatures: any[]):
   `;
 }
 
-function getCurrentStep(request: any): number {
+function getCurrentStep(request: DbRow): number {
   if (!request.origination_scan_status || !request.destination_scan_status) return 1;
   if (!request.dta_signature_date) return 2;
   return 3; // Complete
