@@ -1,4 +1,4 @@
-# aft-project
+# aft-app
 
 To install dependencies:
 
