@@ -427,7 +427,7 @@ function getSubmitButtonText(currentStep: number, _request: any): string {
   }
 }
 
-function renderExistingSignatures(signatures: any[]): string {
+function renderExistingSignatures(signatures: DbRow[]): string {
   if (!signatures || signatures.length === 0) {
     return '';
   }

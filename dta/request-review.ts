@@ -311,7 +311,7 @@ function renderJustification(request: DbRow): string {
   });
 }
 
-function renderHistory(history: any[]): string {
+function renderHistory(history: DbRow[]): string {
   if (!history || history.length === 0) {
     return '';
   }
@@ -330,7 +330,7 @@ function renderHistory(history: any[]): string {
             <div class="flex-1">
               <div class="flex items-center gap-2 mb-1">
                 <span class="text-sm font-medium text-[var(--foreground)]">${entry.action}</span>
-                <span class="text-xs text-[var(--muted-foreground)]">${new Date(entry.created_at).toLocaleString()}</span>
+                <span class="text-xs text-[var(--muted-foreground)]">${new Date(entry.created_at as number).toLocaleString()}</span>
               </div>
               ${entry.notes ? `<p class="text-sm text-[var(--muted-foreground)]">${entry.notes}</p>` : ''}
               <p class="text-xs text-[var(--muted-foreground)]">by ${entry.user_email}</p>

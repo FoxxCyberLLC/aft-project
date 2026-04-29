@@ -315,7 +315,7 @@ function renderJustification(request: DbRow): string {
   });
 }
 
-function renderHistory(history: any[]): string {
+function renderHistory(history: DbRow[]): string {
   if (!history || history.length === 0) {
     return '';
   }
@@ -334,7 +334,7 @@ function renderHistory(history: any[]): string {
             <div class="flex-1">
               <div class="flex items-center gap-2 mb-1">
                 <span class="text-sm font-medium text-[var(--foreground)]">${entry.action}</span>
-                <span class="text-xs text-[var(--muted-foreground)]">${new Date(entry.created_at).toLocaleString()}</span>
+                <span class="text-xs text-[var(--muted-foreground)]">${new Date(entry.created_at as number).toLocaleString()}</span>
               </div>
               ${entry.notes ? `<p class="text-sm text-[var(--muted-foreground)]">${entry.notes}</p>` : ''}
               <p class="text-xs text-[var(--muted-foreground)]">by ${entry.user_email}</p>
@@ -533,7 +533,7 @@ function renderMetadata(request: DbRow): string {
   });
 }
 
-function renderExistingSignatures(signatures: any[]): string {
+function renderExistingSignatures(signatures: DbRow[]): string {
   if (!signatures || signatures.length === 0) {
     return '';
   }
@@ -565,7 +565,7 @@ function renderExistingSignatures(signatures: any[]): string {
                   </div>
                   <div>
                     <label class="text-sm font-medium text-gray-600">Signature Date</label>
-                    <div class="text-gray-900">${new Date(sig.signature_timestamp).toLocaleString()}</div>
+                    <div class="text-gray-900">${new Date(sig.signature_timestamp as string).toLocaleString()}</div>
                   </div>
                   <div>
                     <label class="text-sm font-medium text-gray-600">Certificate Subject</label>
@@ -585,11 +585,11 @@ function renderExistingSignatures(signatures: any[]): string {
                   </div>
                   <div>
                     <label class="text-sm font-medium text-gray-600">Certificate Valid From</label>
-                    <div class="text-gray-900">${new Date(sig.certificate_not_before * 1000).toLocaleDateString()}</div>
+                    <div class="text-gray-900">${new Date((sig.certificate_not_before as number) * 1000).toLocaleDateString()}</div>
                   </div>
                   <div>
                     <label class="text-sm font-medium text-gray-600">Certificate Valid To</label>
-                    <div class="text-gray-900">${new Date(sig.certificate_not_after * 1000).toLocaleDateString()}</div>
+                    <div class="text-gray-900">${new Date((sig.certificate_not_after as number) * 1000).toLocaleDateString()}</div>
                   </div>
                 </div>
                 <div class="mt-4 pt-4 border-t border-green-200">

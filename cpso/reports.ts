@@ -68,7 +68,7 @@ async function render(user: CPSOUser): Promise<string> {
     ORDER BY month DESC
     LIMIT 6
   `)
-    .all(user.email, ...cpsoAdvancedStatuses)) as DbRow[];
+    .all(user.email, ...cpsoAdvancedStatuses)) as Array<{ month?: string; approved?: number; rejected?: number; source_system?: string | null; dest_system?: string | null; count?: number }>;
 
   // Get system breakdown
   const systemData = (await db
@@ -83,7 +83,7 @@ async function render(user: CPSOUser): Promise<string> {
     ORDER BY count DESC
     LIMIT 10
   `)
-    .all(user.email, ...cpsoAdvancedStatuses)) as DbRow[];
+    .all(user.email, ...cpsoAdvancedStatuses)) as Array<{ month?: string; approved?: number; rejected?: number; source_system?: string | null; dest_system?: string | null; count?: number }>;
 
   const approvalRate = stats.total?.count
     ? Math.round(((stats.approved?.count ?? 0) / stats.total.count) * 100)
@@ -148,12 +148,12 @@ async function render(user: CPSOUser): Promise<string> {
               <tbody>
                 ${monthlyData
                   .map(
-                    (month: any) => `
+                    (month) => `
                   <tr class="border-b border-[var(--border)]">
                     <td class="py-2 text-sm text-[var(--foreground)]">${formatMonth(month.month)}</td>
                     <td class="text-right py-2 text-sm text-[var(--success)]">${month.approved}</td>
                     <td class="text-right py-2 text-sm text-[var(--destructive)]">${month.rejected}</td>
-                    <td class="text-right py-2 text-sm font-semibold text-[var(--foreground)]">${month.approved + month.rejected}</td>
+                    <td class="text-right py-2 text-sm font-semibold text-[var(--foreground)]">${(month.approved ?? 0) + (month.rejected ?? 0)}</td>
                   </tr>
                 `,
                   )
@@ -177,7 +177,7 @@ async function render(user: CPSOUser): Promise<string> {
           <div class="space-y-3">
             ${systemData
               .map(
-                (route: any) => `
+                (route) => `
               <div class="flex items-center justify-between py-2 border-b border-[var(--border)] last:border-0">
                 <div class="flex-1">
                   <span class="text-sm font-medium text-[var(--foreground)]">
