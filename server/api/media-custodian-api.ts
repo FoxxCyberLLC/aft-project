@@ -1,5 +1,5 @@
 // Media Custodian API endpoints
-import { getDb } from '../../lib/database-bun';
+import { getDb, type DbRow } from '../../lib/database-bun';
 import { RequestTrackingService } from '../../lib/request-tracking';
 
 // Get all users for assignment dropdowns
@@ -12,7 +12,7 @@ async function getAllUsers(): Promise<any[]> {
     WHERE is_active = TRUE
     ORDER BY last_name, first_name
   `)
-    .all()) as any[];
+    .all()) as DbRow[];
 }
 
 // Get only DTAs for drive assignment
@@ -26,7 +26,7 @@ async function getDTAUsers(): Promise<any[]> {
     WHERE u.is_active = TRUE AND ur.role = 'dta'
     ORDER BY u.last_name, u.first_name
   `)
-    .all()) as any[];
+    .all()) as DbRow[];
 }
 
 // Media Drive CRUD Operations
@@ -39,7 +39,7 @@ async function getAllMediaDrives(): Promise<any[]> {
     LEFT JOIN users u ON md.issued_to_user_id = u.id
     ORDER BY md.created_at DESC
   `)
-    .all()) as any[];
+    .all()) as DbRow[];
 }
 
 async function getMediaDriveById(id: number): Promise<any | null> {
@@ -51,7 +51,7 @@ async function getMediaDriveById(id: number): Promise<any | null> {
     LEFT JOIN users u ON md.issued_to_user_id = u.id
     WHERE md.id = ?
   `)
-    .get(id)) as any | undefined;
+    .get(id)) as DbRow | undefined;
   return row || null;
 }
 
@@ -144,7 +144,7 @@ async function issueDrive(
     JOIN user_roles ur ON ur.user_id = u.id AND ur.is_active = TRUE
     WHERE u.id = ? AND ur.role = 'dta'
   `)
-    .get(userId)) as any;
+    .get(userId)) as DbRow;
 
   if (!user) {
     return { success: false, message: 'Only DTAs can have drives issued to them' };
@@ -157,7 +157,7 @@ async function issueDrive(
     FROM media_drives
     WHERE issued_to_user_id = ? AND status = 'issued'
   `)
-    .get(userId)) as any;
+    .get(userId)) as DbRow;
 
   if (existingDrive) {
     return {
@@ -194,7 +194,7 @@ async function returnDrive(driveId: number): Promise<{ success: boolean; message
     AND ar.status NOT IN ('completed', 'disposed', 'rejected', 'cancelled')
     LIMIT 1
   `)
-    .get(driveId)) as any;
+    .get(driveId)) as DbRow;
 
   if (activeRequest) {
     return {
@@ -270,7 +270,7 @@ async function getAllRequests(query: any = {}): Promise<any[]> {
     params.push(parseInt(query.limit, 10));
   }
 
-  return (await db.query(sql).all(...params)) as any[];
+  return (await db.query(sql).all(...params)) as DbRow[];
 }
 
 // Get request statistics for reports page
@@ -278,7 +278,7 @@ async function getRequestStats(): Promise<any> {
   const db = getDb();
 
   // Get total requests count
-  const totalResult = (await db.query('SELECT COUNT(*) as count FROM aft_requests').get()) as any;
+  const totalResult = (await db.query('SELECT COUNT(*) as count FROM aft_requests').get()) as DbRow;
   const total = totalResult?.count || 0;
 
   // Get pending requests count
@@ -286,13 +286,13 @@ async function getRequestStats(): Promise<any> {
     .query(
       "SELECT COUNT(*) as count FROM aft_requests WHERE status NOT IN ('completed', 'rejected', 'cancelled')",
     )
-    .get()) as any;
+    .get()) as DbRow;
   const pending = pendingResult?.count || 0;
 
   // Get completed requests count
   const completedResult = (await db
     .query("SELECT COUNT(*) as count FROM aft_requests WHERE status = 'completed'")
-    .get()) as any;
+    .get()) as DbRow;
   const completed = completedResult?.count || 0;
 
   // Get recent activity (last 30 days)
@@ -300,7 +300,7 @@ async function getRequestStats(): Promise<any> {
     .query(
       'SELECT COUNT(*) as count FROM aft_requests WHERE created_at >= EXTRACT(EPOCH FROM NOW())::BIGINT - 2592000',
     )
-    .get()) as any;
+    .get()) as DbRow;
   const recentActivity = recentResult?.count || 0;
 
   return {
@@ -349,7 +349,7 @@ async function generateMediaInventoryReport(_params?: any): Promise<any> {
     FROM media_drives
     GROUP BY status
   `)
-    .all()) as any[];
+    .all()) as DbRow[];
 
   // Get drive counts by type
   const typeCounts = (await db
@@ -358,7 +358,7 @@ async function generateMediaInventoryReport(_params?: any): Promise<any> {
     FROM media_drives
     GROUP BY type
   `)
-    .all()) as any[];
+    .all()) as DbRow[];
 
   // Get recently issued drives
   const recentlyIssued = (await db
@@ -370,7 +370,7 @@ async function generateMediaInventoryReport(_params?: any): Promise<any> {
     ORDER BY md.issued_at DESC
     LIMIT 10
   `)
-    .all()) as any[];
+    .all()) as DbRow[];
 
   return {
     title: 'Media Inventory Report',
@@ -395,7 +395,7 @@ async function generateRequestSummaryReport(_params?: any): Promise<any> {
     FROM aft_requests
     GROUP BY status
   `)
-    .all()) as any[];
+    .all()) as DbRow[];
 
   // Get recent requests
   const recentRequests = (await db
@@ -406,7 +406,7 @@ async function generateRequestSummaryReport(_params?: any): Promise<any> {
     ORDER BY ar.created_at DESC
     LIMIT 10
   `)
-    .all()) as any[];
+    .all()) as DbRow[];
 
   // Get monthly request trends (last 6 months)
   const monthlyTrends = (await db
@@ -419,7 +419,7 @@ async function generateRequestSummaryReport(_params?: any): Promise<any> {
     GROUP BY month
     ORDER BY month DESC
   `)
-    .all()) as any[];
+    .all()) as DbRow[];
 
   return {
     title: 'Request Summary Report',
@@ -447,7 +447,7 @@ async function generateDriveUtilizationReport(_params?: any): Promise<any> {
       SUM(CASE WHEN status = 'maintenance' THEN 1 ELSE 0 END) as maintenance_drives
     FROM media_drives
   `)
-    .get()) as any;
+    .get()) as DbRow;
 
   // Get top users by drive usage
   const topUsers = (await db
@@ -463,7 +463,7 @@ async function generateDriveUtilizationReport(_params?: any): Promise<any> {
     ORDER BY drives_issued DESC
     LIMIT 10
   `)
-    .all()) as any[];
+    .all()) as DbRow[];
 
   const utilizationRate =
     utilization.total_drives > 0
@@ -501,7 +501,7 @@ async function generateUserActivityReport(_params?: any): Promise<any> {
     ORDER BY total_requests DESC
     LIMIT 20
   `)
-    .all()) as any[];
+    .all()) as DbRow[];
 
   return {
     title: 'User Activity Report',
@@ -529,7 +529,7 @@ async function processRequest(
     // Get current request
     const request = (await db
       .query('SELECT * FROM aft_requests WHERE id = ?')
-      .get(requestId)) as any;
+      .get(requestId)) as DbRow;
     if (!request) {
       return { success: false, message: 'Request not found' };
     }
@@ -632,7 +632,7 @@ async function processRequest(
     const success = await RequestTrackingService.updateRequestStatus(
       requestId,
       userId,
-      newStatus as any,
+      newStatus as DbRow,
       notes,
     );
 

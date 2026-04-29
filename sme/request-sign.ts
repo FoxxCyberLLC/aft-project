@@ -10,7 +10,7 @@ import {
 } from '../components/icons';
 import { ComponentBuilder } from '../components/ui/server-components';
 import { CACSignatureManager } from '../lib/cac-signature';
-import { getDb } from '../lib/database-bun';
+import { getDb, type DbRow } from '../lib/database-bun';
 import { SMENavigation, type SMEUser } from './sme-nav';
 
 async function render(user: SMEUser, requestId: string): Promise<string> {
@@ -36,7 +36,7 @@ async function render(user: SMEUser, requestId: string): Promise<string> {
     LEFT JOIN media_drives md ON r.selected_drive_id = md.id
     WHERE r.id = ?
   `)
-    .get(requestId)) as any;
+    .get(requestId)) as DbRow;
 
   if (!request) {
     return renderNotFound(user);
@@ -49,7 +49,7 @@ async function render(user: SMEUser, requestId: string): Promise<string> {
     WHERE request_id = ? 
     ORDER BY created_at DESC
   `)
-    .all(requestId)) as any[];
+    .all(requestId)) as DbRow[];
 
   // Get existing CAC signatures
   const _cacSignatures = await CACSignatureManager.getRequestSignatures(parseInt(requestId, 10));

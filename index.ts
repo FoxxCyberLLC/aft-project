@@ -1,6 +1,6 @@
 // AFT Server - Modular implementation
 
-import { waitForReady } from './lib/database-bun';
+import { waitForReady, type DbRow } from './lib/database-bun';
 import { applySecurityHeaders, initializeSecurity } from './lib/security';
 import { handleAPI } from './server/api/index';
 import { handleAdminRoutes } from './server/routes/admin-routes';
@@ -84,8 +84,8 @@ function sanitizeRequest(request: Request): Request {
   // Request()`. For other methods we forward the original body. duplex:'half'
   // is required by the Fetch spec when supplying a streaming body.
   if (request.method !== 'GET' && request.method !== 'HEAD') {
-    (init as any).body = request.body;
-    (init as any).duplex = 'half';
+    (init as DbRow).body = request.body;
+    (init as DbRow).duplex = 'half';
   }
   return new Request(request.url, init);
 }

@@ -1,6 +1,7 @@
 import { getDb } from './database-bun';
 import { escapeHtml } from './formatters';
 import { SMTPClient } from './smtp-client';
+import type { DbRow } from './database-bun';
 
 interface EmailConfig {
   host: string;
@@ -396,7 +397,7 @@ export async function getNextApproverEmails(status: string): Promise<string[]> {
     JOIN user_roles ur ON ur.user_id = u.id
     WHERE ur.role = ? AND ur.is_active = TRUE AND u.is_active = TRUE
   `)
-    .all(role)) as any[];
+    .all(role)) as DbRow[];
 
   return users.map((u) => u.email);
 }

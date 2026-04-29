@@ -1,5 +1,5 @@
 // Timeline API routes
-import { getDb } from '../../lib/database-bun';
+import { getDb, type DbRow } from '../../lib/database-bun';
 import { checkAuth } from '../utils';
 
 const db = getDb();
@@ -51,8 +51,8 @@ export async function handleTimelineAPI(
 
       const requestData =
         auth.activeRole === 'requestor'
-          ? ((await db.query(request_query).get(requestId, auth.userId)) as any)
-          : ((await db.query(request_query).get(requestId)) as any);
+          ? ((await db.query(request_query).get(requestId, auth.userId)) as DbRow)
+          : ((await db.query(request_query).get(requestId)) as DbRow);
 
       if (!requestData) {
         return new Response(

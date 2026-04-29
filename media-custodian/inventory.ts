@@ -1,6 +1,6 @@
 // Media Custodian Inventory Management - Full CRUD operations for media drives
 import { ComponentBuilder } from '../components/ui/server-components';
-import { getDb } from '../lib/database-bun';
+import { getDb, type DbRow } from '../lib/database-bun';
 import { MediaCustodianNavigation, type MediaCustodianUser } from './media-custodian-nav';
 
 async function render(user: MediaCustodianUser, _userId: number): Promise<string> {
@@ -14,7 +14,7 @@ async function render(user: MediaCustodianUser, _userId: number): Promise<string
     LEFT JOIN users u ON md.issued_to_user_id = u.id
     ORDER BY md.created_at DESC
   `)
-    .all()) as any[];
+    .all()) as DbRow[];
 
   // Get only DTAs for drive assignment dropdown
   const users = (await db
@@ -25,7 +25,7 @@ async function render(user: MediaCustodianUser, _userId: number): Promise<string
     WHERE u.is_active = TRUE AND ur.role = 'dta'
     ORDER BY u.last_name, u.first_name
   `)
-    .all()) as any[];
+    .all()) as DbRow[];
 
   // Build drives table
   const drivesTable = buildDrivesTable(drives);
@@ -161,7 +161,7 @@ function buildDrivesTable(drives: any[]): string {
     {
       key: 'serial_number',
       label: 'Serial Number',
-      render: (_value: any, row: any) => `
+      render: (_value: unknown, row: DbRow) => `
         <div>
           <div class="font-medium text-[var(--foreground)]">${row.serial_number}</div>
           <div class="text-sm text-[var(--muted-foreground)]">ID: ${row.id}</div>
@@ -171,14 +171,14 @@ function buildDrivesTable(drives: any[]): string {
     {
       key: 'media_control_number',
       label: 'Media Control #',
-      render: (_value: any, row: any) => `
+      render: (_value: unknown, row: DbRow) => `
         <div class="text-sm text-[var(--foreground)]">${row.media_control_number || '-'}</div>
       `,
     },
     {
       key: 'type',
       label: 'Type & Model',
-      render: (_value: any, row: any) => `
+      render: (_value: unknown, row: DbRow) => `
         <div>
           <div class="font-medium text-[var(--foreground)]">${row.type}</div>
           <div class="text-sm text-[var(--muted-foreground)]">${row.model}</div>
@@ -188,14 +188,14 @@ function buildDrivesTable(drives: any[]): string {
     {
       key: 'capacity',
       label: 'Capacity',
-      render: (_value: any, row: any) => `
+      render: (_value: unknown, row: DbRow) => `
         <div class="text-sm text-[var(--foreground)]">${row.capacity}</div>
       `,
     },
     {
       key: 'status',
       label: 'Status',
-      render: (_value: any, row: any) => {
+      render: (_value: unknown, row: DbRow) => {
         const statusVariant = {
           available: 'success',
           issued: 'warning',
@@ -212,21 +212,21 @@ function buildDrivesTable(drives: any[]): string {
     {
       key: 'location',
       label: 'Location',
-      render: (_value: any, row: any) => `
+      render: (_value: unknown, row: DbRow) => `
         <div class="text-sm text-[var(--foreground)]">${row.location || 'Not specified'}</div>
       `,
     },
     {
       key: 'issued_to',
       label: 'Issued To',
-      render: (_value: any, row: any) => `
+      render: (_value: unknown, row: DbRow) => `
         <div class="text-sm text-[var(--foreground)]">${row.issued_to || 'Not issued'}</div>
       `,
     },
     {
       key: 'last_activity',
       label: 'Last Activity',
-      render: (_value: any, row: any) => {
+      render: (_value: unknown, row: DbRow) => {
         const ts = row.issued_at || row.returned_at || row.last_used || row.created_at;
         const label = row.issued_at
           ? 'Issued'
@@ -246,7 +246,7 @@ function buildDrivesTable(drives: any[]): string {
     {
       key: 'actions',
       label: 'Actions',
-      render: (_value: any, row: any) => `
+      render: (_value: unknown, row: DbRow) => `
         <div class="flex gap-2">
           ${
             row.status === 'available'

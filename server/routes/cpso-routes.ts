@@ -6,7 +6,7 @@ import { CPSODashboard } from '../../cpso/dashboard';
 import { PendingCPSOReviewsPage } from '../../cpso/pending';
 import { CPSOReportsPage } from '../../cpso/reports';
 import { RequestReviewPage } from '../../cpso/request-review';
-import { getDb, UserRole } from '../../lib/database-bun';
+import { getDb, UserRole, type DbRow } from '../../lib/database-bun';
 import { RoleMiddleware } from '../../middleware/role-middleware';
 import { createHtmlPage } from '../utils';
 
@@ -33,7 +33,7 @@ export async function handleCPSORoutes(
   const db = getDb();
   const userDetails = (await db
     .query('SELECT first_name, last_name FROM users WHERE id = ?')
-    .get(authResult.session.userId)) as any;
+    .get(authResult.session.userId)) as DbRow;
 
   const user = {
     id: authResult.session.userId,

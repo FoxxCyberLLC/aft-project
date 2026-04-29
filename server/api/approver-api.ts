@@ -1,7 +1,7 @@
 // Approver API Endpoints
 
 import { type CACSignatureData, CACSignatureManager } from '../../lib/cac-signature';
-import { getDb, UserRole } from '../../lib/database-bun';
+import { getDb, UserRole, type DbRow } from '../../lib/database-bun';
 import { emailService, getNextApproverEmails } from '../../lib/email-service';
 import { escapeCsv, escapeHtml } from '../../lib/formatters';
 import { auditLog } from '../../lib/security';
@@ -41,7 +41,7 @@ export async function handleApproverAPI(
           .query(
             "SELECT COUNT(*) as count FROM aft_requests WHERE status IN ('pending_approver', 'submitted')",
           )
-          .get()) as any;
+          .get()) as DbRow;
         return new Response(JSON.stringify({ count: result?.count || 0 }), {
           headers: { 'Content-Type': 'application/json' },
         });
@@ -54,7 +54,7 @@ export async function handleApproverAPI(
           WHERE status = 'approved' AND approver_email = ?
           ORDER BY updated_at DESC
         `)
-          .all(session.email)) as any[];
+          .all(session.email)) as DbRow[];
 
         // Generate CSV
         const csv = generateCSV(requests);
@@ -268,7 +268,7 @@ export async function handleApproverAPI(
         if (result.changes === 0) {
           const currentRequest = (await db
             .query('SELECT status FROM aft_requests WHERE id = ?')
-            .get(requestId)) as any;
+            .get(requestId)) as DbRow;
           let errorMessage = 'This request cannot be approved at this time.';
 
           if (currentRequest) {
@@ -306,7 +306,7 @@ export async function handleApproverAPI(
           SELECT request_number, requestor_email, transfer_type, classification
           FROM aft_requests WHERE id = ?
         `)
-          .get(requestId)) as any;
+          .get(requestId)) as DbRow;
 
         // Add to history (ISSM approval)
         const historyAction = 'ISSM_APPROVED';
@@ -395,7 +395,7 @@ export async function handleApproverAPI(
         if (result.changes === 0) {
           const currentRequest = (await db
             .query('SELECT status FROM aft_requests WHERE id = ?')
-            .get(requestId)) as any;
+            .get(requestId)) as DbRow;
           let errorMessage = 'This request cannot be rejected at this time.';
 
           if (currentRequest) {
@@ -434,7 +434,7 @@ export async function handleApproverAPI(
           SELECT request_number, requestor_email, transfer_type, classification
           FROM aft_requests WHERE id = ?
         `)
-          .get(requestId)) as any;
+          .get(requestId)) as DbRow;
 
         // Add to history
         await db
@@ -504,7 +504,7 @@ export async function handleApproverAPI(
           WHERE r.approver_email = ? ${dateFilter}
           ORDER BY r.updated_at DESC
         `)
-          .all(session.email)) as any[];
+          .all(session.email)) as DbRow[];
 
         // Generate a printable HTML report
         const html = generatePrintableReport(reportData, type, session.email);
@@ -554,7 +554,7 @@ function generateCSV(requests: any[]): string {
     r.dest_system,
     r.classification || 'UNCLASSIFIED',
     r.requestor_email,
-    r.updated_at ? new Date(r.updated_at * 1000).toLocaleDateString() : '',
+    r.updated_at ? new Date((r.updated_at as number) * 1000).toLocaleDateString() : '',
     r.status,
   ]);
 
@@ -579,8 +579,8 @@ function generatePrintableReport(requests: any[], type: string, approverEmail: s
       (r) => `
     <tr>
         <td>${escapeHtml(r.id)}</td>
-        <td>${escapeHtml(r.created_at ? new Date(r.created_at * 1000).toLocaleDateString() : '')}</td>
-        <td>${escapeHtml(r.updated_at ? new Date(r.updated_at * 1000).toLocaleDateString() : '')}</td>
+        <td>${escapeHtml(r.created_at ? new Date((r.created_at as number) * 1000).toLocaleDateString() : '')}</td>
+        <td>${escapeHtml(r.updated_at ? new Date((r.updated_at as number) * 1000).toLocaleDateString() : '')}</td>
         <td>${escapeHtml(r.status)}</td>
         <td>${escapeHtml(r.source_system)} -&gt; ${escapeHtml(r.dest_system)}</td>
         <td>${escapeHtml(r.requestor_name || r.requestor_email)}</td>

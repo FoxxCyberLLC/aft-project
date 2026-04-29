@@ -2,7 +2,7 @@
 
 import { CalendarIcon, CheckCircleIcon } from '../components/icons';
 import { ComponentBuilder } from '../components/ui/server-components';
-import { getDb } from '../lib/database-bun';
+import { getDb, type DbRow } from '../lib/database-bun';
 import { ApproverNavigation, type ApproverUser } from './approver-nav';
 
 async function render(user: ApproverUser, _userId: number): Promise<string> {
@@ -23,17 +23,17 @@ async function render(user: ApproverUser, _userId: number): Promise<string> {
     WHERE r.approver_email = ? AND r.status NOT IN ('draft', 'submitted', 'pending_approver', 'rejected')
     ORDER BY r.updated_at DESC
   `)
-    .all(user.email)) as any[];
+    .all(user.email)) as DbRow[];
 
   // Calculate statistics
   const todayCount = approvedRequests.filter((r) => {
-    const updatedDate = new Date(r.updated_at * 1000);
+    const updatedDate = new Date((r.updated_at as number) * 1000);
     const today = new Date();
     return updatedDate.toDateString() === today.toDateString();
   }).length;
 
   const weekCount = approvedRequests.filter((r) => {
-    const updatedDate = new Date(r.updated_at * 1000);
+    const updatedDate = new Date((r.updated_at as number) * 1000);
     const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
     return updatedDate >= weekAgo;
   }).length;
@@ -56,17 +56,17 @@ async function render(user: ApproverUser, _userId: number): Promise<string> {
     {
       key: 'systems',
       label: 'Systems',
-      render: (_value: any, row: any) => `${row.source_system} → ${row.destination_system}`,
+      render: (_value: unknown, row: DbRow) => `${row.source_system} → ${row.destination_system}`,
     },
     {
       key: 'updated_at',
       label: 'Approved Date',
-      render: (_value: any, row: any) => new Date(row.updated_at * 1000).toLocaleDateString(),
+      render: (_value: unknown, row: DbRow) => new Date((row.updated_at as number) * 1000).toLocaleDateString(),
     },
     {
       key: 'status',
       label: 'Current Status',
-      render: (_value: any, row: any) => {
+      render: (_value: unknown, row: DbRow) => {
         const statusLabels = {
           pending_cpso: 'Pending CPSO',
           pending_dta: 'Pending DTA',
@@ -93,7 +93,7 @@ async function render(user: ApproverUser, _userId: number): Promise<string> {
     {
       key: 'actions',
       label: 'Actions',
-      render: (_value: any, row: any) =>
+      render: (_value: unknown, row: DbRow) =>
         ComponentBuilder.tableCellActions([
           { label: 'View Details', onClick: `viewRequest(${row.id})`, variant: 'secondary' },
         ]),

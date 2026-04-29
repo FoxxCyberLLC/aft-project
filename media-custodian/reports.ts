@@ -1,6 +1,6 @@
 // Media Custodian Reports Interface
 import { ComponentBuilder } from '../components/ui/server-components';
-import { getDb } from '../lib/database-bun';
+import { getDb, type DbRow } from '../lib/database-bun';
 import { MediaCustodianNavigation, type MediaCustodianUser } from './media-custodian-nav';
 
 async function renderReportsPage(user: MediaCustodianUser): Promise<string> {
@@ -12,29 +12,29 @@ async function renderReportsPage(user: MediaCustodianUser): Promise<string> {
       .query(
         "SELECT COUNT(*) as count FROM aft_requests WHERE status IN ('pending_media_custody', 'media_transfer_active', 'media_transfer_complete')",
       )
-      .get()) as any,
+      .get()) as DbRow,
     pendingCustody: (await db
       .query("SELECT COUNT(*) as count FROM aft_requests WHERE status = 'pending_media_custody'")
-      .get()) as any,
+      .get()) as DbRow,
     activeTransfers: (await db
       .query("SELECT COUNT(*) as count FROM aft_requests WHERE status = 'media_transfer_active'")
-      .get()) as any,
+      .get()) as DbRow,
     completed: (await db
       .query("SELECT COUNT(*) as count FROM aft_requests WHERE status = 'media_transfer_complete'")
-      .get()) as any,
+      .get()) as DbRow,
   };
 
   const driveStats = {
-    totalDrives: (await db.query('SELECT COUNT(*) as count FROM media_drives').get()) as any,
+    totalDrives: (await db.query('SELECT COUNT(*) as count FROM media_drives').get()) as DbRow,
     availableDrives: (await db
       .query("SELECT COUNT(*) as count FROM media_drives WHERE status = 'available'")
-      .get()) as any,
+      .get()) as DbRow,
     issuedDrives: (await db
       .query("SELECT COUNT(*) as count FROM media_drives WHERE status = 'issued'")
-      .get()) as any,
+      .get()) as DbRow,
     disposedDrives: (await db
       .query("SELECT COUNT(*) as count FROM media_drives WHERE status = 'disposed'")
-      .get()) as any,
+      .get()) as DbRow,
   };
 
   const securityStats = {
@@ -44,13 +44,13 @@ async function renderReportsPage(user: MediaCustodianUser): Promise<string> {
       FROM aft_requests
       WHERE origination_scan_performed = TRUE OR destination_scan_performed = TRUE
     `)
-      .get()) as any,
+      .get()) as DbRow,
     scansPerformed: (await db
       .query(`
       SELECT COUNT(*) as count FROM aft_requests 
       WHERE origination_scan_performed = TRUE OR destination_scan_performed = TRUE
     `)
-      .get()) as any,
+      .get()) as DbRow,
     cleanTransfers: (await db
       .query(`
       SELECT COUNT(*) as count FROM aft_requests 
@@ -58,7 +58,7 @@ async function renderReportsPage(user: MediaCustodianUser): Promise<string> {
       AND COALESCE(origination_threats_found, 0) = 0 
       AND COALESCE(destination_threats_found, 0) = 0
     `)
-      .get()) as any,
+      .get()) as DbRow,
   };
 
   const reportCards = [

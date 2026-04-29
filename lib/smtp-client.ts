@@ -1,3 +1,4 @@
+import type { DbRow } from './database-bun';
 // Minimal SMTP client implemented on top of Bun's TCP socket API.
 //
 // Supports:
@@ -58,7 +59,7 @@ export class SMTPClient {
       tlsRejectUnauthorized: true,
       auth: undefined,
       ...config,
-    } as any;
+    } as DbRow;
   }
 
   // Connect, perform handshake, return a session-bound helper closure set.
@@ -106,7 +107,7 @@ export class SMTPClient {
       ? { rejectUnauthorized: this.config.tlsRejectUnauthorized, serverName: this.config.host }
       : undefined;
 
-    let socket: AnySocket = await (Bun as any).connect({
+    let socket: AnySocket = await (Bun as DbRow).connect({
       hostname: this.config.host,
       port: this.config.port,
       tls: tlsOptions,
@@ -154,7 +155,7 @@ export class SMTPClient {
       socket.write(`${line}\r\n`);
       // Bun sockets support flush() in newer versions; ignore otherwise.
       try {
-        (socket as any).flush?.();
+        (socket as DbRow).flush?.();
       } catch {}
     };
 
@@ -177,12 +178,12 @@ export class SMTPClient {
       // Bun supports upgrading a plain socket to TLS via socket.upgradeTLS().
       // If the running Bun version doesn't expose it, fail loudly rather than
       // continuing in plaintext.
-      if (typeof (socket as any).upgradeTLS !== 'function') {
+      if (typeof (socket as DbRow).upgradeTLS !== 'function') {
         throw new Error(
           'STARTTLS requested but this Bun runtime does not support socket.upgradeTLS(). Use port 465 (implicit TLS) instead.',
         );
       }
-      socket = await (socket as any).upgradeTLS({
+      socket = await (socket as DbRow).upgradeTLS({
         hostname: this.config.host,
         rejectUnauthorized: this.config.tlsRejectUnauthorized,
         serverName: this.config.host,

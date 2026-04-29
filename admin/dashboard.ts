@@ -9,7 +9,7 @@ import {
   UsersIcon,
 } from '../components/icons';
 import { ComponentBuilder, Templates } from '../components/ui/server-components';
-import { getDb } from '../lib/database-bun';
+import { getDb, type DbRow } from '../lib/database-bun';
 import { AdminNavigation, type AdminUser } from './admin-nav';
 
 async function render(user: AdminUser): Promise<string> {
@@ -18,14 +18,14 @@ async function render(user: AdminUser): Promise<string> {
   // Get system statistics
   const userCount = (await db
     .query('SELECT COUNT(*) as count FROM users WHERE is_active = TRUE')
-    .get()) as any;
-  const requestCount = (await db.query('SELECT COUNT(*) as count FROM aft_requests').get()) as any;
+    .get()) as DbRow;
+  const requestCount = (await db.query('SELECT COUNT(*) as count FROM aft_requests').get()) as DbRow;
   const recentLogins = (await db
     .query(`
     SELECT COUNT(*) as count FROM security_audit_log 
     WHERE action = 'LOGIN_SUCCESS' AND timestamp > (EXTRACT(EPOCH FROM NOW())::BIGINT - 86400)
   `)
-    .get()) as any;
+    .get()) as DbRow;
 
   // Build admin cards
   const userManagementCard = Templates.adminCard({
@@ -35,7 +35,7 @@ async function render(user: AdminUser): Promise<string> {
     secondaryAction: { label: 'Add User', onClick: "window.location.href='/admin/users'" },
     status: {
       label: 'Active Users',
-      value: userCount?.count?.toString() || '0',
+      value: Number(userCount?.count).toString() || '0',
       status: 'operational',
     },
   });
@@ -61,7 +61,7 @@ async function render(user: AdminUser): Promise<string> {
     secondaryAction: { label: 'Analytics', onClick: "window.location.href='/admin/reports'" },
     status: {
       label: 'Total Requests',
-      value: requestCount?.count?.toString() || '0',
+      value: Number(requestCount?.count).toString() || '0',
       status: 'operational',
     },
   });
@@ -76,9 +76,9 @@ async function render(user: AdminUser): Promise<string> {
 
   // Build statistics card
   const statsCard = AdminNavigation.renderQuickStats([
-    { label: 'Active Users', value: userCount?.count || 0, status: 'operational' },
-    { label: 'Total Requests', value: requestCount?.count || 0, status: 'operational' },
-    { label: "Today's Logins", value: recentLogins?.count || 0, status: 'operational' },
+    { label: 'Active Users', value: Number(userCount?.count) || 0, status: 'operational' },
+    { label: 'Total Requests', value: Number(requestCount?.count) || 0, status: 'operational' },
+    { label: "Today's Logins", value: Number(recentLogins?.count) || 0, status: 'operational' },
     { label: 'System Status', value: 'OPERATIONAL', status: 'operational' },
   ]);
 
@@ -149,7 +149,7 @@ function getScript(): string {
 
     function displayRecentActivity(logs) {
       const activityHtml = logs.map(log => {
-        const date = new Date(log.timestamp * 1000);
+        const date = new Date((log.timestamp as number) * 1000);
         const statusClass = log.action.includes('SUCCESS') ? 'text-[var(--success)]' :
                            log.action.includes('FAILED') ? 'text-[var(--destructive)]' :
                            'text-[var(--warning)]';

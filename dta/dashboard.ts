@@ -1,6 +1,6 @@
 // DTA Dashboard - Main DTA landing page
 import { ComponentBuilder, Templates } from '../components/ui/server-components';
-import { getDb } from '../lib/database-bun';
+import { getDb, type DbRow } from '../lib/database-bun';
 import { DTANavigation, type DTAUser } from './dta-nav';
 
 async function render(user: DTAUser, userId: number): Promise<string> {
@@ -9,19 +9,19 @@ async function render(user: DTAUser, userId: number): Promise<string> {
   // Get DTA statistics - filtered by assigned DTA
   const allRequests = (await db
     .query('SELECT COUNT(*) as count FROM aft_requests WHERE dta_id = ?')
-    .get(userId)) as any;
+    .get(userId)) as DbRow;
   const dtaPendingRequests = (await db
     .query(`
     SELECT COUNT(*) as count FROM aft_requests 
     WHERE status = 'pending_dta' AND dta_id = ?
   `)
-    .get(userId)) as any;
+    .get(userId)) as DbRow;
   const activeTransfers = (await db
     .query(`
     SELECT COUNT(*) as count FROM aft_requests 
     WHERE status = 'active_transfer' AND dta_id = ?
   `)
-    .get(userId)) as any;
+    .get(userId)) as DbRow;
   const recentRequests = (await db
     .query(`
     SELECT * FROM aft_requests 
@@ -30,7 +30,7 @@ async function render(user: DTAUser, userId: number): Promise<string> {
     ORDER BY updated_at DESC 
     LIMIT 5
   `)
-    .all(userId)) as any[];
+    .all(userId)) as DbRow[];
 
   // Build action cards using Templates.adminCard
   const pendingRequestsCard = Templates.adminCard({
@@ -42,7 +42,7 @@ async function render(user: DTAUser, userId: number): Promise<string> {
     },
     status: {
       label: 'Pending',
-      value: dtaPendingRequests?.count?.toString() || '0',
+      value: Number(dtaPendingRequests?.count).toString() || '0',
       status: dtaPendingRequests?.count > 0 ? 'warning' : 'operational',
     },
   });
@@ -53,7 +53,7 @@ async function render(user: DTAUser, userId: number): Promise<string> {
     primaryAction: { label: 'Monitor Transfers', onClick: "window.location.href='/dta/active'" },
     status: {
       label: 'Active',
-      value: activeTransfers?.count?.toString() || '0',
+      value: Number(activeTransfers?.count).toString() || '0',
       status: activeTransfers?.count > 0 ? 'info' : 'operational',
     },
   });
@@ -94,7 +94,7 @@ async function render(user: DTAUser, userId: number): Promise<string> {
         WHERE status IN ('active_transfer', 'pending_sme_signature', 'completed', 'disposed')
           AND dta_id = ?
       `)
-        .get(userId)) as any;
+        .get(userId)) as DbRow;
     }
   } catch (error) {
     console.warn('Could not query scan statistics, columns may not exist yet:', error);
@@ -105,15 +105,15 @@ async function render(user: DTAUser, userId: number): Promise<string> {
 
   // Build statistics card using DTANavigation.renderQuickStats
   const statsCard = DTANavigation.renderQuickStats([
-    { label: 'My Assigned Requests', value: allRequests?.count || 0, status: 'operational' },
+    { label: 'My Assigned Requests', value: Number(allRequests?.count) || 0, status: 'operational' },
     {
       label: 'Pending My Action',
-      value: dtaPendingRequests?.count || 0,
+      value: Number(dtaPendingRequests?.count) || 0,
       status: dtaPendingRequests?.count > 0 ? 'warning' : 'operational',
     },
     {
       label: 'My Active Transfers',
-      value: activeTransfers?.count || 0,
+      value: Number(activeTransfers?.count) || 0,
       status: activeTransfers?.count > 0 ? 'info' : 'operational',
     },
     {
@@ -184,7 +184,7 @@ function buildRecentRequestsTable(requests: any[]): string {
     {
       key: 'request_number',
       label: 'Request',
-      render: (_value: any, row: any) => `
+      render: (_value: unknown, row: DbRow) => `
         <div>
           <div class="font-medium text-[var(--foreground)] text-sm">${row.request_number}</div>
           <div class="text-xs text-[var(--muted-foreground)]">ID: ${row.id}</div>
@@ -194,7 +194,7 @@ function buildRecentRequestsTable(requests: any[]): string {
     {
       key: 'status',
       label: 'Status',
-      render: (_value: any, row: any) => {
+      render: (_value: unknown, row: DbRow) => {
         const statusVariant = {
           pending_dta: 'warning',
           active_transfer: 'info',
@@ -210,15 +210,15 @@ function buildRecentRequestsTable(requests: any[]): string {
     {
       key: 'transfer_type',
       label: 'Type',
-      render: (_value: any, row: any) => `
+      render: (_value: unknown, row: DbRow) => `
         <div class="text-sm text-[var(--foreground)]">${row.transfer_type}</div>
       `,
     },
     {
       key: 'updated_at',
       label: 'Updated',
-      render: (_value: any, row: any) => `
-        <div class="text-xs text-[var(--foreground)]">${new Date(row.updated_at * 1000).toLocaleDateString()}</div>
+      render: (_value: unknown, row: DbRow) => `
+        <div class="text-xs text-[var(--foreground)]">${new Date((row.updated_at as number) * 1000).toLocaleDateString()}</div>
       `,
     },
   ];

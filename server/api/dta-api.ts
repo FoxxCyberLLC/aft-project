@@ -1,7 +1,7 @@
 // DTA API endpoints
 
 import { type CACSignatureData, CACSignatureManager } from '../../lib/cac-signature';
-import { getDb, UserRole } from '../../lib/database-bun';
+import { getDb, UserRole, type DbRow } from '../../lib/database-bun';
 import { RequestTrackingService } from '../../lib/request-tracking';
 import { auditLog } from '../../lib/security';
 import { RoleMiddleware } from '../../middleware/role-middleware';
@@ -243,7 +243,7 @@ async function getAllRequests(db: any, userId?: number): Promise<Response> {
       updated_at DESC
     LIMIT 100
   `)
-    .all(userId)) as any[];
+    .all(userId)) as DbRow[];
 
   return new Response(JSON.stringify({ success: true, requests }), {
     headers: { 'Content-Type': 'application/json' },
@@ -385,7 +385,7 @@ async function getSMEUsers(db: any): Promise<Response> {
     )
     ORDER BY name
   `)
-    .all()) as any[];
+    .all()) as DbRow[];
 
   return new Response(
     JSON.stringify({
@@ -1572,7 +1572,7 @@ async function signTransferManual(
       FROM aft_requests 
       WHERE id = ? AND dta_id = ?
     `)
-      .get(requestId, userId)) as any;
+      .get(requestId, userId)) as DbRow;
 
     if (!request) {
       return new Response(
@@ -1732,7 +1732,7 @@ async function signTransferWithCAC(
       FROM aft_requests 
       WHERE id = ? AND dta_id = ?
     `)
-      .get(requestId, userId)) as any;
+      .get(requestId, userId)) as DbRow;
 
     if (!request) {
       return new Response(

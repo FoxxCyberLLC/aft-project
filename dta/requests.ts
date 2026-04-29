@@ -1,6 +1,6 @@
 // Admin Requests Management Interface
 import { ComponentBuilder } from '../components/ui/server-components';
-import { AFT_STATUS_LABELS, getDb } from '../lib/database-bun';
+import { AFT_STATUS_LABELS, getDb, type DbRow } from '../lib/database-bun';
 import { RequestTrackingService } from '../lib/request-tracking';
 import { DTANavigation, type DTAUser } from './dta-nav';
 
@@ -14,12 +14,12 @@ async function renderRequestsPage(
   // Get request statistics for assigned DTA
   const totalRequests = (await db
     .query('SELECT COUNT(*) as count FROM aft_requests WHERE dta_id = ?')
-    .get(userId)) as any;
+    .get(userId)) as DbRow;
   const pendingRequests = (await db
     .query(
       "SELECT COUNT(*) as count FROM aft_requests WHERE status NOT IN ('completed', 'rejected', 'cancelled') AND dta_id = ?",
     )
-    .get(userId)) as any;
+    .get(userId)) as DbRow;
 
   // Get requests with timeline data - filtered by DTA assignment
   const requestsWithTimeline = await RequestTrackingService.getRequestsWithTimeline({
@@ -47,7 +47,7 @@ async function renderRequestsPage(
     {
       key: 'request_number',
       label: 'Request Number',
-      render: (_value: any, row: any) => `
+      render: (_value: unknown, row: DbRow) => `
         <div>
           <div class="font-medium text-[var(--foreground)]">${row.request_number}</div>
           <div class="text-sm text-[var(--muted-foreground)]">ID: ${row.id}</div>
@@ -57,21 +57,21 @@ async function renderRequestsPage(
     {
       key: 'requestor_name',
       label: 'Requestor',
-      render: (_value: any, row: any) => `
+      render: (_value: unknown, row: DbRow) => `
         <div class="text-sm text-[var(--foreground)]">${row.requestor_name}</div>
       `,
     },
     {
       key: 'transfer_type',
       label: 'Type',
-      render: (_value: any, row: any) => `
+      render: (_value: unknown, row: DbRow) => `
         <div class="text-sm text-[var(--foreground)]">${row.transfer_type}</div>
       `,
     },
     {
       key: 'classification',
       label: 'Classification',
-      render: (_value: any, row: any) => `
+      render: (_value: unknown, row: DbRow) => `
         <div class="text-xs px-2 py-1 rounded-full bg-[var(--warning)]/10 text-[var(--warning)] border border-[var(--warning)]/20 font-medium text-center">
           ${row.classification}
         </div>
@@ -80,7 +80,7 @@ async function renderRequestsPage(
     {
       key: 'status',
       label: 'Status & Progress',
-      render: (_value: any, row: any) => {
+      render: (_value: unknown, row: DbRow) => {
         const statusVariant: {
           [key: string]: 'default' | 'info' | 'success' | 'error' | 'warning';
         } = {
@@ -125,14 +125,14 @@ async function renderRequestsPage(
     {
       key: 'created_at',
       label: 'Created',
-      render: (_value: any, row: any) => `
-        <div class="text-sm text-[var(--foreground)]">${new Date(row.created_at * 1000).toLocaleDateString()}</div>
+      render: (_value: unknown, row: DbRow) => `
+        <div class="text-sm text-[var(--foreground)]">${new Date((row.created_at as number) * 1000).toLocaleDateString()}</div>
       `,
     },
     {
       key: 'actions',
       label: 'Actions',
-      render: (_value: any, row: any) => {
+      render: (_value: unknown, row: DbRow) => {
         const actions: Array<{
           label: string;
           onClick: string;
@@ -241,7 +241,7 @@ async function renderRequestsPage(
           <div class="text-sm text-[var(--muted-foreground)]">Pending Review</div>
         </div>
         <div class="bg-[var(--card)] p-4 rounded-lg border border-[var(--border)]">
-          <div class="text-2xl font-bold text-[var(--success)]">${Math.round((((totalRequests?.count || 1) - (pendingRequests?.count || 0)) / (totalRequests?.count || 1)) * 100)}%</div>
+          <div class="text-2xl font-bold text-[var(--success)]">${Math.round(((Number(totalRequests?.count || 1) - Number(pendingRequests?.count || 0)) / Number(totalRequests?.count || 1)) * 100)}%</div>
           <div class="text-sm text-[var(--muted-foreground)]">Completion Rate</div>
         </div>
         <div class="bg-[var(--card)] p-4 rounded-lg border border-[var(--border)]">

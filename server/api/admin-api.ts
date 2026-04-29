@@ -1,14 +1,12 @@
 // Admin API routes
-import {
-  backupDatabase,
+import { backupDatabase,
   getDb,
   getRoleDescription,
   getRoleDisplayName,
   getSystemSettings,
   runMaintenance,
   saveSystemSettings,
-  UserRole,
-} from '../../lib/database-bun';
+  UserRole, type DbRow } from '../../lib/database-bun';
 import { escapeCsv } from '../../lib/formatters';
 import { auditLog } from '../../lib/security';
 import { RoleMiddleware } from '../../middleware/role-middleware';
@@ -39,16 +37,16 @@ export async function handleAdminAPI(
 
     const userCount = (await db
       .query('SELECT COUNT(*) as count FROM users WHERE is_active = TRUE')
-      .get()) as any;
+      .get()) as DbRow;
     const requestCount = (await db
       .query('SELECT COUNT(*) as count FROM aft_requests')
-      .get()) as any;
+      .get()) as DbRow;
     const recentLogins = (await db
       .query(`
       SELECT COUNT(*) as count FROM security_audit_log 
       WHERE action = 'LOGIN_SUCCESS' AND timestamp > (EXTRACT(EPOCH FROM NOW())::BIGINT - 86400)
     `)
-      .get()) as any;
+      .get()) as DbRow;
 
     return new Response(
       JSON.stringify({
@@ -92,7 +90,7 @@ export async function handleAdminAPI(
     if (authResult.response) return authResult.response;
 
     try {
-      const userData = (await request.json()) as any;
+      const userData = (await request.json()) as DbRow;
       const hashedPassword = await Bun.password.hash(userData.password, {
         algorithm: 'bcrypt',
         cost: 12,
@@ -113,7 +111,7 @@ export async function handleAdminAPI(
           userData.organization || null,
           userData.phone || null,
           !!userData.is_active,
-        )) as any;
+        )) as DbRow;
 
       // Add primary role to user_roles table
       await db
@@ -160,7 +158,7 @@ export async function handleAdminAPI(
     }
 
     // Get user info
-    const user = (await db.query('SELECT * FROM users WHERE id = ?').get(userId)) as any;
+    const user = (await db.query('SELECT * FROM users WHERE id = ?').get(userId)) as DbRow;
     if (!user) {
       return new Response(JSON.stringify({ error: 'User not found' }), {
         status: 404,
@@ -209,7 +207,7 @@ export async function handleAdminAPI(
     const { roles } = (await request.json()) as { roles: string[] };
 
     // Get user's primary role (cannot be removed)
-    const user = (await db.query('SELECT primary_role FROM users WHERE id = ?').get(userId)) as any;
+    const user = (await db.query('SELECT primary_role FROM users WHERE id = ?').get(userId)) as DbRow;
     if (!user) {
       return new Response(JSON.stringify({ error: 'User not found' }), {
         status: 404,
@@ -256,7 +254,7 @@ export async function handleAdminAPI(
         headers: { 'Content-Type': 'application/json' },
       });
     }
-    const user = (await db.query('SELECT * FROM users WHERE id = ?').get(userId)) as any;
+    const user = (await db.query('SELECT * FROM users WHERE id = ?').get(userId)) as DbRow;
 
     if (!user) {
       return new Response(JSON.stringify({ error: 'User not found' }), {
@@ -288,7 +286,7 @@ export async function handleAdminAPI(
           },
         );
       }
-      const userData = (await request.json()) as any;
+      const userData = (await request.json()) as DbRow;
 
       let updateQuery = `
         UPDATE users 
@@ -471,7 +469,7 @@ export async function handleAdminAPI(
     if (authResult.response) return authResult.response;
 
     try {
-      const body = (await request.json()) as any;
+      const body = (await request.json()) as DbRow;
       const settingsToSave = {
         'email.smtpServer': body.smtpServer,
         'email.smtpPort': body.smtpPort,
@@ -506,7 +504,7 @@ export async function handleAdminAPI(
     if (authResult.response) return authResult.response;
 
     try {
-      const body = (await request.json()) as any;
+      const body = (await request.json()) as DbRow;
 
       // In a real app, you'd use a library like Nodemailer to send a test email.
       // For now, we'll just simulate it by checking if the server is configured.
@@ -566,7 +564,7 @@ export async function handleAdminAPI(
         LEFT JOIN users u ON sal.user_id = u.id
         ORDER BY sal.timestamp DESC
       `)
-        .all()) as any[];
+        .all()) as DbRow[];
 
       // Convert to CSV with proper quoting and CSV-injection scrubbing.
       const header =
@@ -574,7 +572,7 @@ export async function handleAdminAPI(
         '\n';
       const csvRows = logs
         .map((log) => {
-          const timestamp = new Date(log.timestamp * 1000).toISOString();
+          const timestamp = new Date((log.timestamp as number) * 1000).toISOString();
           const user = log.user_email || 'System';
           return [log.id, timestamp, user, log.action, log.description || '', log.ip_address || '']
             .map(escapeCsv)

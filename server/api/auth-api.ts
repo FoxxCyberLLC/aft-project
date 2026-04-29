@@ -1,5 +1,5 @@
 // Authentication API routes
-import { getDb, getUserRoles, setUserPassword, verifyPassword } from '../../lib/database-bun';
+import { getDb, getUserRoles, setUserPassword, verifyPassword, type DbRow } from '../../lib/database-bun';
 import {
   auditLog,
   buildCsrfCookie,
@@ -112,7 +112,7 @@ export async function handleAuthAPI(
 
     const user = (await db
       .query('SELECT * FROM users WHERE email = ? AND is_active = TRUE')
-      .get(body.email)) as any;
+      .get(body.email)) as DbRow;
 
     if (!user) {
       recordFailedAttempt(`${ipAddress}:${body.email}`);
@@ -245,7 +245,7 @@ export async function handleAuthAPI(
 
     const user = (await db
       .query('SELECT id, password FROM users WHERE id = ? AND is_active = TRUE')
-      .get(auth.userId)) as any;
+      .get(auth.userId)) as DbRow;
     if (!user) {
       return new Response(JSON.stringify({ success: false, message: 'User not found' }), {
         status: 404,

@@ -2,7 +2,7 @@
 
 import { AlertCircleIcon } from '../components/icons';
 import { ComponentBuilder } from '../components/ui/server-components';
-import { getDb } from '../lib/database-bun';
+import { getDb, type DbRow } from '../lib/database-bun';
 import { ApproverNavigation, type ApproverUser } from './approver-nav';
 
 async function render(user: ApproverUser, _userId: number): Promise<string> {
@@ -20,7 +20,7 @@ async function render(user: ApproverUser, _userId: number): Promise<string> {
     WHERE r.status IN ('pending_approver', 'pending_approval', 'submitted')
     ORDER BY r.created_at DESC
   `)
-    .all()) as any[];
+    .all()) as DbRow[];
 
   // Transform requests data for table
   const tableData = pendingRequests.map((request: any) => ({
@@ -38,7 +38,7 @@ async function render(user: ApproverUser, _userId: number): Promise<string> {
     {
       key: 'request_number',
       label: 'Request Number',
-      render: (_value: any, row: any) => `
+      render: (_value: unknown, row: DbRow) => `
         <div>
           <div class="font-medium text-[var(--foreground)]">${row.request_number}</div>
           <div class="text-sm text-[var(--muted-foreground)]">ID: ${row.id}</div>
@@ -48,31 +48,31 @@ async function render(user: ApproverUser, _userId: number): Promise<string> {
     {
       key: 'requestor_name',
       label: 'Requestor',
-      render: (_value: any, row: any) =>
+      render: (_value: unknown, row: DbRow) =>
         `<div class="text-sm text-[var(--foreground)]">${row.requestor_name}</div>`,
     },
     {
       key: 'transfer_type',
       label: 'Type',
-      render: (_value: any, row: any) =>
+      render: (_value: unknown, row: DbRow) =>
         `<div class="text-sm text-[var(--foreground)]">${row.transfer_type}</div>`,
     },
     {
       key: 'classification',
       label: 'Classification',
-      render: (_value: any, row: any) =>
+      render: (_value: unknown, row: DbRow) =>
         `<div class="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-800 font-medium text-center">${row.classification}</div>`,
     },
     {
       key: 'created_at',
       label: 'Submitted',
-      render: (_value: any, row: any) =>
-        `<div class="text-sm text-[var(--foreground)]">${new Date(row.created_at * 1000).toLocaleDateString()}</div>`,
+      render: (_value: unknown, row: DbRow) =>
+        `<div class="text-sm text-[var(--foreground)]">${new Date((row.created_at as number) * 1000).toLocaleDateString()}</div>`,
     },
     {
       key: 'priority',
       label: 'Priority',
-      render: (_value: any, row: any) => {
+      render: (_value: unknown, row: DbRow) => {
         const isUrgent = row.priority === 'urgent';
         return `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${isUrgent ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'} ">
           ${isUrgent ? AlertCircleIcon({ size: 14 }) : ''}
@@ -83,7 +83,7 @@ async function render(user: ApproverUser, _userId: number): Promise<string> {
     {
       key: 'actions',
       label: 'Actions',
-      render: (_value: any, row: any) =>
+      render: (_value: unknown, row: DbRow) =>
         ComponentBuilder.tableCellActions([
           { label: 'Review', onClick: `reviewRequest(${row.id})`, variant: 'primary' },
           { label: 'View Details', onClick: `viewRequest(${row.id})`, variant: 'secondary' },

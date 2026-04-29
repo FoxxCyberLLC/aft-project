@@ -12,7 +12,7 @@ import {
   XCircleIcon,
 } from '../components/icons';
 import { ComponentBuilder } from '../components/ui/server-components';
-import { getDb } from '../lib/database-bun';
+import { getDb, type DbRow } from '../lib/database-bun';
 import { DTANavigation, type DTAUser } from './dta-nav';
 
 async function render(user: DTAUser, requestId: string, userId: number): Promise<string> {
@@ -40,7 +40,7 @@ async function render(user: DTAUser, requestId: string, userId: number): Promise
     LEFT JOIN media_drives md ON r.selected_drive_id = md.id
     WHERE r.id = ? AND r.dta_id = ?
   `)
-    .get(requestId, userId)) as any;
+    .get(requestId, userId)) as DbRow;
 
   if (!request) {
     return renderNotFound(user);
@@ -53,7 +53,7 @@ async function render(user: DTAUser, requestId: string, userId: number): Promise
     WHERE request_id = ? 
     ORDER BY created_at DESC
   `)
-    .all(requestId)) as any[];
+    .all(requestId)) as DbRow[];
 
   const content = `
     <div class="space-y-6">

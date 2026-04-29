@@ -1,7 +1,7 @@
 // CPSO API Endpoints
 
 import { type CACSignatureData, CACSignatureManager } from '../../lib/cac-signature';
-import { getDb, UserRole } from '../../lib/database-bun';
+import { getDb, UserRole, type DbRow } from '../../lib/database-bun';
 import { escapeCsv, escapeHtml } from '../../lib/formatters';
 import { auditLog } from '../../lib/security';
 import { RoleMiddleware } from '../../middleware/role-middleware';
@@ -37,7 +37,7 @@ export async function handleCPSOAPI(
       if (apiPath === 'pending-count') {
         const result = (await db
           .query("SELECT COUNT(*) as count FROM aft_requests WHERE status = 'pending_cpso'")
-          .get()) as any;
+          .get()) as DbRow;
         return new Response(JSON.stringify({ count: result?.count || 0 }), {
           headers: { 'Content-Type': 'application/json' },
         });
@@ -50,7 +50,7 @@ export async function handleCPSOAPI(
           WHERE status = 'approved' AND approver_email = ?
           ORDER BY updated_at DESC
         `)
-          .all(session.email)) as any[];
+          .all(session.email)) as DbRow[];
 
         // Generate CSV
         const csv = generateCSV(requests);
@@ -252,7 +252,7 @@ export async function handleCPSOAPI(
         if (result.changes === 0) {
           const current = (await db
             .query('SELECT status FROM aft_requests WHERE id = ?')
-            .get(requestId)) as any;
+            .get(requestId)) as DbRow;
           const errorMessage = current
             ? `This request is in "${current.status}" status and cannot be approved by CPSO.`
             : 'Request not found.';
@@ -319,7 +319,7 @@ export async function handleCPSOAPI(
         if (result.changes === 0) {
           const current = (await db
             .query('SELECT status FROM aft_requests WHERE id = ?')
-            .get(requestId)) as any;
+            .get(requestId)) as DbRow;
           const errorMessage = current
             ? `This request is in "${current.status}" status and cannot be rejected by CPSO.`
             : 'Request not found.';
@@ -388,7 +388,7 @@ export async function handleCPSOAPI(
             ${dateFilter}
           ORDER BY r.updated_at DESC
         `)
-          .all(session.email)) as any[];
+          .all(session.email)) as DbRow[];
 
         // Generate a printable HTML report
         const html = generatePrintableReport(reportData, type, session.email);
@@ -434,7 +434,7 @@ function generateCSV(requests: any[]): string {
     r.dest_system,
     r.classification || 'UNCLASSIFIED',
     r.requestor_email,
-    r.updated_at ? new Date(r.updated_at * 1000).toLocaleDateString() : '',
+    r.updated_at ? new Date((r.updated_at as number) * 1000).toLocaleDateString() : '',
     r.status,
   ]);
 
@@ -459,8 +459,8 @@ function generatePrintableReport(requests: any[], type: string, approverEmail: s
       (r) => `
     <tr>
         <td>${escapeHtml(r.id)}</td>
-        <td>${escapeHtml(r.created_at ? new Date(r.created_at * 1000).toLocaleDateString() : '')}</td>
-        <td>${escapeHtml(r.updated_at ? new Date(r.updated_at * 1000).toLocaleDateString() : '')}</td>
+        <td>${escapeHtml(r.created_at ? new Date((r.created_at as number) * 1000).toLocaleDateString() : '')}</td>
+        <td>${escapeHtml(r.updated_at ? new Date((r.updated_at as number) * 1000).toLocaleDateString() : '')}</td>
         <td>${escapeHtml(r.status)}</td>
         <td>${escapeHtml(r.source_system)} -&gt; ${escapeHtml(r.dest_system)}</td>
         <td>${escapeHtml(r.requestor_name || r.requestor_email)}</td>

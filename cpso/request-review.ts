@@ -14,7 +14,7 @@ import {
 } from '../components/icons';
 import { ComponentBuilder } from '../components/ui/server-components';
 import { CACSignatureManager } from '../lib/cac-signature';
-import { getDb } from '../lib/database-bun';
+import { getDb, type DbRow } from '../lib/database-bun';
 import { CPSONavigation, type CPSOUser } from './cpso-nav';
 
 async function render(user: CPSOUser, requestId: string): Promise<string> {
@@ -42,7 +42,7 @@ async function render(user: CPSOUser, requestId: string): Promise<string> {
     LEFT JOIN media_drives md ON r.selected_drive_id = md.id
     WHERE r.id = ?
   `)
-    .get(requestId)) as any;
+    .get(requestId)) as DbRow;
 
   if (!request) {
     return renderNotFound(user);
@@ -55,7 +55,7 @@ async function render(user: CPSOUser, requestId: string): Promise<string> {
     WHERE request_id = ?
     ORDER BY created_at DESC
   `)
-    .all(requestId)) as any[];
+    .all(requestId)) as DbRow[];
 
   // Get existing CAC signatures for this request
   const cacSignatures = await CACSignatureManager.getRequestSignatures(parseInt(requestId, 10));

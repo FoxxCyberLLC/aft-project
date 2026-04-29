@@ -1,7 +1,7 @@
 // AFT Request Creation Wizard - Sections I & II from ACDS Form v1.3
 
 import { FormComponents } from '../components/ui/form-components';
-import { getDb } from '../lib/database-bun';
+import { getDb, type DbRow } from '../lib/database-bun';
 import { RequestorNavigation, type RequestorUser } from './requestor-nav';
 
 export interface AFTRequestDraft {
@@ -40,7 +40,7 @@ async function render(user: RequestorUser, userId: number, draftId?: number): Pr
   if (draftId) {
     existingDraft = (await db
       .query('SELECT * FROM aft_requests WHERE id = ? AND requestor_id = ?')
-      .get(draftId, userId)) as any;
+      .get(draftId, userId)) as DbRow;
     if (existingDraft) {
       // Parse files list if it exists
       if (existingDraft.files_list) {

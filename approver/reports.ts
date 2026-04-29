@@ -1,7 +1,7 @@
 // Approver Reports Page - Analytics and reporting for approval activities
 
 import { ChartBarIcon, DownloadIcon, PieChartIcon, TrendingUpIcon } from '../components/icons';
-import { getDb } from '../lib/database-bun';
+import { getDb, type DbRow } from '../lib/database-bun';
 import { ApproverNavigation, type ApproverUser } from './approver-nav';
 
 async function render(user: ApproverUser): Promise<string> {
@@ -14,21 +14,21 @@ async function render(user: ApproverUser): Promise<string> {
       SELECT COUNT(*) as count FROM aft_requests 
       WHERE approver_email = ?
     `)
-      .get(user.email)) as any,
+      .get(user.email)) as DbRow,
 
     approved: (await db
       .query(`
       SELECT COUNT(*) as count FROM aft_requests 
       WHERE status = 'approved' AND approver_email = ?
     `)
-      .get(user.email)) as any,
+      .get(user.email)) as DbRow,
 
     rejected: (await db
       .query(`
       SELECT COUNT(*) as count FROM aft_requests 
       WHERE status = 'rejected' AND approver_email = ?
     `)
-      .get(user.email)) as any,
+      .get(user.email)) as DbRow,
 
     avgProcessingTime: (await db
       .query(`
@@ -36,7 +36,7 @@ async function render(user: ApproverUser): Promise<string> {
       FROM aft_requests
       WHERE status IN ('approved', 'rejected') AND approver_email = ?
     `)
-      .get(user.email)) as any,
+      .get(user.email)) as DbRow,
   };
 
   // Get monthly breakdown
@@ -52,7 +52,7 @@ async function render(user: ApproverUser): Promise<string> {
     ORDER BY month DESC
     LIMIT 6
   `)
-    .all(user.email)) as any[];
+    .all(user.email)) as DbRow[];
 
   // Get system breakdown
   const systemData = (await db
@@ -67,7 +67,7 @@ async function render(user: ApproverUser): Promise<string> {
     ORDER BY count DESC
     LIMIT 10
   `)
-    .all(user.email)) as any[];
+    .all(user.email)) as DbRow[];
 
   const approvalRate = stats.total?.count
     ? Math.round((stats.approved?.count / stats.total?.count) * 100)

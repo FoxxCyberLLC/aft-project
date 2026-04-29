@@ -1,6 +1,6 @@
 // CPSO Dashboard - Main CPSO landing page
 import { ComponentBuilder } from '../components/ui/server-components';
-import { getDb } from '../lib/database-bun';
+import { getDb, type DbRow } from '../lib/database-bun';
 import { CPSONavigation, type CPSOUser } from './cpso-nav';
 
 async function render(user: CPSOUser, _userId: number): Promise<string> {
@@ -12,21 +12,21 @@ async function render(user: CPSOUser, _userId: number): Promise<string> {
     SELECT COUNT(*) as count FROM aft_requests 
     WHERE status = 'pending_cpso'
   `)
-    .get()) as any;
+    .get()) as DbRow;
 
   const approved7d = (await db
     .query(`
     SELECT COUNT(*) as count FROM aft_requests 
     WHERE status = 'approved' AND approver_email = ? AND updated_at >= (EXTRACT(EPOCH FROM NOW())::BIGINT - 7*24*60*60)
   `)
-    .get(user.email)) as any;
+    .get(user.email)) as DbRow;
 
   const rejected7d = (await db
     .query(`
     SELECT COUNT(*) as count FROM aft_requests 
     WHERE status = 'rejected' AND approver_email = ? AND updated_at >= (EXTRACT(EPOCH FROM NOW())::BIGINT - 7*24*60*60)
   `)
-    .get(user.email)) as any;
+    .get(user.email)) as DbRow;
 
   // Pending queue - only requests awaiting CPSO approval
   const pendingQueue = (await db
@@ -40,7 +40,7 @@ async function render(user: CPSOUser, _userId: number): Promise<string> {
     ORDER BY r.updated_at DESC
     LIMIT 25
   `)
-    .all()) as any[];
+    .all()) as DbRow[];
 
   // Recently approved by this CPSO
   const recentApproved = (await db
@@ -51,17 +51,17 @@ async function render(user: CPSOUser, _userId: number): Promise<string> {
     ORDER BY r.updated_at DESC
     LIMIT 10
   `)
-    .all(user.email)) as any[];
+    .all(user.email)) as DbRow[];
 
   // KPI stats
   const statsCard = CPSONavigation.renderQuickStats([
     {
       label: 'Pending CPSO Review',
-      value: pendingCount?.count || 0,
-      status: (pendingCount?.count || 0) > 0 ? 'warning' : 'operational',
+      value: Number(pendingCount?.count) || 0,
+      status: (Number(pendingCount?.count) || 0) > 0 ? 'warning' : 'operational',
     },
-    { label: 'Approved (7d)', value: approved7d?.count || 0, status: 'operational' },
-    { label: 'Rejected (7d)', value: rejected7d?.count || 0, status: 'operational' },
+    { label: 'Approved (7d)', value: Number(approved7d?.count) || 0, status: 'operational' },
+    { label: 'Rejected (7d)', value: Number(rejected7d?.count) || 0, status: 'operational' },
     { label: 'SLA Risk', value: getAgingRisk(pendingQueue), status: 'warning' },
   ]);
 
@@ -129,7 +129,7 @@ function buildPendingTable(rows: any[]): string {
     {
       key: 'request_number',
       label: 'Request Number',
-      render: (_value: any, row: any) => `
+      render: (_value: unknown, row: DbRow) => `
         <div>
           <div class="font-medium text-[var(--foreground)]">${row.request_number}</div>
           <div class="text-xs text-[var(--muted-foreground)]">ID: ${row.id}</div>
@@ -145,7 +145,7 @@ function buildPendingTable(rows: any[]): string {
     {
       key: 'transfer_type',
       label: 'Type',
-      render: (_value: any, row: any) => `
+      render: (_value: unknown, row: DbRow) => `
         <div class="text-sm text-[var(--foreground)]">${row.transfer_type}</div>
       `,
     },
@@ -164,7 +164,7 @@ function buildPendingTable(rows: any[]): string {
     {
       key: 'status',
       label: 'Status',
-      render: (_value: any, row: any) => {
+      render: (_value: unknown, row: DbRow) => {
         const statusVariant = {
           draft: 'default',
           submitted: 'info',
@@ -185,8 +185,8 @@ function buildPendingTable(rows: any[]): string {
     {
       key: 'created_at',
       label: 'Submitted',
-      render: (_value: any, row: any) => `
-        <div class="text-sm text-[var(--foreground)]">${new Date(row.created_at * 1000).toLocaleDateString()}</div>
+      render: (_value: unknown, row: DbRow) => `
+        <div class="text-sm text-[var(--foreground)]">${new Date((row.created_at as number) * 1000).toLocaleDateString()}</div>
       `,
     },
     {
@@ -225,7 +225,7 @@ function buildApprovedTable(rows: any[]): string {
         <div class="font-medium">${r.request_number}</div>
         <div class="text-xs text-[var(--muted-foreground)]">${r.transfer_type || 'Unknown'} • ${r.classification || ''}</div>
       </div>
-      <div class="text-xs text-[var(--muted-foreground)]">${new Date(r.updated_at * 1000).toLocaleDateString()}</div>
+      <div class="text-xs text-[var(--muted-foreground)]">${new Date((r.updated_at as number) * 1000).toLocaleDateString()}</div>
     </div>
   `,
     )

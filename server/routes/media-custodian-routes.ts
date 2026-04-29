@@ -1,6 +1,6 @@
 // Media Custodian Routes - Handle all media custodian-related requests
 
-import { UserRole } from '../../lib/database-bun';
+import { UserRole, type DbRow } from '../../lib/database-bun';
 import { MediaCustodianDashboard } from '../../media-custodian/dashboard';
 import { MediaCustodianInventory } from '../../media-custodian/inventory';
 import { MediaCustodianReports } from '../../media-custodian/reports';
@@ -244,7 +244,7 @@ async function handleAPI(
             headers: { 'Content-Type': 'application/json' },
           });
         } else if (method === 'POST') {
-          const body = (await request.json()) as any;
+          const body = (await request.json()) as DbRow;
           const newDrive = await MediaCustodianAPI.createMediaDrive(body);
           return new Response(JSON.stringify({ success: true, drive: newDrive }), {
             status: 201,
@@ -357,7 +357,7 @@ async function handleAPI(
                   headers: { 'Content-Type': 'application/json' },
                 });
               } else if (method === 'PUT') {
-                const body = (await request.json()) as any;
+                const body = (await request.json()) as DbRow;
                 const success = await MediaCustodianAPI.updateMediaDrive(driveId, body);
                 return new Response(JSON.stringify({ success }), {
                   headers: { 'Content-Type': 'application/json' },
@@ -369,7 +369,7 @@ async function handleAPI(
               const action = pathParts[2];
 
               if (action === 'issue' && method === 'POST') {
-                const body = (await request.json()) as any;
+                const body = (await request.json()) as DbRow;
                 const userId = parseInt((body.userId ?? body.user_id) as string, 10);
                 const result = await MediaCustodianAPI.issueDrive(driveId, userId, body.purpose);
                 return new Response(JSON.stringify(result), {

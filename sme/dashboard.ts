@@ -1,6 +1,6 @@
 // SME Dashboard - Main SME landing page
 import { ComponentBuilder, Templates } from '../components/ui/server-components';
-import { getDb } from '../lib/database-bun';
+import { getDb, type DbRow } from '../lib/database-bun';
 import { SMENavigation, type SMEUser } from './sme-nav';
 
 async function render(user: SMEUser, _userId: number): Promise<string> {
@@ -11,14 +11,14 @@ async function render(user: SMEUser, _userId: number): Promise<string> {
     SELECT COUNT(*) as count FROM aft_requests 
     WHERE status = 'pending_sme_signature'
   `)
-    .get()) as any;
+    .get()) as DbRow;
 
   const signedHistory = (await db
     .query(`
     SELECT COUNT(*) as count FROM aft_request_history
     WHERE user_email = ? AND action = 'sme_signed'
   `)
-    .get(user.email)) as any;
+    .get(user.email)) as DbRow;
 
   const recentActivity = (await db
     .query(`
@@ -27,7 +27,7 @@ async function render(user: SMEUser, _userId: number): Promise<string> {
     ORDER BY updated_at DESC
     LIMIT 5
   `)
-    .all(user.email)) as any[];
+    .all(user.email)) as DbRow[];
 
   const pendingCard = Templates.adminCard({
     title: 'Pending Signatures',
@@ -35,7 +35,7 @@ async function render(user: SMEUser, _userId: number): Promise<string> {
     primaryAction: { label: 'Review Pending', onClick: "window.location.href='/sme'" },
     status: {
       label: 'Pending',
-      value: pendingSignatures?.count?.toString() || '0',
+      value: Number(pendingSignatures?.count).toString() || '0',
       status: pendingSignatures?.count > 0 ? 'warning' : 'operational',
     },
   });
@@ -46,7 +46,7 @@ async function render(user: SMEUser, _userId: number): Promise<string> {
     primaryAction: { label: 'View History', onClick: "window.location.href='/sme/history'" },
     status: {
       label: 'Signed',
-      value: signedHistory?.count?.toString() || '0',
+      value: Number(signedHistory?.count).toString() || '0',
       status: 'operational',
     },
   });
@@ -97,7 +97,7 @@ function buildRecentActivityTable(requests: any[]): string {
     {
       key: 'request_number',
       label: 'Request',
-      render: (_value: any, row: any) => `<div>
+      render: (_value: unknown, row: DbRow) => `<div>
                                           <div class="font-medium text-[var(--foreground)] text-sm">${row.request_number}</div>
                                           <div class="text-xs text-[var(--muted-foreground)]">ID: ${row.id}</div>
                                         </div>`,
@@ -105,7 +105,7 @@ function buildRecentActivityTable(requests: any[]): string {
     {
       key: 'status',
       label: 'Status',
-      render: (_value: any, row: any) => {
+      render: (_value: unknown, row: DbRow) => {
         const statusVariant = {
           pending_sme_signature: 'warning',
           completed: 'success',
@@ -117,13 +117,13 @@ function buildRecentActivityTable(requests: any[]): string {
     {
       key: 'updated_at',
       label: 'Last Updated',
-      render: (_value: any, row: any) =>
-        `<div class="text-xs text-[var(--foreground)]">${new Date(row.updated_at * 1000).toLocaleDateString()}</div>`,
+      render: (_value: unknown, row: DbRow) =>
+        `<div class="text-xs text-[var(--foreground)]">${new Date((row.updated_at as number) * 1000).toLocaleDateString()}</div>`,
     },
     {
       key: 'actions',
       label: 'Actions',
-      render: (_value: any, row: any) => {
+      render: (_value: unknown, row: DbRow) => {
         if (row.status === 'pending_sme_signature') {
           return ComponentBuilder.button({
             children: 'Sign',
@@ -166,7 +166,7 @@ async function renderSignatureQueue(user: SMEUser, _userId: number): Promise<str
     WHERE r.status = 'pending_sme_signature'
     ORDER BY r.updated_at ASC
   `)
-    .all()) as any[];
+    .all()) as DbRow[];
 
   const content = `
     <div class="space-y-8">
@@ -209,7 +209,7 @@ function buildSignatureQueueTable(requests: any[]): string {
     {
       key: 'request_number',
       label: 'Request',
-      render: (_value: any, row: any) => `<div>
+      render: (_value: unknown, row: DbRow) => `<div>
                                           <div class="font-medium text-[var(--foreground)] text-sm">${row.request_number}</div>
                                           <div class="text-xs text-[var(--muted-foreground)]">ID: ${row.id}</div>
                                         </div>`,
@@ -217,13 +217,13 @@ function buildSignatureQueueTable(requests: any[]): string {
     {
       key: 'requestor_email',
       label: 'Requestor',
-      render: (_value: any, row: any) =>
+      render: (_value: unknown, row: DbRow) =>
         `<div class="text-sm text-[var(--foreground)]">${row.requestor_email || 'Unknown'}</div>`,
     },
     {
       key: 'dta_signature',
       label: 'DTA Status',
-      render: (_value: any, row: any) => {
+      render: (_value: unknown, row: DbRow) => {
         return row.dta_signature
           ? ComponentBuilder.statusBadge('DTA SIGNED', 'success')
           : ComponentBuilder.statusBadge('PENDING DTA', 'warning');
@@ -232,13 +232,13 @@ function buildSignatureQueueTable(requests: any[]): string {
     {
       key: 'updated_at',
       label: 'Last Updated',
-      render: (_value: any, row: any) =>
-        `<div class="text-xs text-[var(--foreground)]">${new Date(row.updated_at * 1000).toLocaleDateString()}</div>`,
+      render: (_value: unknown, row: DbRow) =>
+        `<div class="text-xs text-[var(--foreground)]">${new Date((row.updated_at as number) * 1000).toLocaleDateString()}</div>`,
     },
     {
       key: 'actions',
       label: 'Actions',
-      render: (_value: any, row: any) => {
+      render: (_value: unknown, row: DbRow) => {
         return ComponentBuilder.button({
           children: 'Review & Sign',
           onClick: `window.location.href='/sme/sign/${row.id}'`,

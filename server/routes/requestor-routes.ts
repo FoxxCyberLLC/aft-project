@@ -1,7 +1,7 @@
 // Requestor page routes
 
 import { ChevronLeftIcon } from '../../components/icons';
-import { getDb } from '../../lib/database-bun';
+import { getDb, type DbRow } from '../../lib/database-bun';
 import { RoleMiddleware } from '../../middleware/role-middleware';
 import { RequestorAllRequests } from '../../requestor/all-requests';
 import { RequestorDashboard } from '../../requestor/dashboard';
@@ -111,7 +111,7 @@ export async function handleRequestDetailPage(
     LEFT JOIN users u ON ar.requestor_id = u.id
     WHERE ar.id = ? AND ar.requestor_id = ?
   `)
-    .get(requestId, userId)) as any;
+    .get(requestId, userId)) as DbRow;
 
   if (!requestData) {
     return new Response('Request not found or access denied', { status: 404 });
@@ -131,7 +131,7 @@ export async function handleRequestDetailPage(
     ORDER BY cs.created_at DESC
     LIMIT 1
   `)
-    .get(requestId)) as any;
+    .get(requestId)) as DbRow;
 
   // Parse files list
   let files = [];

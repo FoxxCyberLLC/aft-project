@@ -1,7 +1,7 @@
 // CPSO Reports Page - Analytics and reporting for CPSO activities
 
 import { ChartBarIcon, DownloadIcon, PieChartIcon, TrendingUpIcon } from '../components/icons';
-import { getDb } from '../lib/database-bun';
+import { getDb, type DbRow } from '../lib/database-bun';
 import { CPSONavigation, type CPSOUser } from './cpso-nav';
 
 async function render(user: CPSOUser): Promise<string> {
@@ -29,7 +29,7 @@ async function render(user: CPSOUser): Promise<string> {
       SELECT COUNT(*) as count FROM aft_requests
       WHERE approver_email = ? AND status IN (${advancedStatusList})
     `)
-      .get(user.email, ...cpsoAdvancedStatuses)) as any,
+      .get(user.email, ...cpsoAdvancedStatuses)) as DbRow,
 
     approved: (await db
       .query(`
@@ -37,14 +37,14 @@ async function render(user: CPSOUser): Promise<string> {
       WHERE approver_email = ? AND status NOT IN ('rejected', 'cancelled')
         AND status IN (${advancedStatusList})
     `)
-      .get(user.email, ...cpsoAdvancedStatuses)) as any,
+      .get(user.email, ...cpsoAdvancedStatuses)) as DbRow,
 
     rejected: (await db
       .query(`
       SELECT COUNT(*) as count FROM aft_requests
       WHERE approver_email = ? AND status = 'rejected'
     `)
-      .get(user.email)) as any,
+      .get(user.email)) as DbRow,
 
     avgProcessingTime: (await db
       .query(`
@@ -52,7 +52,7 @@ async function render(user: CPSOUser): Promise<string> {
       FROM aft_requests
       WHERE approver_email = ? AND status IN (${advancedStatusList})
     `)
-      .get(user.email, ...cpsoAdvancedStatuses)) as any,
+      .get(user.email, ...cpsoAdvancedStatuses)) as DbRow,
   };
 
   // Get monthly breakdown
@@ -68,7 +68,7 @@ async function render(user: CPSOUser): Promise<string> {
     ORDER BY month DESC
     LIMIT 6
   `)
-    .all(user.email, ...cpsoAdvancedStatuses)) as any[];
+    .all(user.email, ...cpsoAdvancedStatuses)) as DbRow[];
 
   // Get system breakdown
   const systemData = (await db
@@ -83,7 +83,7 @@ async function render(user: CPSOUser): Promise<string> {
     ORDER BY count DESC
     LIMIT 10
   `)
-    .all(user.email, ...cpsoAdvancedStatuses)) as any[];
+    .all(user.email, ...cpsoAdvancedStatuses)) as DbRow[];
 
   const approvalRate = stats.total?.count
     ? Math.round((stats.approved?.count / stats.total?.count) * 100)

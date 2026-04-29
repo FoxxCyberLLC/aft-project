@@ -2,7 +2,7 @@
 
 import { ShieldIcon } from '../components/icons';
 import { ComponentBuilder } from '../components/ui/server-components';
-import { getDb } from '../lib/database-bun';
+import { getDb, type DbRow } from '../lib/database-bun';
 import { RequestTrackingService } from '../lib/request-tracking';
 import { MediaCustodianNavigation, type MediaCustodianUser } from './media-custodian-nav';
 
@@ -14,12 +14,12 @@ async function renderRequestsPage(
   const db = getDb();
 
   // Get request statistics for all requests (media custodian sees all)
-  const totalRequests = (await db.query('SELECT COUNT(*) as count FROM aft_requests').get()) as any;
+  const totalRequests = (await db.query('SELECT COUNT(*) as count FROM aft_requests').get()) as DbRow;
   const pendingRequests = (await db
     .query(
       "SELECT COUNT(*) as count FROM aft_requests WHERE status NOT IN ('completed', 'rejected', 'cancelled')",
     )
-    .get()) as any;
+    .get()) as DbRow;
 
   // Get all requests with timeline data
   const requestsWithTimeline = await RequestTrackingService.getRequestsWithTimeline({
@@ -48,7 +48,7 @@ async function renderRequestsPage(
     {
       key: 'request_number',
       label: 'Request Number',
-      render: (_value: any, row: any) => `
+      render: (_value: unknown, row: DbRow) => `
         <div>
           <div class="font-medium text-[var(--foreground)]">${row.request_number}</div>
           <div class="text-sm text-[var(--muted-foreground)]">ID: ${row.id}</div>
@@ -58,7 +58,7 @@ async function renderRequestsPage(
     {
       key: 'requestor_info',
       label: 'Requestor',
-      render: (_value: any, row: any) => `
+      render: (_value: unknown, row: DbRow) => `
         <div>
           <div class="font-medium text-[var(--foreground)]">${row.requestor_name || 'Unknown'}</div>
           <div class="text-sm text-[var(--muted-foreground)]">${row.requestor_email || 'No email'}</div>
@@ -68,21 +68,21 @@ async function renderRequestsPage(
     {
       key: 'updated_at',
       label: 'Last Updated',
-      render: (_value: any, row: any) => `
-        <div class="text-sm text-[var(--foreground)]">${new Date(row.updated_at * 1000).toLocaleDateString()}</div>
+      render: (_value: unknown, row: DbRow) => `
+        <div class="text-sm text-[var(--foreground)]">${new Date((row.updated_at as number) * 1000).toLocaleDateString()}</div>
       `,
     },
     {
       key: 'transfer_type',
       label: 'Type',
-      render: (_value: any, row: any) => `
+      render: (_value: unknown, row: DbRow) => `
         <div class="text-sm text-[var(--foreground)]">${row.transfer_type}</div>
       `,
     },
     {
       key: 'classification',
       label: 'Classification',
-      render: (_value: any, row: any) => `
+      render: (_value: unknown, row: DbRow) => `
         <div class="text-xs px-2 py-1 rounded-full bg-[var(--warning)]/10 text-[var(--warning)] border border-[var(--warning)]/20 font-medium text-center">
           ${row.classification}
         </div>
@@ -91,7 +91,7 @@ async function renderRequestsPage(
     {
       key: 'status',
       label: 'Status & Progress',
-      render: (_value: any, row: any) => {
+      render: (_value: unknown, row: DbRow) => {
         const statusVariant: {
           [key: string]: 'default' | 'info' | 'success' | 'error' | 'warning';
         } = {
@@ -130,7 +130,7 @@ async function renderRequestsPage(
     {
       key: 'actions',
       label: 'Actions',
-      render: (_value: any, row: any) => {
+      render: (_value: unknown, row: DbRow) => {
         const actions: Array<{
           label: string;
           onClick: string;
@@ -258,7 +258,7 @@ async function renderRequestProcessPage(
     LEFT JOIN media_drives md ON r.selected_drive_id = md.id
     WHERE r.id = ?
   `)
-    .get(requestId)) as any;
+    .get(requestId)) as DbRow;
 
   if (!request) {
     return `
@@ -346,7 +346,7 @@ async function renderRequestDetail(user: MediaCustodianUser, requestId: number):
     LEFT JOIN media_drives md ON r.selected_drive_id = md.id
     WHERE r.id = ?
   `)
-    .get(requestId)) as any;
+    .get(requestId)) as DbRow;
 
   if (!request) {
     return `
@@ -383,7 +383,7 @@ async function renderRequestDetail(user: MediaCustodianUser, requestId: number):
     WHERE request_id = ? 
     ORDER BY created_at DESC
   `)
-    .all(requestId)) as any[];
+    .all(requestId)) as DbRow[];
 
   // Build request details view
   const requestDetails = buildRequestDetailsView(request, files);

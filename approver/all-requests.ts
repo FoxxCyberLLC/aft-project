@@ -2,7 +2,7 @@
 
 import { CheckIcon } from '../components/icons';
 import { ComponentBuilder } from '../components/ui/server-components';
-import { AFT_STATUS_LABELS, getDb } from '../lib/database-bun';
+import { AFT_STATUS_LABELS, getDb, type DbRow } from '../lib/database-bun';
 import { RequestTrackingService } from '../lib/request-tracking';
 import { ApproverNavigation, type ApproverUser } from './approver-nav';
 
@@ -13,12 +13,12 @@ async function render(
   const db = getDb();
 
   // Stats (optional but matches format)
-  const totalRequests = (await db.query('SELECT COUNT(*) as count FROM aft_requests').get()) as any;
+  const totalRequests = (await db.query('SELECT COUNT(*) as count FROM aft_requests').get()) as DbRow;
   const pendingRequests = (await db
     .query(
       "SELECT COUNT(*) as count FROM aft_requests WHERE status NOT IN ('completed', 'rejected', 'cancelled')",
     )
-    .get()) as any;
+    .get()) as DbRow;
 
   // Get requests with timeline data and additional details
   const requestsWithTimeline = await RequestTrackingService.getRequestsWithTimeline({
@@ -36,7 +36,7 @@ async function render(
         SELECT u.first_name, u.last_name, u.email
         FROM users u WHERE u.id = ?
       `)
-          .get(request.dta_id)) as any;
+          .get(request.dta_id)) as DbRow;
       }
 
       // Get drive information
@@ -47,7 +47,7 @@ async function render(
         SELECT serial_number, media_control_number, type, model, status
         FROM media_drives WHERE id = ?
       `)
-          .get(request.selected_drive_id)) as any;
+          .get(request.selected_drive_id)) as DbRow;
       }
 
       return {
@@ -74,7 +74,7 @@ async function render(
     {
       key: 'request_number',
       label: 'Request Number',
-      render: (_value: any, row: any) => `
+      render: (_value: unknown, row: DbRow) => `
         <div>
           <div class="font-medium text-[var(--foreground)]">${row.request_number}</div>
           <div class="text-sm text-[var(--muted-foreground)]">ID: ${row.id}</div>
@@ -84,14 +84,14 @@ async function render(
     {
       key: 'requestor_name',
       label: 'Requestor',
-      render: (_value: any, row: any) => `
+      render: (_value: unknown, row: DbRow) => `
         <div class="text-sm text-[var(--foreground)]">${row.requestor_name}</div>
       `,
     },
     {
       key: 'dta_info',
       label: 'Assigned DTA',
-      render: (_value: any, row: any) => `
+      render: (_value: unknown, row: DbRow) => `
         <div class="text-sm">
           ${
             row.dta_info
@@ -105,7 +105,7 @@ async function render(
     {
       key: 'drive_info',
       label: 'Drive Assignment',
-      render: (_value: any, row: any) => `
+      render: (_value: unknown, row: DbRow) => `
         <div class="text-sm">
           ${
             row.drive_info
@@ -119,7 +119,7 @@ async function render(
     {
       key: 'systems',
       label: 'Source → Destination',
-      render: (_value: any, row: any) => `
+      render: (_value: unknown, row: DbRow) => `
         <div class="text-sm">
           <div class="text-[var(--foreground)]">${row.source_system || 'N/A'}</div>
           <div class="text-xs text-[var(--muted-foreground)]">→ ${row.dest_system || 'N/A'}</div>
@@ -129,14 +129,14 @@ async function render(
     {
       key: 'transfer_type',
       label: 'Type',
-      render: (_value: any, row: any) => `
+      render: (_value: unknown, row: DbRow) => `
         <div class="text-sm text-[var(--foreground)]">${row.transfer_type}</div>
       `,
     },
     {
       key: 'classification',
       label: 'Classification',
-      render: (_value: any, row: any) => `
+      render: (_value: unknown, row: DbRow) => `
         <div class="text-xs px-2 py-1 rounded-full bg-[var(--warning)]/10 text-[var(--warning)] border border-[var(--warning)]/20 font-medium text-center">
           ${row.classification}
         </div>
@@ -145,7 +145,7 @@ async function render(
     {
       key: 'status',
       label: 'Status & Progress',
-      render: (_value: any, row: any) => {
+      render: (_value: unknown, row: DbRow) => {
         const statusVariant: {
           [key: string]: 'default' | 'info' | 'success' | 'error' | 'warning';
         } = {
@@ -185,14 +185,14 @@ async function render(
     {
       key: 'created_at',
       label: 'Created',
-      render: (_value: any, row: any) => `
-        <div class="text-sm text-[var(--foreground)]">${new Date(row.created_at * 1000).toLocaleDateString()}</div>
+      render: (_value: unknown, row: DbRow) => `
+        <div class="text-sm text-[var(--foreground)]">${new Date((row.created_at as number) * 1000).toLocaleDateString()}</div>
       `,
     },
     {
       key: 'actions',
       label: 'Actions',
-      render: (_value: any, row: any) =>
+      render: (_value: unknown, row: DbRow) =>
         ComponentBuilder.tableCellActions([
           { label: 'Review', onClick: `reviewRequest(${row.id})`, variant: 'primary' },
           { label: 'Timeline', onClick: `viewTimeline(${row.id})`, variant: 'secondary' },
@@ -278,7 +278,7 @@ async function render(
           <div class="text-sm text-[var(--muted-foreground)]">Pending Review</div>
         </div>
         <div class="bg-[var(--card)] p-4 rounded-lg border border-[var(--border)]">
-          <div class="text-2xl font-bold text-[var(--success)]">${Math.round((((totalRequests?.count || 1) - (pendingRequests?.count || 0)) / (totalRequests?.count || 1)) * 100)}%</div>
+          <div class="text-2xl font-bold text-[var(--success)]">${Math.round(((Number(totalRequests?.count || 1) - Number(pendingRequests?.count || 0)) / Number(totalRequests?.count || 1)) * 100)}%</div>
           <div class="text-sm text-[var(--muted-foreground)]">Completion Rate</div>
         </div>
         <div class="bg-[var(--card)] p-4 rounded-lg border border-[var(--border)]">

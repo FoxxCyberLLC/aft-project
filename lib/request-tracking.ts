@@ -3,6 +3,7 @@
 
 import type { TimelineStep } from '../components/ui/timeline';
 import { AFT_STATUS_LABELS, AFTStatus, type AFTStatusType, getDb } from './database-bun';
+import type { DbRow } from './database-bun';
 
 export interface RequestAuditEntry {
   id: number;
@@ -39,7 +40,7 @@ async function getRequestTimeline(requestId: number): Promise<RequestTimelineDat
     FROM aft_requests
     WHERE id = ?
   `)
-    .get(requestId)) as any;
+    .get(requestId)) as DbRow;
 
   if (!request) return null;
 
@@ -329,7 +330,7 @@ async function updateRequestStatus(
   try {
     const request = (await db
       .query('SELECT status FROM aft_requests WHERE id = ?')
-      .get(requestId)) as any;
+      .get(requestId)) as DbRow;
     if (!request) return false;
 
     const oldStatus = request.status;
@@ -415,7 +416,7 @@ async function getRequestsWithTimeline(filters?: {
     }
   }
 
-  const requests = (await db.query(query).all(...params)) as any[];
+  const requests = (await db.query(query).all(...params)) as DbRow[];
 
   // Add timeline progress for each request
   return requests.map((request) => {

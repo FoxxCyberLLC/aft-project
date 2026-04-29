@@ -3,7 +3,7 @@
 import { CACPinModal } from '../components/cac-pin-modal';
 import { ShieldIcon } from '../components/icons';
 import { CACSignatureManager } from '../lib/cac-signature';
-import { getDb } from '../lib/database-bun';
+import { getDb, type DbRow } from '../lib/database-bun';
 import { DTANavigation, type DTAUser } from './dta-nav';
 
 async function render(user: DTAUser, requestId: string, userId: number): Promise<string> {
@@ -23,7 +23,7 @@ async function render(user: DTAUser, requestId: string, userId: number): Promise
     FROM aft_requests
     WHERE id = ? AND dta_id = ?
   `)
-    .get(requestId, userId)) as any;
+    .get(requestId, userId)) as DbRow;
 
   if (!request) {
     return renderNotFound(user);
@@ -38,7 +38,7 @@ async function render(user: DTAUser, requestId: string, userId: number): Promise
     WHERE ur.role = 'sme' AND u.is_active = TRUE
     ORDER BY u.last_name, u.first_name
   `)
-    .all()) as any[];
+    .all()) as DbRow[];
 
   // Get existing CAC signatures for this request
   const cacSignatures = await CACSignatureManager.getRequestSignatures(parseInt(requestId, 10));

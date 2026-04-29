@@ -1,6 +1,6 @@
 // DTA Reports Interface
 import { ComponentBuilder } from '../components/ui/server-components';
-import { getDb } from '../lib/database-bun';
+import { getDb, type DbRow } from '../lib/database-bun';
 import { DTANavigation, type DTAUser } from './dta-nav';
 
 async function renderReportsPage(user: DTAUser): Promise<string> {
@@ -12,13 +12,13 @@ async function renderReportsPage(user: DTAUser): Promise<string> {
       .query(
         "SELECT COUNT(*) as count FROM aft_requests WHERE status IN ('active_transfer', 'completed', 'disposed')",
       )
-      .get()) as any,
+      .get()) as DbRow,
     active: (await db
       .query("SELECT COUNT(*) as count FROM aft_requests WHERE status = 'active_transfer'")
-      .get()) as any,
+      .get()) as DbRow,
     completed: (await db
       .query("SELECT COUNT(*) as count FROM aft_requests WHERE status = 'completed'")
-      .get()) as any,
+      .get()) as DbRow,
   };
 
   const performanceStats = {
@@ -28,7 +28,7 @@ async function renderReportsPage(user: DTAUser): Promise<string> {
       FROM aft_requests 
       WHERE actual_start_date IS NOT NULL AND actual_end_date IS NOT NULL
     `)
-      .get()) as any,
+      .get()) as DbRow,
     successRate: (await db
       .query(`
       SELECT 
@@ -36,7 +36,7 @@ async function renderReportsPage(user: DTAUser): Promise<string> {
       FROM aft_requests 
       WHERE status IN ('completed', 'rejected', 'cancelled')
     `)
-      .get()) as any,
+      .get()) as DbRow,
   };
 
   const securityStats = {
@@ -46,13 +46,13 @@ async function renderReportsPage(user: DTAUser): Promise<string> {
       FROM aft_requests
       WHERE origination_scan_performed = TRUE OR destination_scan_performed = TRUE
     `)
-      .get()) as any,
+      .get()) as DbRow,
     scansPerformed: (await db
       .query(`
       SELECT COUNT(*) as count FROM aft_requests 
       WHERE origination_scan_performed = TRUE OR destination_scan_performed = TRUE
     `)
-      .get()) as any,
+      .get()) as DbRow,
   };
 
   const reportCards = [

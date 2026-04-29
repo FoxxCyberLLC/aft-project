@@ -1,7 +1,7 @@
 // SME API Endpoints
 
 import { type CACSignatureData, CACSignatureManager } from '../../lib/cac-signature';
-import { getDb, UserRole } from '../../lib/database-bun';
+import { getDb, UserRole, type DbRow } from '../../lib/database-bun';
 import { RequestTrackingService } from '../../lib/request-tracking';
 import { auditLog } from '../../lib/security';
 import { RoleMiddleware } from '../../middleware/role-middleware';
@@ -101,7 +101,7 @@ async function signRequest(
 
     const requestData = (await db
       .query('SELECT * FROM aft_requests WHERE id = ?')
-      .get(requestId)) as any;
+      .get(requestId)) as DbRow;
 
     if (!requestData) {
       return new Response(JSON.stringify({ success: false, error: 'Request not found' }), {
@@ -192,7 +192,7 @@ async function signRequestWithCAC(
 
     const requestData = (await db
       .query('SELECT * FROM aft_requests WHERE id = ?')
-      .get(requestId)) as any;
+      .get(requestId)) as DbRow;
 
     if (!requestData) {
       return new Response(JSON.stringify({ success: false, error: 'Request not found' }), {

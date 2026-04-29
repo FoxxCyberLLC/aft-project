@@ -1,6 +1,6 @@
 // Requestor Dashboard - Main requestor landing page
 import { ComponentBuilder, Templates } from '../components/ui/server-components';
-import { getDb } from '../lib/database-bun';
+import { getDb, type DbRow } from '../lib/database-bun';
 import { RequestorNavigation, type RequestorUser } from './requestor-nav';
 
 async function render(user: RequestorUser, userId: number): Promise<string> {
@@ -9,13 +9,13 @@ async function render(user: RequestorUser, userId: number): Promise<string> {
   // Get requestor's statistics
   const myRequests = (await db
     .query('SELECT COUNT(*) as count FROM aft_requests WHERE requestor_id = ?')
-    .get(userId)) as any;
+    .get(userId)) as DbRow;
   const pendingRequests = (await db
     .query(`
     SELECT COUNT(*) as count FROM aft_requests 
     WHERE requestor_id = ? AND status NOT IN ('completed', 'rejected', 'cancelled')
   `)
-    .get(userId)) as any;
+    .get(userId)) as DbRow;
   const recentRequests = (await db
     .query(`
     SELECT * FROM aft_requests 
@@ -23,7 +23,7 @@ async function render(user: RequestorUser, userId: number): Promise<string> {
     ORDER BY created_at DESC 
     LIMIT 5
   `)
-    .all(userId)) as any[];
+    .all(userId)) as DbRow[];
 
   // Build action cards
   const newRequestCard = Templates.adminCard({
@@ -43,7 +43,7 @@ async function render(user: RequestorUser, userId: number): Promise<string> {
     secondaryAction: { label: 'Filter', onClick: 'filterMyRequests()' },
     status: {
       label: 'Total Requests',
-      value: myRequests?.count?.toString() || '0',
+      value: Number(myRequests?.count).toString() || '0',
       status: 'operational',
     },
   });
@@ -53,10 +53,10 @@ async function render(user: RequestorUser, userId: number): Promise<string> {
 
   // Build statistics card
   const statsCard = RequestorNavigation.renderQuickStats([
-    { label: 'Total Requests', value: myRequests?.count || 0, status: 'operational' },
+    { label: 'Total Requests', value: Number(myRequests?.count) || 0, status: 'operational' },
     {
       label: 'Pending Review',
-      value: pendingRequests?.count || 0,
+      value: Number(pendingRequests?.count) || 0,
       status: pendingRequests?.count > 0 ? 'warning' : 'operational',
     },
     {
@@ -137,7 +137,7 @@ function buildRecentRequestsTable(requests: any[]): string {
     {
       key: 'request_number',
       label: 'Request Number',
-      render: (_value: any, row: any) => `
+      render: (_value: unknown, row: DbRow) => `
         <div>
           <div class="font-medium text-[var(--foreground)]">${row.request_number}</div>
           <div class="text-sm text-[var(--muted-foreground)]">ID: ${row.id}</div>
@@ -147,14 +147,14 @@ function buildRecentRequestsTable(requests: any[]): string {
     {
       key: 'transfer_type',
       label: 'Type',
-      render: (_value: any, row: any) => `
+      render: (_value: unknown, row: DbRow) => `
         <div class="text-sm text-[var(--foreground)]">${row.transfer_type}</div>
       `,
     },
     {
       key: 'status',
       label: 'Status',
-      render: (_value: any, row: any) => {
+      render: (_value: unknown, row: DbRow) => {
         const statusVariant = {
           draft: 'default',
           submitted: 'info',
@@ -175,14 +175,14 @@ function buildRecentRequestsTable(requests: any[]): string {
     {
       key: 'created_at',
       label: 'Submitted',
-      render: (_value: any, row: any) => `
-        <div class="text-sm text-[var(--foreground)]">${new Date(row.created_at * 1000).toLocaleDateString()}</div>
+      render: (_value: unknown, row: DbRow) => `
+        <div class="text-sm text-[var(--foreground)]">${new Date((row.created_at as number) * 1000).toLocaleDateString()}</div>
       `,
     },
     {
       key: 'actions',
       label: 'Actions',
-      render: (_value: any, row: any) => {
+      render: (_value: unknown, row: DbRow) => {
         const actions = [
           { label: 'View', onClick: `viewRequest(${row.id})`, variant: 'secondary' as const },
         ];

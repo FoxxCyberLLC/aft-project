@@ -3,6 +3,7 @@
 
 import { getDb, type TxDb } from './database-bun';
 import { auditLog } from './security';
+import type { DbRow } from './database-bun';
 
 export interface CACSignatureData {
   signature: string; // Base64 encoded signature
@@ -106,7 +107,7 @@ async function applyApproverSignature(
         FROM aft_requests
         WHERE id = ? AND status IN (${allowedStatuses.map(() => '?').join(',')})
       `)
-        .get(requestId, ...allowedStatuses)) as any;
+        .get(requestId, ...allowedStatuses)) as DbRow;
 
       if (!request) {
         return { success: false as const, error: 'Request not found or not ready for approval' };
@@ -206,7 +207,7 @@ async function applySignature(
         FROM aft_requests
         WHERE id = ? AND (status = 'pending_sme_signature' OR status = 'draft')
       `)
-        .get(requestId)) as any;
+        .get(requestId)) as DbRow;
 
       if (!request) {
         return { success: false as const, error: 'Request not found or not ready for signature' };
@@ -306,7 +307,7 @@ async function applyDTASignature(
         FROM aft_requests
         WHERE id = ? AND dta_id = ?
       `)
-        .get(requestId, signerId)) as any;
+        .get(requestId, signerId)) as DbRow;
 
       if (!request) {
         return { success: false as const, error: 'Request not found or access denied' };
@@ -406,7 +407,7 @@ async function applySMESignature(
         FROM aft_requests
         WHERE id = ? AND status = 'pending_sme_signature'
       `)
-        .get(requestId)) as any;
+        .get(requestId)) as DbRow;
 
       if (!request) {
         return {
@@ -511,7 +512,7 @@ async function applyDTASignatureOnly(
         FROM aft_requests
         WHERE id = ? AND dta_id = ?
       `)
-        .get(requestId, signerId)) as any;
+        .get(requestId, signerId)) as DbRow;
 
       if (!request) {
         return { success: false as const, error: 'Request not found or access denied' };
@@ -655,7 +656,7 @@ async function getRequestSignatures(requestId: number): Promise<any[]> {
     WHERE request_id = ?
     ORDER BY created_at DESC
   `)
-    .all(requestId)) as any[];
+    .all(requestId)) as DbRow[];
 }
 
 async function verifySignatureIntegrity(
@@ -668,7 +669,7 @@ async function verifySignatureIntegrity(
       .query(`
       SELECT * FROM cac_signatures WHERE id = ?
     `)
-      .get(signatureId)) as any;
+      .get(signatureId)) as DbRow;
 
     if (!signature) {
       return { isValid: false, error: 'Signature not found' };
@@ -810,7 +811,7 @@ async function exportSignatureData(signatureId: number): Promise<any> {
     LEFT JOIN users u ON cs.user_id = u.id
     WHERE cs.id = ?
   `)
-    .get(signatureId)) as any;
+    .get(signatureId)) as DbRow;
 
   if (!signature) return null;
 

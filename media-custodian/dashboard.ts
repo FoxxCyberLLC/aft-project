@@ -1,26 +1,26 @@
 // Media Custodian Dashboard - Main media custodian landing page
 import { ComponentBuilder, Templates } from '../components/ui/server-components';
-import { getDb } from '../lib/database-bun';
+import { getDb, type DbRow } from '../lib/database-bun';
 import { MediaCustodianNavigation, type MediaCustodianUser } from './media-custodian-nav';
 
 async function render(user: MediaCustodianUser, _userId: number): Promise<string> {
   const db = getDb();
 
   // Get media custodian's statistics
-  const allRequests = (await db.query('SELECT COUNT(*) as count FROM aft_requests').get()) as any;
+  const allRequests = (await db.query('SELECT COUNT(*) as count FROM aft_requests').get()) as DbRow;
   const pendingRequests = (await db
     .query(`
     SELECT COUNT(*) as count FROM aft_requests 
     WHERE status IN ('submitted', 'pending_dao', 'pending_approver', 'pending_cpso')
   `)
-    .get()) as any;
+    .get()) as DbRow;
   const recentRequests = (await db
     .query(`
     SELECT * FROM aft_requests 
     ORDER BY created_at DESC 
     LIMIT 5
   `)
-    .all()) as any[];
+    .all()) as DbRow[];
 
   // Build action cards
   const allRequestsCard = Templates.adminCard({
@@ -33,7 +33,7 @@ async function render(user: MediaCustodianUser, _userId: number): Promise<string
     secondaryAction: { label: 'Filter', onClick: 'filterAllRequests()' },
     status: {
       label: 'Total Requests',
-      value: allRequests?.count?.toString() || '0',
+      value: Number(allRequests?.count).toString() || '0',
       status: 'operational',
     },
   });
@@ -56,7 +56,7 @@ async function render(user: MediaCustodianUser, _userId: number): Promise<string
     secondaryAction: { label: 'Process Queue', onClick: 'processQueue()' },
     status: {
       label: 'Pending',
-      value: pendingRequests?.count?.toString() || '0',
+      value: Number(pendingRequests?.count).toString() || '0',
       status: pendingRequests?.count > 0 ? 'warning' : 'operational',
     },
   });
@@ -77,10 +77,10 @@ async function render(user: MediaCustodianUser, _userId: number): Promise<string
 
   // Build statistics card
   const statsCard = MediaCustodianNavigation.renderQuickStats([
-    { label: 'Total Requests', value: allRequests?.count || 0, status: 'operational' },
+    { label: 'Total Requests', value: Number(allRequests?.count) || 0, status: 'operational' },
     {
       label: 'Pending Actions',
-      value: pendingRequests?.count || 0,
+      value: Number(pendingRequests?.count) || 0,
       status: pendingRequests?.count > 0 ? 'warning' : 'operational',
     },
     {
@@ -157,7 +157,7 @@ function buildRecentRequestsTable(requests: any[]): string {
     {
       key: 'request_number',
       label: 'Request Number',
-      render: (_value: any, row: any) => `
+      render: (_value: unknown, row: DbRow) => `
         <div>
           <div class="font-medium text-[var(--foreground)]">${row.request_number}</div>
           <div class="text-sm text-[var(--muted-foreground)]">ID: ${row.id}</div>
@@ -167,21 +167,21 @@ function buildRecentRequestsTable(requests: any[]): string {
     {
       key: 'requestor_email',
       label: 'Requestor',
-      render: (_value: any, row: any) => `
+      render: (_value: unknown, row: DbRow) => `
         <div class="text-sm text-[var(--foreground)]">${row.requestor_email}</div>
       `,
     },
     {
       key: 'transfer_type',
       label: 'Type',
-      render: (_value: any, row: any) => `
+      render: (_value: unknown, row: DbRow) => `
         <div class="text-sm text-[var(--foreground)]">${row.transfer_type}</div>
       `,
     },
     {
       key: 'status',
       label: 'Status',
-      render: (_value: any, row: any) => {
+      render: (_value: unknown, row: DbRow) => {
         const statusVariant = {
           draft: 'default',
           submitted: 'info',
@@ -202,14 +202,14 @@ function buildRecentRequestsTable(requests: any[]): string {
     {
       key: 'created_at',
       label: 'Submitted',
-      render: (_value: any, row: any) => `
-        <div class="text-sm text-[var(--foreground)]">${new Date(row.created_at * 1000).toLocaleDateString()}</div>
+      render: (_value: unknown, row: DbRow) => `
+        <div class="text-sm text-[var(--foreground)]">${new Date((row.created_at as number) * 1000).toLocaleDateString()}</div>
       `,
     },
     {
       key: 'actions',
       label: 'Actions',
-      render: (_value: any, row: any) =>
+      render: (_value: unknown, row: DbRow) =>
         ComponentBuilder.tableCellActions([
           { label: 'View', onClick: `viewRequest(${row.id})`, variant: 'secondary' },
           { label: 'Process', onClick: `processRequest(${row.id})`, variant: 'primary' },

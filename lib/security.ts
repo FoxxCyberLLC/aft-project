@@ -1,5 +1,6 @@
 // DOD-compliant security module for AFT application
 import { getDb } from './database-bun';
+import type { DbRow } from './database-bun';
 
 // Security configuration
 export const SECURITY_CONFIG = {
@@ -91,7 +92,7 @@ async function initializeSessionStore() {
     .query(`
     SELECT * FROM sessions WHERE is_active = TRUE
   `)
-    .all()) as any[];
+    .all()) as DbRow[];
 
   existingSessions.forEach((row) => {
     const session: SecureSession = {

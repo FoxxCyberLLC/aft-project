@@ -1,6 +1,6 @@
 // Admin Reports Interface
 import { ComponentBuilder } from '../components/ui/server-components';
-import { getDb } from '../lib/database-bun';
+import { getDb, type DbRow } from '../lib/database-bun';
 import { AdminNavigation, type AdminUser } from './admin-nav';
 
 async function renderReportsPage(user: AdminUser): Promise<string> {
@@ -8,40 +8,40 @@ async function renderReportsPage(user: AdminUser): Promise<string> {
 
   // Get report data
   const userStats = {
-    total: (await db.query('SELECT COUNT(*) as count FROM users').get()) as any,
+    total: (await db.query('SELECT COUNT(*) as count FROM users').get()) as DbRow,
     active: (await db
       .query('SELECT COUNT(*) as count FROM users WHERE is_active = TRUE')
-      .get()) as any,
+      .get()) as DbRow,
     inactive: (await db
       .query('SELECT COUNT(*) as count FROM users WHERE is_active = FALSE')
-      .get()) as any,
+      .get()) as DbRow,
   };
 
   const requestStats = {
-    total: (await db.query('SELECT COUNT(*) as count FROM aft_requests').get()) as any,
+    total: (await db.query('SELECT COUNT(*) as count FROM aft_requests').get()) as DbRow,
     pending: (await db
       .query(
         "SELECT COUNT(*) as count FROM aft_requests WHERE status NOT IN ('completed', 'rejected', 'cancelled')",
       )
-      .get()) as any,
+      .get()) as DbRow,
     completed: (await db
       .query("SELECT COUNT(*) as count FROM aft_requests WHERE status = 'completed'")
-      .get()) as any,
+      .get()) as DbRow,
   };
 
   const securityStats = {
     totalLogins: (await db
       .query("SELECT COUNT(*) as count FROM security_audit_log WHERE action = 'LOGIN_SUCCESS'")
-      .get()) as any,
+      .get()) as DbRow,
     failedLogins: (await db
       .query("SELECT COUNT(*) as count FROM security_audit_log WHERE action = 'LOGIN_FAILED'")
-      .get()) as any,
+      .get()) as DbRow,
     todayLogins: (await db
       .query(`
       SELECT COUNT(*) as count FROM security_audit_log 
       WHERE action = 'LOGIN_SUCCESS' AND timestamp > (EXTRACT(EPOCH FROM NOW())::BIGINT - 86400)
     `)
-      .get()) as any,
+      .get()) as DbRow,
   };
 
   const reportCards = [

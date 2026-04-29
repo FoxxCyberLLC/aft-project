@@ -1,6 +1,6 @@
 // Role-based middleware for request authorization
 
-import { UserRole, type UserRoleType } from '../lib/database-bun';
+import { UserRole, type UserRoleType, type DbRow } from '../lib/database-bun';
 import { type SecureSession, validateSession } from '../lib/security';
 
 // Check if user is authenticated and has selected a role
@@ -180,7 +180,7 @@ async function checkAuthAndRole(
   const session = await requireAuth(request, ipAddress);
 
   if (!session) {
-    return { session: null as any, response: redirectToLogin() };
+    return { session: null as DbRow, response: redirectToLogin() };
   }
 
   // Check if role is selected
