@@ -1,5 +1,5 @@
 // Authentication page routes
-import { getDb, type DbRow } from '../../lib/database-bun';
+import { getDb, type DbRow, type UserRoleType } from '../../lib/database-bun';
 import { buildClearAuthCookies, destroySession } from '../../lib/security';
 import { LoginPage } from '../../login/login-page';
 import { RoleMiddleware } from '../../middleware/role-middleware';
@@ -13,7 +13,7 @@ export async function handleLoginPage(request: Request, ipAddress: string): Prom
   const auth = await checkAuth(request, ipAddress);
   if (auth) {
     if (auth.roleSelected) {
-      return Response.redirect(RoleMiddleware.getRoleDashboardUrl(auth.activeRole as DbRow), 302);
+      return Response.redirect(RoleMiddleware.getRoleDashboardUrl(auth.activeRole as UserRoleType), 302);
     } else {
       return Response.redirect('/select-role', 302);
     }
@@ -35,7 +35,7 @@ export async function handleRoleSelectionPage(
   }
 
   if (auth.roleSelected) {
-    return Response.redirect(RoleMiddleware.getRoleDashboardUrl(auth.activeRole as DbRow), 302);
+    return Response.redirect(RoleMiddleware.getRoleDashboardUrl(auth.activeRole as UserRoleType), 302);
   }
 
   // Get user details
@@ -46,7 +46,7 @@ export async function handleRoleSelectionPage(
 
   // Map available roles to UserRole objects
   const availableRoles = auth.availableRoles.map((role) => ({
-    role: role as DbRow,
+    role: role as UserRoleType,
     isPrimary: role === auth.primaryRole,
   }));
 
@@ -65,7 +65,7 @@ export async function handleDashboardRoutes(
 
   // Redirect to role-specific dashboard
   const activeRole = authResult.session.activeRole || authResult.session.primaryRole;
-  return Response.redirect(RoleMiddleware.getRoleDashboardUrl(activeRole as DbRow), 302);
+  return Response.redirect(RoleMiddleware.getRoleDashboardUrl(activeRole as UserRoleType), 302);
 }
 
 // Logout Handler

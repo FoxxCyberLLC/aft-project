@@ -20,10 +20,10 @@ async function render(user: ApproverUser, _userId: number): Promise<string> {
     WHERE r.status IN ('pending_approver', 'pending_approval', 'submitted')
     ORDER BY r.created_at DESC
   `)
-    .all()) as DbRow[];
+    .all()) as Array<{ id: number; request_number: string; requestor_name: string; transfer_type: string | null; classification: string | null; created_at: number; priority: string | null; }>;
 
   // Transform requests data for table
-  const tableData = pendingRequests.map((request: any) => ({
+  const tableData = pendingRequests.map((request) => ({
     id: request.id,
     request_number: request.request_number,
     requestor_name: request.requestor_name,

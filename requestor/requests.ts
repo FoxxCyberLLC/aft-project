@@ -21,9 +21,18 @@ async function render(
     WHERE r.requestor_id = ?
     ORDER BY r.created_at DESC
   `)
-    .all(userId || 0)) as DbRow[];
+    .all(userId || 0)) as Array<{
+    id: number;
+    request_number: string;
+    status: string;
+    transfer_type: string | null;
+    classification: string | null;
+    created_at: number;
+    source_system: string | null;
+    dest_system: string | null;
+  }>;
 
-  const tableData = userRequests.map((request: any) => ({
+  const tableData = userRequests.map((request) => ({
     id: request.id,
     request_number: request.request_number,
     status: request.status,

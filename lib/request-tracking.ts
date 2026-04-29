@@ -379,7 +379,24 @@ async function getRequestsWithTimeline(filters?: {
   dta_id?: number;
   limit?: number;
   offset?: number;
-}): Promise<Array<any>> {
+}): Promise<Array<DbRow & {
+  id: number;
+  request_number: string;
+  requestor_name: string;
+  status: AFTStatusType;
+  created_at: number;
+  updated_at: number;
+  transfer_type: string | null;
+  classification: string | null;
+  source_system: string | null;
+  dest_system: string | null;
+  dta_id: number | null;
+  selected_drive_id: number | null;
+  timeline_progress: number;
+  total_steps: number;
+  current_step: number;
+  is_terminal: boolean;
+}>> {
   const db = getDb();
 
   let query = `
@@ -429,7 +446,20 @@ async function getRequestsWithTimeline(filters?: {
   }
 
   const requests = (await db.query(query).all(...params)) as Array<
-    DbRow & { status: AFTStatusType }
+    DbRow & {
+      id: number;
+      request_number: string;
+      requestor_name: string;
+      status: AFTStatusType;
+      created_at: number;
+      updated_at: number;
+      transfer_type: string | null;
+      classification: string | null;
+      source_system: string | null;
+      dest_system: string | null;
+      dta_id: number | null;
+      selected_drive_id: number | null;
+    }
   >;
 
   type Terminal =

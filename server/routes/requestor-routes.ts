@@ -111,7 +111,7 @@ export async function handleRequestDetailPage(
     LEFT JOIN users u ON ar.requestor_id = u.id
     WHERE ar.id = ? AND ar.requestor_id = ?
   `)
-    .get(requestId, userId)) as DbRow;
+    .get(requestId, userId)) as (DbRow & { id: number; request_number: string; status: string; files_list: string | null; rejection_reason: string | null; requestor_name: string; created_at: number; updated_at: number }) | undefined;
 
   if (!requestData) {
     return new Response('Request not found or access denied', { status: 404 });
@@ -131,7 +131,21 @@ export async function handleRequestDetailPage(
     ORDER BY cs.created_at DESC
     LIMIT 1
   `)
-    .get(requestId)) as DbRow;
+    .get(requestId)) as
+    | {
+        signer_name: string;
+        signer_email: string;
+        signature_timestamp: string;
+        signature_data: string;
+        notes: string | null;
+        certificate_subject: string;
+        certificate_issuer: string;
+        certificate_serial: string;
+        signature_algorithm: string;
+        certificate_not_before: number;
+        certificate_not_after: number;
+      }
+    | undefined;
 
   // Parse files list
   let files = [];

@@ -27,7 +27,7 @@ async function renderRequestsPage(
   });
 
   // Transform requests data for table
-  const tableData = requestsWithTimeline.map((request: any) => ({
+  const tableData = requestsWithTimeline.map((request) => ({
     id: request.id,
     request_number: request.request_number,
     requestor_name: request.requestor_name,

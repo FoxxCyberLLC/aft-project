@@ -369,7 +369,11 @@ async function handleAPI(
               const action = pathParts[2];
 
               if (action === 'issue' && method === 'POST') {
-                const body = (await request.json()) as DbRow;
+                const body = (await request.json()) as {
+                  userId?: string;
+                  user_id?: string;
+                  purpose: string;
+                };
                 const userId = parseInt((body.userId ?? body.user_id) as string, 10);
                 const result = await MediaCustodianAPI.issueDrive(driveId, userId, body.purpose);
                 return new Response(JSON.stringify(result), {

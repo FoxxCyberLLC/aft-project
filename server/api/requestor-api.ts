@@ -203,7 +203,7 @@ export async function handleRequestorAPI(
             WHERE issued_to_user_id = ? AND status = 'issued'
             ORDER BY issued_at DESC LIMIT 1
           `)
-            .get(parseInt(requestData.dta_id, 10))) as DbRow;
+            .get(parseInt(requestData.dta_id, 10))) as { id: number } | undefined;
           selectedDriveId = dtaDrive?.id || null;
         }
 
@@ -252,7 +252,7 @@ export async function handleRequestorAPI(
             requestData.dest_system || '',
             requestData.dest_location || '',
             requestData.destination_poc || '',
-            requestData.files || '[]',
+            JSON.stringify(requestData.files || []),
             !!requestData.additional_file_list_attached,
             !!requestData.media_encrypted,
             requestData.media_encrypted ? 'Yes' : 'No',
@@ -276,7 +276,7 @@ export async function handleRequestorAPI(
             WHERE issued_to_user_id = ? AND status = 'issued'
             ORDER BY issued_at DESC LIMIT 1
           `)
-            .get(parseInt(requestData.dta_id, 10))) as DbRow;
+            .get(parseInt(requestData.dta_id, 10))) as { id: number } | undefined;
           selectedDriveId = dtaDrive?.id || null;
         }
 
@@ -308,12 +308,12 @@ export async function handleRequestorAPI(
             requestData.dest_system || '',
             requestData.dest_location || '',
             requestData.destination_poc || '',
-            requestData.files || '[]',
+            JSON.stringify(requestData.files || []),
             !!requestData.additional_file_list_attached,
             !!requestData.media_encrypted,
             requestData.media_encrypted ? 'Yes' : 'No',
             transferDataJson,
-          )) as DbRow;
+          ));
 
         requestId = Number(result.lastInsertRowid);
       }
@@ -326,7 +326,7 @@ export async function handleRequestorAPI(
           FROM users
           WHERE id = ?
         `)
-          .get(parseInt(requestData.dta_id, 10))) as DbRow;
+          .get(parseInt(requestData.dta_id, 10))) as { email: string; first_name: string; last_name: string } | undefined;
 
         if (dtaUser) {
           await emailService.notifyDTASelection(requestId, dtaUser.email, {
@@ -432,7 +432,7 @@ export async function handleRequestorAPI(
         SELECT id, status, request_number, transfer_type FROM aft_requests 
         WHERE id = ? AND requestor_id = ?
       `)
-        .get(requestId, authResult.session.userId)) as DbRow;
+        .get(requestId, authResult.session.userId)) as { id: number; status: string; request_number: string; transfer_type: string | null; classification: string | null; } | undefined;
 
       console.log('Submit request - Request ID:', requestId, 'User ID:', authResult.session.userId);
       console.log('Found request:', existingRequest);

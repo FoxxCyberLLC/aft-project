@@ -1,5 +1,5 @@
 // Media Custodian API endpoints
-import { getDb, type DbRow } from '../../lib/database-bun';
+import { getDb, type DbRow, type AFTStatusType } from '../../lib/database-bun';
 import { RequestTrackingService } from '../../lib/request-tracking';
 
 // Get all users for assignment dropdowns
@@ -376,7 +376,7 @@ async function generateMediaInventoryReport(_params?: any): Promise<any> {
     title: 'Media Inventory Report',
     generated_at: new Date().toISOString(),
     summary: {
-      total_drives: statusCounts.reduce((sum, item) => sum + item.count, 0),
+      total_drives: statusCounts.reduce((sum, item) => sum + Number(item.count), 0),
       by_status: statusCounts,
       by_type: typeCounts,
     },
@@ -425,7 +425,7 @@ async function generateRequestSummaryReport(_params?: any): Promise<any> {
     title: 'Request Summary Report',
     generated_at: new Date().toISOString(),
     summary: {
-      total_requests: statusCounts.reduce((sum, item) => sum + item.count, 0),
+      total_requests: statusCounts.reduce((sum, item) => sum + Number(item.count), 0),
       by_status: statusCounts,
       monthly_trends: monthlyTrends,
     },
@@ -447,7 +447,14 @@ async function generateDriveUtilizationReport(_params?: any): Promise<any> {
       SUM(CASE WHEN status = 'maintenance' THEN 1 ELSE 0 END) as maintenance_drives
     FROM media_drives
   `)
-    .get()) as DbRow;
+    .get()) as
+    | {
+        total_drives: number;
+        issued_drives: number;
+        available_drives: number;
+        maintenance_drives: number;
+      }
+    | undefined;
 
   // Get top users by drive usage
   const topUsers = (await db
@@ -466,7 +473,7 @@ async function generateDriveUtilizationReport(_params?: any): Promise<any> {
     .all()) as DbRow[];
 
   const utilizationRate =
-    utilization.total_drives > 0
+    utilization && utilization.total_drives > 0
       ? ((utilization.issued_drives / utilization.total_drives) * 100).toFixed(1)
       : '0.0';
 
@@ -509,7 +516,7 @@ async function generateUserActivityReport(_params?: any): Promise<any> {
     user_activity: userActivity.map((user) => ({
       ...user,
       last_request_date: user.last_request_date
-        ? new Date(user.last_request_date * 1000).toISOString().split('T')[0]
+        ? new Date(Number(user.last_request_date) * 1000).toISOString().split('T')[0]
         : 'Never',
     })),
   };
@@ -578,7 +585,7 @@ async function processRequest(
 
           // Return the drive if one is associated
           if (request.selected_drive_id) {
-            const returnResult = await returnDrive(request.selected_drive_id);
+            const returnResult = await returnDrive(Number(request.selected_drive_id));
             if (!returnResult.success) {
               return {
                 success: false,
@@ -632,7 +639,7 @@ async function processRequest(
     const success = await RequestTrackingService.updateRequestStatus(
       requestId,
       userId,
-      newStatus as DbRow,
+      newStatus as AFTStatusType,
       notes,
     );
 

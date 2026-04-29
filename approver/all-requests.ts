@@ -27,7 +27,7 @@ async function render(
 
   // Enhance with DTA and drive information
   const tableData = await Promise.all(
-    requestsWithTimeline.map(async (request: any) => {
+    requestsWithTimeline.map(async (request) => {
       // Get DTA information
       type DtaInfo = { first_name: string; last_name: string; email: string };
       let dtaInfo: DtaInfo | null = null;
@@ -292,7 +292,7 @@ async function render(
           <div class="text-sm text-[var(--muted-foreground)]">Completion Rate</div>
         </div>
         <div class="bg-[var(--card)] p-4 rounded-lg border border-[var(--border)]">
-          <div class="text-2xl font-bold text-[var(--info)]">${tableData.filter((r: any) => r.created_at > (Date.now() - 86400000) / 1000).length}</div>
+          <div class="text-2xl font-bold text-[var(--info)]">${tableData.filter((r) => r.created_at > (Date.now() - 86400000) / 1000).length}</div>
           <div class="text-sm text-[var(--muted-foreground)]">Today's Requests</div>
         </div>
       </div>
