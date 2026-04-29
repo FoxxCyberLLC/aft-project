@@ -86,7 +86,7 @@ async function render(user: CPSOUser): Promise<string> {
     .all(user.email, ...cpsoAdvancedStatuses)) as DbRow[];
 
   const approvalRate = stats.total?.count
-    ? Math.round((stats.approved?.count / stats.total?.count) * 100)
+    ? Math.round(((stats.approved?.count ?? 0) / stats.total.count) * 100)
     : 0;
 
   const content = `

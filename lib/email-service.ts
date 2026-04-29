@@ -397,7 +397,7 @@ export async function getNextApproverEmails(status: string): Promise<string[]> {
     JOIN user_roles ur ON ur.user_id = u.id
     WHERE ur.role = ? AND ur.is_active = TRUE AND u.is_active = TRUE
   `)
-    .all(role)) as DbRow[];
+    .all(role)) as Array<{ email: string }>;
 
   return users.map((u) => u.email);
 }

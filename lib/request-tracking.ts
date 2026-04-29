@@ -80,7 +80,7 @@ async function getRequestTimeline(requestId: number): Promise<RequestTimelineDat
     timeline_steps: timelineSteps,
     audit_entries: auditEntries,
     estimated_completion: estimateCompletion(request.status),
-    actual_completion: request.actual_end_date,
+    actual_completion: request.actual_end_date ?? undefined,
   };
 }
 
@@ -342,7 +342,7 @@ async function updateRequestStatus(
   try {
     const request = (await db
       .query('SELECT status FROM aft_requests WHERE id = ?')
-      .get(requestId)) as DbRow;
+      .get(requestId)) as { status: AFTStatusType } | undefined;
     if (!request) return false;
 
     const oldStatus = request.status;
@@ -428,7 +428,21 @@ async function getRequestsWithTimeline(filters?: {
     }
   }
 
-  const requests = (await db.query(query).all(...params)) as DbRow[];
+  const requests = (await db.query(query).all(...params)) as Array<
+    DbRow & { status: AFTStatusType }
+  >;
+
+  type Terminal =
+    | typeof AFTStatus.COMPLETED
+    | typeof AFTStatus.DISPOSED
+    | typeof AFTStatus.REJECTED
+    | typeof AFTStatus.CANCELLED;
+  const terminalStatuses: ReadonlyArray<Terminal> = [
+    AFTStatus.COMPLETED,
+    AFTStatus.DISPOSED,
+    AFTStatus.REJECTED,
+    AFTStatus.CANCELLED,
+  ];
 
   // Add timeline progress for each request
   return requests.map((request) => {
@@ -441,12 +455,7 @@ async function getRequestsWithTimeline(filters?: {
       timeline_progress: progress,
       total_steps: flow.length,
       current_step: currentIndex + 1,
-      is_terminal: [
-        AFTStatus.COMPLETED,
-        AFTStatus.DISPOSED,
-        AFTStatus.REJECTED,
-        AFTStatus.CANCELLED,
-      ].includes(request.status),
+      is_terminal: (terminalStatuses as ReadonlyArray<AFTStatusType>).includes(request.status),
     };
   });
 }

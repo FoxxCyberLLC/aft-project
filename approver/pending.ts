@@ -76,7 +76,7 @@ async function render(user: ApproverUser, _userId: number): Promise<string> {
         const isUrgent = (row.priority as string) === 'urgent';
         return `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${isUrgent ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'} ">
           ${isUrgent ? AlertCircleIcon({ size: 14 }) : ''}
-          ${row.priority.toUpperCase()}
+          ${String(row.priority).toUpperCase()}
         </span>`;
       },
     },

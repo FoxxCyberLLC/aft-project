@@ -99,9 +99,9 @@ async function render(
         const variant = statusVariant[row.status as string] || 'default';
         return `
           <div class="space-y-2">
-            ${ComponentBuilder.timelineStatusBadge(row.status, variant, true, {
-              current: row.current_step,
-              total: row.total_steps,
+            ${ComponentBuilder.timelineStatusBadge(row.status as string, variant, true, {
+              current: Number(row.current_step),
+              total: Number(row.total_steps),
             })}
             <div class="w-full bg-[var(--muted)] rounded-full h-1.5">
               <div class="bg-[var(--primary)] h-1.5 rounded-full transition-all duration-300" style="width: ${row.timeline_progress}%"></div>
