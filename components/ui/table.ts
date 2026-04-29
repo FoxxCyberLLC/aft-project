@@ -66,7 +66,7 @@ export function Table({
   compact = false,
   emptyMessage = 'No data available',
   loading = false,
-  onRowClick
+  onRowClick,
 }: TableProps): string {
   if (loading) {
     return `
@@ -91,28 +91,38 @@ export function Table({
     `;
   }
 
-  const headerCells = columns.map(column => `
+  const headerCells = columns
+    .map(
+      (column) => `
     <th class="text-${column.align || 'left'} px-4 py-3 font-medium text-[var(--foreground)] bg-[var(--muted)] ${column.width ? `w-${column.width}` : ''} ${column.sortable ? 'cursor-pointer hover:bg-[var(--secondary)] transition-colors' : ''}" ${column.sortable ? `onclick="sortTable('${column.key}')"` : ''}>
       <div class="flex items-center gap-2">
         ${column.label}
         ${column.sortable ? '<span class="sort-indicator text-xs text-[var(--muted-foreground)]">↕</span>' : ''}
       </div>
     </th>
-  `).join('');
+  `,
+    )
+    .join('');
 
-  const bodyRows = rows.map(row => `
+  const bodyRows = rows
+    .map(
+      (row) => `
     <tr class="${hoverable ? 'hover:bg-[var(--muted)] transition-colors' : ''} ${onRowClick ? 'cursor-pointer' : ''} ${bordered ? 'border-b border-[var(--border)]' : ''}" ${onRowClick ? `onclick="${onRowClick}('${row.id || ''}')"` : ''}>
-      ${columns.map(column => {
-        const value = row[column.key];
-        const displayValue = column.render ? column.render(value, row) : (value || '');
-        return `
+      ${columns
+        .map((column) => {
+          const value = row[column.key];
+          const displayValue = column.render ? column.render(value, row) : value || '';
+          return `
           <td class="px-4 py-${compact ? '2' : '3'} text-${column.align || 'left'}">
             ${displayValue}
           </td>
         `;
-      }).join('')}
+        })
+        .join('')}
     </tr>
-  `).join('');
+  `,
+    )
+    .join('');
 
   return `
     <div class="bg-[var(--card)] rounded-lg border border-[var(--border)] overflow-hidden ${className}">
@@ -132,10 +142,10 @@ export function Table({
   `;
 }
 
-export function TableSearch({ 
-  placeholder = 'Search...', 
+export function TableSearch({
+  placeholder = 'Search...',
   onSearch = 'handleSearch',
-  className = ''
+  className = '',
 }: TableSearchProps): string {
   return `
     <div class="relative ${className}">
@@ -154,21 +164,26 @@ export function TableSearch({
   `;
 }
 
-export function TableFilters({
-  filters,
-  className = ''
-}: TableFiltersProps): string {
-  const filterElements = filters.map(filter => `
+export function TableFilters({ filters, className = '' }: TableFiltersProps): string {
+  const filterElements = filters
+    .map(
+      (filter) => `
     <select 
       class="px-3 py-2 border border-[var(--border)] rounded-md bg-[var(--background)] text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)] transition-colors"
       ${filter.onChange ? `onchange="${filter.onChange}(this.value)"` : ''}
     >
       <option value="">${filter.label}</option>
-      ${filter.options.map(option => `
+      ${filter.options
+        .map(
+          (option) => `
         <option value="${option.value}">${option.label}</option>
-      `).join('')}
+      `,
+        )
+        .join('')}
     </select>
-  `).join('');
+  `,
+    )
+    .join('');
 
   return `
     <div class="flex gap-3 ${className}">
@@ -180,9 +195,11 @@ export function TableFilters({
 export function TableActions({
   primary,
   secondary = [],
-  className = ''
+  className = '',
 }: TableActionsProps): string {
-  const secondaryButtons = secondary.map(action => `
+  const secondaryButtons = secondary
+    .map(
+      (action) => `
     <button 
       onclick="${action.onClick}"
       class="px-3 py-2 bg-[var(--secondary)] text-[var(--secondary-foreground)] border border-[var(--border)] rounded-md hover:bg-[var(--muted)] transition-colors text-sm font-medium flex items-center gap-2"
@@ -190,17 +207,25 @@ export function TableActions({
       ${action.icon || ''}
       ${action.label}
     </button>
-  `).join('');
+  `,
+    )
+    .join('');
 
   return `
     <div class="flex gap-3 items-center ${className}">
-      ${secondary.length > 0 ? `
+      ${
+        secondary.length > 0
+          ? `
         <div class="flex gap-2">
           ${secondaryButtons}
         </div>
-      ` : ''}
+      `
+          : ''
+      }
       
-      ${primary ? `
+      ${
+        primary
+          ? `
         <button 
           onclick="${primary.onClick}"
           class="px-4 py-2 bg-[var(--primary)] text-[var(--primary-foreground)] rounded-md hover:bg-[var(--primary)]/90 transition-colors text-sm font-weight-600 flex items-center gap-2"
@@ -208,7 +233,9 @@ export function TableActions({
           ${primary.icon || ''}
           ${primary.label}
         </button>
-      ` : ''}
+      `
+          : ''
+      }
     </div>
   `;
 }
@@ -220,7 +247,7 @@ export function TableContainer({
   filters,
   actions,
   table,
-  className = ''
+  className = '',
 }: {
   title?: string;
   description?: string;
@@ -232,14 +259,20 @@ export function TableContainer({
 }): string {
   return `
     <div class="space-y-6 ${className}">
-      ${title ? `
+      ${
+        title
+          ? `
         <div>
           <h2 class="text-xl font-semibold text-[var(--foreground)] mb-1">${title}</h2>
           ${description ? `<p class="text-[var(--muted-foreground)] text-sm">${description}</p>` : ''}
         </div>
-      ` : ''}
+      `
+          : ''
+      }
       
-      ${search || filters || actions ? `
+      ${
+        search || filters || actions
+          ? `
         <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div class="flex flex-col sm:flex-row gap-3">
             ${search || ''}
@@ -247,7 +280,9 @@ export function TableContainer({
           </div>
           ${actions || ''}
         </div>
-      ` : ''}
+      `
+          : ''
+      }
       
       ${table}
     </div>
@@ -255,13 +290,17 @@ export function TableContainer({
 }
 
 // Utility function to generate status badges
-export function StatusBadge(status: string, variant?: 'default' | 'success' | 'warning' | 'error' | 'info'): string {
+export function StatusBadge(
+  status: string,
+  variant?: 'default' | 'success' | 'warning' | 'error' | 'info',
+): string {
   const variants = {
     default: 'bg-[var(--secondary)] text-[var(--secondary-foreground)]',
     success: 'bg-[var(--success)]/10 text-[var(--success)] border border-[var(--success)]/20',
     warning: 'bg-[var(--warning)]/10 text-[var(--warning)] border border-[var(--warning)]/20',
-    error: 'bg-[var(--destructive)]/10 text-[var(--destructive)] border border-[var(--destructive)]/20',
-    info: 'bg-[var(--info)]/10 text-[var(--info)] border border-[var(--info)]/20'
+    error:
+      'bg-[var(--destructive)]/10 text-[var(--destructive)] border border-[var(--destructive)]/20',
+    info: 'bg-[var(--info)]/10 text-[var(--info)] border border-[var(--info)]/20',
   };
 
   const variantClass = variants[variant || 'default'];
@@ -274,29 +313,35 @@ export function StatusBadge(status: string, variant?: 'default' | 'success' | 'w
 }
 
 // Utility function for action buttons in table cells
-export function TableCellActions(actions: Array<{
-  label: string;
-  onClick: string;
-  variant?: 'primary' | 'secondary' | 'destructive';
-  size?: 'sm' | 'xs';
-}>): string {
+export function TableCellActions(
+  actions: Array<{
+    label: string;
+    onClick: string;
+    variant?: 'primary' | 'secondary' | 'destructive';
+    size?: 'sm' | 'xs';
+  }>,
+): string {
   return `
     <div class="flex gap-1">
-      ${actions.map(action => {
-        const variants = {
-          primary: 'bg-[var(--primary)] text-[var(--primary-foreground)] hover:bg-[var(--primary)]/90',
-          secondary: 'bg-[var(--secondary)] text-[var(--secondary-foreground)] hover:bg-[var(--muted)]',
-          destructive: 'bg-[var(--destructive)] text-[var(--destructive-foreground)] hover:bg-[var(--destructive)]/90'
-        };
-        const sizes = {
-          xs: 'px-2 py-1 text-xs',
-          sm: 'px-3 py-1.5 text-sm'
-        };
-        
-        const variantClass = variants[action.variant || 'secondary'];
-        const sizeClass = sizes[action.size || 'xs'];
-        
-        return `
+      ${actions
+        .map((action) => {
+          const variants = {
+            primary:
+              'bg-[var(--primary)] text-[var(--primary-foreground)] hover:bg-[var(--primary)]/90',
+            secondary:
+              'bg-[var(--secondary)] text-[var(--secondary-foreground)] hover:bg-[var(--muted)]',
+            destructive:
+              'bg-[var(--destructive)] text-[var(--destructive-foreground)] hover:bg-[var(--destructive)]/90',
+          };
+          const sizes = {
+            xs: 'px-2 py-1 text-xs',
+            sm: 'px-3 py-1.5 text-sm',
+          };
+
+          const variantClass = variants[action.variant || 'secondary'];
+          const sizeClass = sizes[action.size || 'xs'];
+
+          return `
           <button 
             onclick="${action.onClick}"
             class="${variantClass} ${sizeClass} rounded transition-colors font-medium"
@@ -304,7 +349,8 @@ export function TableCellActions(actions: Array<{
             ${action.label}
           </button>
         `;
-      }).join('')}
+        })
+        .join('')}
     </div>
   `;
 }

@@ -3,7 +3,17 @@
 export interface InputProps {
   id?: string;
   name?: string;
-  type?: 'text' | 'email' | 'password' | 'tel' | 'url' | 'search' | 'number' | 'date' | 'datetime-local' | 'time';
+  type?:
+    | 'text'
+    | 'email'
+    | 'password'
+    | 'tel'
+    | 'url'
+    | 'search'
+    | 'number'
+    | 'date'
+    | 'datetime-local'
+    | 'time';
   placeholder?: string;
   value?: string;
   required?: boolean;
@@ -56,7 +66,7 @@ export function Input({
   className = '',
   onChange,
   onFocus,
-  onBlur
+  onBlur,
 }: InputProps): string {
   const baseClasses = [
     'w-full',
@@ -76,7 +86,7 @@ export function Input({
     'focus:border-[var(--ring)]',
     'disabled:opacity-50',
     'disabled:cursor-not-allowed',
-    'readonly:opacity-75'
+    'readonly:opacity-75',
   ];
 
   const allClasses = [...baseClasses, className].filter(Boolean).join(' ');
@@ -99,19 +109,8 @@ export function Input({
   `;
 }
 
-export function Label({
-  htmlFor,
-  required = false,
-  className = '',
-  children
-}: LabelProps): string {
-  const baseClasses = [
-    'block',
-    'text-sm',
-    'font-medium',
-    'text-[var(--foreground)]',
-    'mb-2'
-  ];
+export function Label({ htmlFor, required = false, className = '', children }: LabelProps): string {
+  const baseClasses = ['block', 'text-sm', 'font-medium', 'text-[var(--foreground)]', 'mb-2'];
 
   const allClasses = [...baseClasses, className].filter(Boolean).join(' ');
 
@@ -134,7 +133,7 @@ export function Select({
   className = '',
   onChange,
   options,
-  placeholder
+  placeholder,
 }: SelectProps): string {
   const baseClasses = [
     'w-full',
@@ -152,14 +151,17 @@ export function Select({
     'focus:ring-[var(--ring)]',
     'focus:border-[var(--ring)]',
     'disabled:opacity-50',
-    'disabled:cursor-not-allowed'
+    'disabled:cursor-not-allowed',
   ];
 
   const allClasses = [...baseClasses, className].filter(Boolean).join(' ');
 
   const optionElements = [
-    placeholder ? `<option value="" disabled ${!value ? 'selected' : ''}>${placeholder}</option>` : '',
-    ...options.map(option => `
+    placeholder
+      ? `<option value="" disabled ${!value ? 'selected' : ''}>${placeholder}</option>`
+      : '',
+    ...options.map(
+      (option) => `
       <option 
         value="${option.value}" 
         ${value === option.value ? 'selected' : ''}
@@ -167,8 +169,11 @@ export function Select({
       >
         ${option.label}
       </option>
-    `)
-  ].filter(Boolean).join('');
+    `,
+    ),
+  ]
+    .filter(Boolean)
+    .join('');
 
   return `
     <select
@@ -197,7 +202,7 @@ export function Textarea({
   onFocus,
   onBlur,
   rows = 4,
-  cols
+  cols,
 }: TextareaProps): string {
   const baseClasses = [
     'w-full',
@@ -218,7 +223,7 @@ export function Textarea({
     'disabled:opacity-50',
     'disabled:cursor-not-allowed',
     'readonly:opacity-75',
-    'resize-y'
+    'resize-y',
   ];
 
   const allClasses = [...baseClasses, className].filter(Boolean).join(' ');
@@ -241,10 +246,7 @@ export function Textarea({
   `;
 }
 
-export function FormGroup({
-  className = '',
-  children
-}: FormGroupProps): string {
+export function FormGroup({ className = '', children }: FormGroupProps): string {
   const baseClasses = ['mb-4'];
   const allClasses = [...baseClasses, className].filter(Boolean).join(' ');
 
@@ -259,7 +261,7 @@ export function FormSection({
   title,
   description,
   children,
-  className = ''
+  className = '',
 }: {
   title: string;
   description?: string;
@@ -273,7 +275,7 @@ export function FormSection({
     'border-[var(--border)]',
     'last:border-b-0',
     'last:pb-0',
-    'last:mb-0'
+    'last:mb-0',
   ];
 
   const allClasses = [...baseClasses, className].filter(Boolean).join(' ');
@@ -293,7 +295,7 @@ export function FormSection({
 
 export function ErrorMessage({
   children,
-  className = ''
+  className = '',
 }: {
   children: string;
   className?: string;
@@ -304,7 +306,7 @@ export function ErrorMessage({
     'mt-1',
     'flex',
     'items-center',
-    'gap-1'
+    'gap-1',
   ];
 
   const allClasses = [...baseClasses, className].filter(Boolean).join(' ');
@@ -321,19 +323,12 @@ export function ErrorMessage({
 
 export function SuccessMessage({
   children,
-  className = ''
+  className = '',
 }: {
   children: string;
   className?: string;
 }): string {
-  const baseClasses = [
-    'text-sm',
-    'text-[var(--success)]',
-    'mt-1',
-    'flex',
-    'items-center',
-    'gap-1'
-  ];
+  const baseClasses = ['text-sm', 'text-[var(--success)]', 'mt-1', 'flex', 'items-center', 'gap-1'];
 
   const allClasses = [...baseClasses, className].filter(Boolean).join(' ');
 

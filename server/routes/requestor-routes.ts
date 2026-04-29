@@ -1,124 +1,149 @@
 // Requestor page routes
-import { getDb, UserRole } from "../../lib/database-bun";
-import { RoleMiddleware } from "../../middleware/role-middleware";
-import { RequestorDashboard } from "../../requestor/dashboard";
-import { RequestorRequests } from "../../requestor/requests";
-import { RequestWizard } from "../../requestor/request-wizard";
-import { RequestorAllRequests } from "../../requestor/all-requests";
-import { createHtmlPage } from "../utils";
-import { ChevronLeftIcon } from "../../components/icons";
+
+import { ChevronLeftIcon } from '../../components/icons';
+import { getDb } from '../../lib/database-bun';
+import { RoleMiddleware } from '../../middleware/role-middleware';
+import { RequestorAllRequests } from '../../requestor/all-requests';
+import { RequestorDashboard } from '../../requestor/dashboard';
+import { RequestWizard } from '../../requestor/request-wizard';
+import { RequestorRequests } from '../../requestor/requests';
+import { createHtmlPage } from '../utils';
 
 const db = getDb();
 
 // Requestor Routes Handler
-export async function handleRequestorRoutes(request: Request, path: string, ipAddress: string): Promise<Response> {
+export async function handleRequestorRoutes(
+  request: Request,
+  path: string,
+  ipAddress: string,
+): Promise<Response> {
   // Allow any authenticated user to access requestor routes (all users can be requestors)
   const authResult = await RoleMiddleware.checkAuth(request, ipAddress);
   if (authResult.response) return authResult.response;
-  
-  const user = { 
-    email: authResult.session.email, 
-    role: authResult.session.activeRole || authResult.session.primaryRole 
-  };
-  
-  switch (path) {
-    case '/requestor':
-      const dashboardHtml = await RequestorDashboard.render(user, authResult.session.userId);
-      return new Response(createHtmlPage(
-        "AFT - Requestor Dashboard",
-        dashboardHtml,
-        RequestorDashboard.getScript()
-      ), {
-        headers: { "Content-Type": "text/html" }
-      });
 
-    case '/requestor/requests':
+  const user = {
+    email: authResult.session.email,
+    role: authResult.session.activeRole || authResult.session.primaryRole,
+  };
+
+  switch (path) {
+    case '/requestor': {
+      const dashboardHtml = await RequestorDashboard.render(user, authResult.session.userId);
+      return new Response(
+        createHtmlPage('AFT - Requestor Dashboard', dashboardHtml, RequestorDashboard.getScript()),
+        {
+          headers: { 'Content-Type': 'text/html' },
+        },
+      );
+    }
+
+    case '/requestor/requests': {
       const requestsUrl = new URL(request.url);
       const viewMode = (requestsUrl.searchParams.get('view') as 'table' | 'timeline') || 'table';
-      const requestsHtml = await RequestorRequests.render(user, viewMode, authResult.session.userId);
-      return new Response(createHtmlPage(
-        "AFT - My Requests",
-        requestsHtml,
-        RequestorRequests.getScript()
-      ), {
-        headers: { "Content-Type": "text/html" }
-      });
+      const requestsHtml = await RequestorRequests.render(
+        user,
+        viewMode,
+        authResult.session.userId,
+      );
+      return new Response(
+        createHtmlPage('AFT - My Requests', requestsHtml, RequestorRequests.getScript()),
+        {
+          headers: { 'Content-Type': 'text/html' },
+        },
+      );
+    }
 
-    case '/requestor/all-requests':
+    case '/requestor/all-requests': {
       const allUrl = new URL(request.url);
       const allViewMode = (allUrl.searchParams.get('view') as 'table' | 'timeline') || 'table';
       const allHtml = await RequestorAllRequests.render(user, allViewMode);
-      return new Response(createHtmlPage(
-        "AFT - All Requests",
-        allHtml,
-        RequestorAllRequests.getScript()
-      ), {
-        headers: { "Content-Type": "text/html" }
-      });
+      return new Response(
+        createHtmlPage('AFT - All Requests', allHtml, RequestorAllRequests.getScript()),
+        {
+          headers: { 'Content-Type': 'text/html' },
+        },
+      );
+    }
 
-    case '/requestor/new-request':
+    case '/requestor/new-request': {
       const url = new URL(request.url);
-      const draftId = url.searchParams.get('draft') ? parseInt(url.searchParams.get('draft')!) : undefined;
+      const draftId = url.searchParams.get('draft')
+        ? parseInt(url.searchParams.get('draft')!, 10)
+        : undefined;
       const wizardHtml = await RequestWizard.render(user, authResult.session.userId, draftId);
-      return new Response(createHtmlPage(
-        "AFT - New Request",
-        wizardHtml,
-        RequestWizard.getScript()
-      ), {
-        headers: { "Content-Type": "text/html" }
-      });
+      return new Response(
+        createHtmlPage('AFT - New Request', wizardHtml, RequestWizard.getScript()),
+        {
+          headers: { 'Content-Type': 'text/html' },
+        },
+      );
+    }
 
     default:
       // Handle individual request routes like /requestor/requests/123
       if (path.startsWith('/requestor/requests/')) {
         const requestId = path.split('/')[3];
-        if (requestId && !isNaN(parseInt(requestId))) {
-          return await handleRequestDetailPage(request, parseInt(requestId), user, authResult.session.userId);
+        if (requestId && !Number.isNaN(parseInt(requestId, 10))) {
+          return await handleRequestDetailPage(
+            request,
+            parseInt(requestId, 10),
+            user,
+            authResult.session.userId,
+          );
         }
       }
-      return Response.redirect("/requestor", 302);
+      return Response.redirect('/requestor', 302);
   }
 }
 
 // Handle individual request detail page
-export async function handleRequestDetailPage(request: Request, requestId: number, user: any, userId: number): Promise<Response> {
+export async function handleRequestDetailPage(
+  _request: Request,
+  requestId: number,
+  _user: any,
+  userId: number,
+): Promise<Response> {
   // Get request details - ensure requestor can only view their own requests
-  const requestData = await db.query(`
+  const requestData = (await db
+    .query(`
     SELECT ar.*, u.first_name || ' ' || u.last_name as requestor_name
     FROM aft_requests ar
     LEFT JOIN users u ON ar.requestor_id = u.id
     WHERE ar.id = ? AND ar.requestor_id = ?
-  `).get(requestId, userId) as any;
-  
+  `)
+    .get(requestId, userId)) as any;
+
   if (!requestData) {
-    return new Response("Request not found or access denied", { status: 404 });
+    return new Response('Request not found or access denied', { status: 404 });
   }
-  
+
   // Get timeline data
   const { RequestTrackingService } = await import('../../lib/request-tracking');
-  const timelineData = RequestTrackingService.getRequestTimeline(requestId);
-  
+  const timelineData = await RequestTrackingService.getRequestTimeline(requestId);
+
   // Get CAC signature data for this request
-  const cacSignature = await db.query(`
+  const cacSignature = (await db
+    .query(`
     SELECT cs.*, u.first_name || ' ' || u.last_name as signer_name
     FROM cac_signatures cs
     LEFT JOIN users u ON cs.user_id = u.id
     WHERE cs.request_id = ?
     ORDER BY cs.created_at DESC
     LIMIT 1
-  `).get(requestId) as any;
-  
+  `)
+    .get(requestId)) as any;
+
   // Parse files list
   let files = [];
   try {
     files = JSON.parse(requestData.files_list || '[]');
-  } catch (e) {
+  } catch (_e) {
     files = [];
   }
-  
+
   const canSubmit = requestData.status === 'draft';
   const canEdit = ['draft'].includes(requestData.status);
-  
+
   const detailHtml = `
     <div class="min-h-screen bg-[var(--background)]">
       <div class="container mx-auto px-4 py-8">
@@ -136,13 +161,17 @@ export async function handleRequestDetailPage(request: Request, requestId: numbe
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <!-- Main Content -->
           <div class="lg:col-span-2 space-y-6">
-            ${requestData.status === 'rejected' && requestData.rejection_reason ? `
+            ${
+              requestData.status === 'rejected' && requestData.rejection_reason
+                ? `
             <div class="border-2 border-[var(--destructive)] bg-[var(--destructive)]/10 text-[var(--destructive)] rounded-lg p-4">
               <div class="font-semibold mb-1">Request Rejected</div>
               <div class="text-sm">Reason: ${requestData.rejection_reason}</div>
               <div class="text-xs text-[var(--muted-foreground)] mt-1">This request has been rejected and cannot be modified. Please create a new request if needed.</div>
             </div>
-            ` : ''}
+            `
+                : ''
+            }
             <!-- Request Information -->
             <div class="bg-[var(--card)] border border-[var(--border)] rounded-lg p-6">
               <h2 class="text-xl font-semibold mb-4">Request Information</h2>
@@ -173,16 +202,19 @@ export async function handleRequestDetailPage(request: Request, requestId: numbe
             <!-- Files List -->
             <div class="bg-[var(--card)] border border-[var(--border)] rounded-lg p-6">
               <h2 class="text-xl font-semibold mb-4">Files to Transfer</h2>
-              ${files.length > 0 ? `
+              ${
+                files.length > 0
+                  ? `
                 <div class="space-y-2">
-                  ${files.map((file: any) => {
-                    const base = (file?.name || '').toString();
-                    const ext = (file?.type || '').toString();
-                    const fullName = base && ext ? `${base}.${ext}` : base || '(unnamed)';
-                    const size = (file?.size || '').toString().trim();
-                    const sizeDisplay = size ? size : 'Size not specified';
-                    const classification = file?.classification || 'No classification';
-                    return `
+                  ${files
+                    .map((file: any) => {
+                      const base = (file?.name || '').toString();
+                      const ext = (file?.type || '').toString();
+                      const fullName = base && ext ? `${base}.${ext}` : base || '(unnamed)';
+                      const size = (file?.size || '').toString().trim();
+                      const sizeDisplay = size ? size : 'Size not specified';
+                      const classification = file?.classification || 'No classification';
+                      return `
                       <div class="flex items-center justify-between p-3 bg-[var(--muted)] rounded">
                         <div>
                           <div class="font-medium">${fullName}</div>
@@ -191,13 +223,18 @@ export async function handleRequestDetailPage(request: Request, requestId: numbe
                         <div class="text-sm text-[var(--muted-foreground)]">${classification}</div>
                       </div>
                     `;
-                  }).join('')}
+                    })
+                    .join('')}
                 </div>
-              ` : '<p class="text-[var(--muted-foreground)]">No files specified</p>'}
+              `
+                  : '<p class="text-[var(--muted-foreground)]">No files specified</p>'
+              }
             </div>
             
             <!-- CAC Digital Signature -->
-            ${cacSignature ? `
+            ${
+              cacSignature
+                ? `
             <div class="bg-[var(--card)] border border-[var(--border)] rounded-lg p-6">
               <h2 class="text-xl font-semibold mb-4 flex items-center gap-2">
                 <svg class="w-5 h-5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
@@ -244,17 +281,25 @@ export async function handleRequestDetailPage(request: Request, requestId: numbe
                   <label class="text-sm font-medium text-gray-600">Digital Signature Hash</label>
                   <div class="text-gray-900 text-xs font-mono break-all bg-gray-50 p-2 rounded mt-1">${cacSignature.signature_data}</div>
                 </div>
-                ${cacSignature.notes ? `
+                ${
+                  cacSignature.notes
+                    ? `
                 <div class="mt-3">
                   <label class="text-sm font-medium text-gray-600">Notes</label>
                   <div class="text-gray-900">${cacSignature.notes}</div>
                 </div>
-                ` : ''}
+                `
+                    : ''
+                }
               </div>
             </div>
-            ` : ''}
+            `
+                : ''
+            }
             
-            ${canSubmit ? `
+            ${
+              canSubmit
+                ? `
             <!-- Submission Section -->
             <div class="bg-[var(--card)] border border-[var(--border)] rounded-lg p-6">
               <h2 class="text-xl font-semibold mb-4">Review & Submit Request</h2>
@@ -330,7 +375,9 @@ export async function handleRequestDetailPage(request: Request, requestId: numbe
                 </button>
               </div>
             </div>
-            ` : ''}
+            `
+                : ''
+            }
           </div>
           
           <!-- Sidebar -->
@@ -353,12 +400,16 @@ export async function handleRequestDetailPage(request: Request, requestId: numbe
                   <span class="text-sm text-[var(--muted-foreground)]">Last Updated</span>
                   <span class="text-sm">${new Date(requestData.updated_at * 1000).toLocaleDateString()}</span>
                 </div>
-                ${requestData.rejection_reason ? `
+                ${
+                  requestData.rejection_reason
+                    ? `
                 <div>
                   <label class="text-sm font-medium text-[var(--muted-foreground)]">Rejection Reason</label>
                   <p class="text-sm text-[var(--destructive)] mt-1">${requestData.rejection_reason}</p>
                 </div>
-                ` : ''}
+                `
+                    : ''
+                }
               </div>
             </div>
             
@@ -373,37 +424,52 @@ export async function handleRequestDetailPage(request: Request, requestId: numbe
               </div>
             </div>
             
-            ${timelineData ? `
+            ${
+              timelineData
+                ? `
             <!-- Timeline Summary -->
             <div class="bg-[var(--card)] border border-[var(--border)] rounded-lg p-6">
               <h2 class="text-xl font-semibold mb-4">Timeline Progress</h2>
               <div class="space-y-2">
-                ${timelineData.timeline_steps.slice(0, 3).map(step => `
+                ${timelineData.timeline_steps
+                  .slice(0, 3)
+                  .map(
+                    (step) => `
                   <div class="flex items-center gap-2">
                     <div class="w-4 h-4 rounded-full flex items-center justify-center text-xs ${
-                      step.status === 'completed' ? 'bg-[var(--success)] text-white' :
-                      step.status === 'current' ? 'bg-[var(--primary)] text-white' :
-                      'bg-[var(--muted)] text-[var(--muted-foreground)]'
+                      step.status === 'completed'
+                        ? 'bg-[var(--success)] text-white'
+                        : step.status === 'current'
+                          ? 'bg-[var(--primary)] text-white'
+                          : 'bg-[var(--muted)] text-[var(--muted-foreground)]'
                     }">
                       ${step.status === 'completed' ? '✓' : step.status === 'current' ? '●' : '○'}
                     </div>
                     <span class="text-sm">${step.title}</span>
                   </div>
-                `).join('')}
-                ${timelineData.timeline_steps.length > 3 ? `
+                `,
+                  )
+                  .join('')}
+                ${
+                  timelineData.timeline_steps.length > 3
+                    ? `
                   <button onclick="viewTimeline(${requestId})" class="text-xs text-[var(--primary)] hover:underline">
                     View all ${timelineData.timeline_steps.length} steps
                   </button>
-                ` : ''}
+                `
+                    : ''
+                }
               </div>
             </div>
-            ` : ''}
+            `
+                : ''
+            }
           </div>
         </div>
       </div>
     </div>
   `;
-  
+
   const script = `
     // Handle signature method toggle
     const signatureRadios = document.querySelectorAll('input[name="signature_method"]');
@@ -604,12 +670,11 @@ export async function handleRequestDetailPage(request: Request, requestId: numbe
       document.body.appendChild(modalBackdrop);
     }
   `;
-  
-  return new Response(createHtmlPage(
-    `AFT - Request #${requestData.request_number}`,
-    detailHtml,
-    script
-  ), {
-    headers: { "Content-Type": "text/html" }
-  });
+
+  return new Response(
+    createHtmlPage(`AFT - Request #${requestData.request_number}`, detailHtml, script),
+    {
+      headers: { 'Content-Type': 'text/html' },
+    },
+  );
 }

@@ -1,21 +1,22 @@
 // AFT Server - Modular implementation
-import { initializeSecurity, applySecurityHeaders } from "./lib/security";
-import { waitForReady } from "./lib/database-bun";
-import { handleStaticFiles } from "./server/static-handler";
-import { handleAPI } from "./server/api/index";
+
+import { waitForReady } from './lib/database-bun';
+import { applySecurityHeaders, initializeSecurity } from './lib/security';
+import { handleAPI } from './server/api/index';
+import { handleAdminRoutes } from './server/routes/admin-routes';
+import { handleApproverRoutes } from './server/routes/approver-routes';
 import {
-  handleLoginPage,
-  handleRoleSelectionPage,
   handleDashboardRoutes,
-  handleLogout
-} from "./server/routes/auth-routes";
-import { handleAdminRoutes } from "./server/routes/admin-routes";
-import { handleRequestorRoutes } from "./server/routes/requestor-routes";
-import { handleApproverRoutes } from "./server/routes/approver-routes";
-import { handleMediaCustodianRoutes } from "./server/routes/media-custodian-routes";
-import { handleDTARoutes } from "./server/routes/dta-routes";
-import { handleSMERoutes } from "./server/routes/sme-routes";
-import { handleCPSORoutes } from "./server/routes/cpso-routes";
+  handleLoginPage,
+  handleLogout,
+  handleRoleSelectionPage,
+} from './server/routes/auth-routes';
+import { handleCPSORoutes } from './server/routes/cpso-routes';
+import { handleDTARoutes } from './server/routes/dta-routes';
+import { handleMediaCustodianRoutes } from './server/routes/media-custodian-routes';
+import { handleRequestorRoutes } from './server/routes/requestor-routes';
+import { handleSMERoutes } from './server/routes/sme-routes';
+import { handleStaticFiles } from './server/static-handler';
 
 // Wait for the database schema to be ready, then initialize the security module.
 await waitForReady();
@@ -27,7 +28,9 @@ await initializeSecurity();
 // headers or otherwise bypassing nginx.
 const PROXY_SHARED_SECRET = process.env.AFT_PROXY_SHARED_SECRET || '';
 if (!PROXY_SHARED_SECRET) {
-  console.warn('⚠️  AFT_PROXY_SHARED_SECRET is not set - skipping reverse-proxy authentication. Do NOT run in production without this.');
+  console.warn(
+    '⚠️  AFT_PROXY_SHARED_SECRET is not set - skipping reverse-proxy authentication. Do NOT run in production without this.',
+  );
 }
 
 // Constant-time string comparison to avoid timing oracles on the secret.
@@ -51,14 +54,12 @@ const SENSITIVE_HEADER_NAMES = [
   'x-client-cert-fingerprint',
   'x-client-cert-not-before',
   'x-client-cert-not-after',
-  'x-client-cert-pem'
+  'x-client-cert-pem',
 ];
 
 function sanitizeRequest(request: Request): Request {
   const proxySecret = request.headers.get('x-aft-proxy-secret') || '';
-  const trusted = PROXY_SHARED_SECRET
-    ? timingSafeEqual(proxySecret, PROXY_SHARED_SECRET)
-    : true; // No secret configured - dev mode, see warning above.
+  const trusted = PROXY_SHARED_SECRET ? timingSafeEqual(proxySecret, PROXY_SHARED_SECRET) : true; // No secret configured - dev mode, see warning above.
 
   // If the request did not come through a trusted proxy, drop any header that
   // claims to carry CAC certificate state. Otherwise, only honour CAC headers
@@ -77,7 +78,7 @@ function sanitizeRequest(request: Request): Request {
 
   const init: RequestInit = {
     method: request.method,
-    headers: cleanedHeaders
+    headers: cleanedHeaders,
   };
   // GET/HEAD requests must not carry a body when re-cloned through `new
   // Request()`. For other methods we forward the original body. duplex:'half'
@@ -124,42 +125,42 @@ Bun.serve({
     if (staticResponse) {
       return staticResponse;
     }
-    
+
     // Handle API routes
     if (path.startsWith('/api/')) {
       return applySecurityHeaders(await handleAPI(request, path, ipAddress));
     }
-    
+
     // Handle page routes
     let response: Response;
-    
+
     // Handle legacy dashboard routes - redirect to new role-specific routes
     if (path === '/dashboard/approver' || path === '/dashboard/cpso') {
       response = Response.redirect('/approver', 302);
     } else if (path === '/dashboard/dao') {
       // This role is not yet implemented, return appropriate message
-      response = new Response("This role dashboard is not yet implemented", { status: 501 });
+      response = new Response('This role dashboard is not yet implemented', { status: 501 });
     } else if (path.startsWith('/sme') || path === '/dashboard/sme') {
       response = await handleSMERoutes(request, path, ipAddress);
     } else if (path === '/dashboard/dta') {
       // Redirect legacy DTA dashboard route to new route
       response = Response.redirect('/dta', 302);
-    // Admin routes
+      // Admin routes
     } else if (path.startsWith('/admin')) {
       response = await handleAdminRoutes(request, path, ipAddress);
-    // Requestor routes
+      // Requestor routes
     } else if (path.startsWith('/requestor')) {
       response = await handleRequestorRoutes(request, path, ipAddress);
-    // Approver routes
+      // Approver routes
     } else if (path.startsWith('/approver')) {
       response = await handleApproverRoutes(request, path, ipAddress);
-    // Media custodian routes
+      // Media custodian routes
     } else if (path.startsWith('/media-custodian')) {
       response = await handleMediaCustodianRoutes(request, path, ipAddress);
-    // DTA routes
+      // DTA routes
     } else if (path.startsWith('/dta')) {
       response = await handleDTARoutes(request, path, ipAddress);
-    // CPSO routes
+      // CPSO routes
     } else if (path.startsWith('/cpso')) {
       response = await handleCPSORoutes(request, path, ipAddress);
     } else {
@@ -179,17 +180,17 @@ Bun.serve({
           response = await handleLogout(request);
           break;
         default:
-          response = new Response("Page not found", { status: 404 });
+          response = new Response('Page not found', { status: 404 });
       }
     }
-    
+
     // Apply security headers to all responses
     return applySecurityHeaders(response);
   },
 });
 
-console.log("AFT Server listening on http://127.0.0.1:3001 (loopback only)");
-console.log("Multi-role authentication enabled - public entry point is nginx (HTTPS + CAC)");
+console.log('AFT Server listening on http://127.0.0.1:3001 (loopback only)');
+console.log('Multi-role authentication enabled - public entry point is nginx (HTTPS + CAC)');
 if (!PROXY_SHARED_SECRET) {
-  console.log("WARNING: AFT_PROXY_SHARED_SECRET not set - reverse-proxy auth disabled.");
+  console.log('WARNING: AFT_PROXY_SHARED_SECRET not set - reverse-proxy auth disabled.');
 }

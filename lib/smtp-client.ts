@@ -57,7 +57,7 @@ export class SMTPClient {
       ehloName: 'localhost',
       tlsRejectUnauthorized: true,
       auth: undefined,
-      ...config
+      ...config,
     } as any;
   }
 
@@ -99,7 +99,7 @@ export class SMTPClient {
           resolveData = null;
           r('');
         }
-      }
+      },
     };
 
     const tlsOptions = this.config.secure
@@ -110,7 +110,7 @@ export class SMTPClient {
       hostname: this.config.host,
       port: this.config.port,
       tls: tlsOptions,
-      socket: handlers
+      socket: handlers,
     });
 
     const readChunk = (): Promise<string> =>
@@ -151,9 +151,11 @@ export class SMTPClient {
     };
 
     const writeLine = async (line: string) => {
-      socket.write(line + '\r\n');
+      socket.write(`${line}\r\n`);
       // Bun sockets support flush() in newer versions; ignore otherwise.
-      try { (socket as any).flush?.(); } catch {}
+      try {
+        (socket as any).flush?.();
+      } catch {}
     };
 
     // Server greeting
@@ -176,12 +178,14 @@ export class SMTPClient {
       // If the running Bun version doesn't expose it, fail loudly rather than
       // continuing in plaintext.
       if (typeof (socket as any).upgradeTLS !== 'function') {
-        throw new Error('STARTTLS requested but this Bun runtime does not support socket.upgradeTLS(). Use port 465 (implicit TLS) instead.');
+        throw new Error(
+          'STARTTLS requested but this Bun runtime does not support socket.upgradeTLS(). Use port 465 (implicit TLS) instead.',
+        );
       }
       socket = await (socket as any).upgradeTLS({
         hostname: this.config.host,
         rejectUnauthorized: this.config.tlsRejectUnauthorized,
-        serverName: this.config.host
+        serverName: this.config.host,
       });
 
       // Send EHLO again on the now-secure channel.
@@ -202,7 +206,9 @@ export class SMTPClient {
         };
 
         if (supports('PLAIN')) {
-          const token = Buffer.from(`\0${this.config.auth.user}\0${this.config.auth.pass}`).toString('base64');
+          const token = Buffer.from(
+            `\0${this.config.auth.user}\0${this.config.auth.pass}`,
+          ).toString('base64');
           await writeLine(`AUTH PLAIN ${token}`);
           const r = await readResponse();
           if (r.code !== 235) throw new Error(`AUTH PLAIN failed: ${r.message}`);
@@ -229,7 +235,7 @@ export class SMTPClient {
     const set = new Set<string>();
     for (const line of response.split(/\r?\n/)) {
       const m = line.match(/^250[\s-](.+)$/);
-      if (m && m[1]) set.add(m[1].trim().toUpperCase());
+      if (m?.[1]) set.add(m[1].trim().toUpperCase());
     }
     return set;
   }
@@ -246,29 +252,32 @@ export class SMTPClient {
   }
 
   private encodeQuotedPrintable(text: string): string {
-    return text.split('\n').map(line => {
-      let encoded = '';
-      let lineLen = 0;
-      for (let i = 0; i < line.length; i++) {
-        const ch = line[i]!;
-        const code = ch.charCodeAt(0);
-        let chunk: string;
-        if (code === 61) {
-          chunk = '=3D';
-        } else if (code < 32 || code > 126) {
-          chunk = '=' + code.toString(16).toUpperCase().padStart(2, '0');
-        } else {
-          chunk = ch;
+    return text
+      .split('\n')
+      .map((line) => {
+        let encoded = '';
+        let lineLen = 0;
+        for (let i = 0; i < line.length; i++) {
+          const ch = line[i]!;
+          const code = ch.charCodeAt(0);
+          let chunk: string;
+          if (code === 61) {
+            chunk = '=3D';
+          } else if (code < 32 || code > 126) {
+            chunk = `=${code.toString(16).toUpperCase().padStart(2, '0')}`;
+          } else {
+            chunk = ch;
+          }
+          if (lineLen + chunk.length > 73) {
+            encoded += '=\r\n';
+            lineLen = 0;
+          }
+          encoded += chunk;
+          lineLen += chunk.length;
         }
-        if (lineLen + chunk.length > 73) {
-          encoded += '=\r\n';
-          lineLen = 0;
-        }
-        encoded += chunk;
-        lineLen += chunk.length;
-      }
-      return encoded;
-    }).join('\r\n');
+        return encoded;
+      })
+      .join('\r\n');
   }
 
   private buildMimeMessage(message: EmailMessage): string {
@@ -338,19 +347,25 @@ export class SMTPClient {
       // Dot-stuff lines that begin with '.' per RFC 5321 §4.5.2.
       const mime = this.buildMimeMessage(message)
         .split('\r\n')
-        .map(line => (line.startsWith('.') ? '.' + line : line))
+        .map((line) => (line.startsWith('.') ? `.${line}` : line))
         .join('\r\n');
-      socket.write(mime + '\r\n.\r\n');
+      socket.write(`${mime}\r\n.\r\n`);
       r = await readResponse();
       if (r.code !== 250) throw new Error(`Message rejected: ${r.message}`);
 
       const messageId = mime.match(/Message-ID:\s*(<[^>]+>)/i)?.[1] || this.generateMessageId();
       await writeLine('QUIT');
-      try { await readResponse(); } catch {}
-      try { socket.end(); } catch {}
+      try {
+        await readResponse();
+      } catch {}
+      try {
+        socket.end();
+      } catch {}
       return { messageId, accepted };
     } catch (err) {
-      try { socket.end(); } catch {}
+      try {
+        socket.end();
+      } catch {}
       throw err;
     }
   }
@@ -358,8 +373,12 @@ export class SMTPClient {
   async verify(): Promise<boolean> {
     try {
       const session = await this.openSession();
-      try { await session.writeLine('QUIT'); } catch {}
-      try { session.socket.end(); } catch {}
+      try {
+        await session.writeLine('QUIT');
+      } catch {}
+      try {
+        session.socket.end();
+      } catch {}
       return true;
     } catch (err) {
       console.error('SMTP verification failed:', err);

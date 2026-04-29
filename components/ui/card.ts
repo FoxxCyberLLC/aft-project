@@ -26,37 +26,36 @@ export function Card({
   className = '',
   children,
   hover = false,
-  variant = 'default'
+  variant = 'default',
 }: CardProps): string {
   const baseClasses = [
     'bg-[var(--card)]',
     'text-[var(--card-foreground)]',
     'rounded-lg',
     'border',
-    'border-[var(--border)]'
+    'border-[var(--border)]',
   ];
 
   const variantClasses = {
     default: ['shadow-[var(--shadow-sm)]'],
     elevated: ['shadow-[var(--shadow-lg)]'],
-    outlined: ['border-2', 'shadow-none']
+    outlined: ['border-2', 'shadow-none'],
   };
 
-  const hoverClasses = hover ? [
-    'transition-all',
-    'duration-200',
-    'hover:shadow-[var(--shadow-md)]',
-    'hover:border-[var(--primary)]',
-    'hover:-translate-y-1',
-    'cursor-pointer'
-  ] : [];
+  const hoverClasses = hover
+    ? [
+        'transition-all',
+        'duration-200',
+        'hover:shadow-[var(--shadow-md)]',
+        'hover:border-[var(--primary)]',
+        'hover:-translate-y-1',
+        'cursor-pointer',
+      ]
+    : [];
 
-  const allClasses = [
-    ...baseClasses,
-    ...variantClasses[variant],
-    ...hoverClasses,
-    className
-  ].filter(Boolean).join(' ');
+  const allClasses = [...baseClasses, ...variantClasses[variant], ...hoverClasses, className]
+    .filter(Boolean)
+    .join(' ');
 
   return `
     <div class="${allClasses}">
@@ -66,11 +65,7 @@ export function Card({
 }
 
 export function CardHeader({ className = '', children }: CardHeaderProps): string {
-  const classes = [
-    'p-6',
-    'pb-4',
-    className
-  ].filter(Boolean).join(' ');
+  const classes = ['p-6', 'pb-4', className].filter(Boolean).join(' ');
 
   return `
     <div class="${classes}">
@@ -80,11 +75,7 @@ export function CardHeader({ className = '', children }: CardHeaderProps): strin
 }
 
 export function CardContent({ className = '', children }: CardContentProps): string {
-  const classes = [
-    'p-6',
-    'pt-0',
-    className
-  ].filter(Boolean).join(' ');
+  const classes = ['p-6', 'pt-0', className].filter(Boolean).join(' ');
 
   return `
     <div class="${classes}">
@@ -94,13 +85,9 @@ export function CardContent({ className = '', children }: CardContentProps): str
 }
 
 export function CardFooter({ className = '', children }: CardFooterProps): string {
-  const classes = [
-    'p-6',
-    'pt-4',
-    'border-t',
-    'border-[var(--border)]',
-    className
-  ].filter(Boolean).join(' ');
+  const classes = ['p-6', 'pt-4', 'border-t', 'border-[var(--border)]', className]
+    .filter(Boolean)
+    .join(' ');
 
   return `
     <div class="${classes}">
@@ -109,26 +96,37 @@ export function CardFooter({ className = '', children }: CardFooterProps): strin
   `;
 }
 
-export function CardTitle({ className = '', children }: { className?: string; children: string }): string {
+export function CardTitle({
+  className = '',
+  children,
+}: {
+  className?: string;
+  children: string;
+}): string {
   const classes = [
     'text-lg',
     'font-semibold',
     'leading-none',
     'tracking-tight',
     'text-[var(--card-foreground)]',
-    className
-  ].filter(Boolean).join(' ');
+    className,
+  ]
+    .filter(Boolean)
+    .join(' ');
 
   return `<h3 class="${classes}">${children}</h3>`;
 }
 
-export function CardDescription({ className = '', children }: { className?: string; children: string }): string {
-  const classes = [
-    'text-sm',
-    'text-[var(--muted-foreground)]',
-    'mt-2',
-    className
-  ].filter(Boolean).join(' ');
+export function CardDescription({
+  className = '',
+  children,
+}: {
+  className?: string;
+  children: string;
+}): string {
+  const classes = ['text-sm', 'text-[var(--muted-foreground)]', 'mt-2', className]
+    .filter(Boolean)
+    .join(' ');
 
   return `<p class="${classes}">${children}</p>`;
 }
@@ -150,17 +148,19 @@ export function StatusCard({
   actions,
   className = '',
   hover = true,
-  variant = 'default'
+  variant = 'default',
 }: StatusCardProps): string {
-  const statusContent = items.map(item => {
-    const statusClass = item.status ? getStatusClass(item.status) : '';
-    return `
+  const statusContent = items
+    .map((item) => {
+      const statusClass = item.status ? getStatusClass(item.status) : '';
+      return `
       <div class="flex justify-between items-center py-2 border-b border-[var(--border)] last:border-b-0">
         <span class="text-sm text-[var(--muted-foreground)]">${item.label}</span>
         <span class="text-sm font-medium font-mono ${statusClass}">${item.value}</span>
       </div>
     `;
-  }).join('');
+    })
+    .join('');
 
   const cardContent = CardContent({
     children: `
@@ -168,16 +168,17 @@ export function StatusCard({
         ${statusContent}
       </div>
       ${actions ? `<div class="mt-6 pt-4 border-t border-[var(--border)]">${actions}</div>` : ''}
-    `
+    `,
   });
 
   return Card({
     className,
     hover,
     variant,
-    children: CardHeader({
-      children: CardTitle({ children: title })
-    }) + cardContent
+    children:
+      CardHeader({
+        children: CardTitle({ children: title }),
+      }) + cardContent,
   });
 }
 
@@ -189,7 +190,7 @@ function getStatusClass(status: string): string {
     attention: 'text-[var(--warning)]',
     warning: 'text-[var(--warning)]',
     error: 'text-[var(--destructive)]',
-    info: 'text-[var(--info)]'
+    info: 'text-[var(--info)]',
   };
   return statusClasses[status as keyof typeof statusClasses] || '';
 }

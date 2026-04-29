@@ -59,7 +59,7 @@ RUN apt-get update \
 # Install Bun from the official tarball into /usr/local. We can't use the
 # `oven/bun` image as a multi-stage source for the binary alone because the
 # runtime architecture must match.
-ARG BUN_VERSION=1.3.11
+ARG BUN_VERSION=1.3.13
 RUN set -eux; \
     arch="$(dpkg --print-architecture)"; \
     case "$arch" in \

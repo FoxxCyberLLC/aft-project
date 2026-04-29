@@ -26,8 +26,8 @@ export function escapeHtml(value: unknown): string {
 export function escapeCsv(value: unknown): string {
   if (value === null || value === undefined) return '""';
   let s = String(value);
-  if (/^[=+\-@]/.test(s)) s = "'" + s;
-  return '"' + s.replace(/"/g, '""') + '"';
+  if (/^[=+\-@]/.test(s)) s = `'${s}`;
+  return `"${s.replace(/"/g, '""')}"`;
 }
 
 /**
@@ -37,12 +37,15 @@ export function escapeCsv(value: unknown): string {
  * @param placeholder The string to return for invalid or null inputs.
  * @returns A formatted date string (e.g., "YYYY-MM-DD HH:mm:ss UTC") or the placeholder.
  */
-export function formatTimestamp(timestamp: number | Date | string | null | undefined, placeholder: string = 'N/A'): string {
+export function formatTimestamp(
+  timestamp: number | Date | string | null | undefined,
+  placeholder: string = 'N/A',
+): string {
   if (timestamp === null || timestamp === undefined || timestamp === 0) {
     return placeholder;
   }
 
-  let date;
+  let date: Date;
   if (typeof timestamp === 'number') {
     // Assuming the number is a Unix timestamp in seconds
     date = new Date(timestamp * 1000);
@@ -50,7 +53,7 @@ export function formatTimestamp(timestamp: number | Date | string | null | undef
     date = new Date(timestamp);
   }
 
-  if (isNaN(date.getTime())) {
+  if (Number.isNaN(date.getTime())) {
     return placeholder;
   }
 
@@ -70,19 +73,22 @@ export function formatTimestamp(timestamp: number | Date | string | null | undef
  * @param placeholder The string to return for invalid or null inputs.
  * @returns A relative time string or the placeholder.
  */
-export function timeAgo(timestamp: number | Date | string | null | undefined, placeholder: string = 'N/A'): string {
+export function timeAgo(
+  timestamp: number | Date | string | null | undefined,
+  placeholder: string = 'N/A',
+): string {
   if (timestamp === null || timestamp === undefined || timestamp === 0) {
     return placeholder;
   }
 
-  let date;
+  let date: Date;
   if (typeof timestamp === 'number') {
     date = new Date(timestamp * 1000);
   } else {
     date = new Date(timestamp);
   }
 
-  if (isNaN(date.getTime())) {
+  if (Number.isNaN(date.getTime())) {
     return placeholder;
   }
 
@@ -91,26 +97,26 @@ export function timeAgo(timestamp: number | Date | string | null | undefined, pl
 
   let interval = seconds / 31536000; // years
   if (interval > 1) {
-    return Math.floor(interval) + " years ago";
+    return `${Math.floor(interval)} years ago`;
   }
   interval = seconds / 2592000; // months
   if (interval > 1) {
-    return Math.floor(interval) + " months ago";
+    return `${Math.floor(interval)} months ago`;
   }
   interval = seconds / 86400; // days
   if (interval > 1) {
-    return Math.floor(interval) + " days ago";
+    return `${Math.floor(interval)} days ago`;
   }
   interval = seconds / 3600; // hours
   if (interval > 1) {
-    return Math.floor(interval) + " hours ago";
+    return `${Math.floor(interval)} hours ago`;
   }
   interval = seconds / 60; // minutes
   if (interval > 1) {
-    return Math.floor(interval) + " minutes ago";
+    return `${Math.floor(interval)} minutes ago`;
   }
   if (seconds < 10) {
-    return "just now";
+    return 'just now';
   }
-  return Math.floor(seconds) + " seconds ago";
+  return `${Math.floor(seconds)} seconds ago`;
 }

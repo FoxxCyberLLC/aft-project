@@ -1,13 +1,27 @@
 // Static file handler
-import { applySecurityHeaders } from "../lib/security";
-import * as path from "node:path";
+
+import * as path from 'node:path';
+import { applySecurityHeaders } from '../lib/security';
 
 const ALLOWED_LIB_EXTENSIONS = new Set(['.js', '.css', '.map']);
 const ALLOWED_STATIC_EXTENSIONS = new Set([
-  '.css', '.js', '.map',
-  '.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico', '.webp',
-  '.woff', '.woff2', '.ttf', '.otf', '.eot',
-  '.txt', '.json'
+  '.css',
+  '.js',
+  '.map',
+  '.png',
+  '.jpg',
+  '.jpeg',
+  '.gif',
+  '.svg',
+  '.ico',
+  '.webp',
+  '.woff',
+  '.woff2',
+  '.ttf',
+  '.otf',
+  '.eot',
+  '.txt',
+  '.json',
 ]);
 
 const STATIC_ROOT = path.resolve('./static');
@@ -31,21 +45,35 @@ function safeResolve(root: string, requestSubpath: string): string | null {
 function contentTypeFor(p: string): string {
   const ext = path.extname(p).toLowerCase();
   switch (ext) {
-    case '.css':  return 'text/css';
-    case '.js':   return 'application/javascript';
-    case '.json': return 'application/json';
-    case '.svg':  return 'image/svg+xml';
-    case '.png':  return 'image/png';
+    case '.css':
+      return 'text/css';
+    case '.js':
+      return 'application/javascript';
+    case '.json':
+      return 'application/json';
+    case '.svg':
+      return 'image/svg+xml';
+    case '.png':
+      return 'image/png';
     case '.jpg':
-    case '.jpeg': return 'image/jpeg';
-    case '.gif':  return 'image/gif';
-    case '.ico':  return 'image/x-icon';
-    case '.webp': return 'image/webp';
-    case '.woff': return 'font/woff';
-    case '.woff2':return 'font/woff2';
-    case '.ttf':  return 'font/ttf';
-    case '.otf':  return 'font/otf';
-    default:      return 'application/octet-stream';
+    case '.jpeg':
+      return 'image/jpeg';
+    case '.gif':
+      return 'image/gif';
+    case '.ico':
+      return 'image/x-icon';
+    case '.webp':
+      return 'image/webp';
+    case '.woff':
+      return 'font/woff';
+    case '.woff2':
+      return 'font/woff2';
+    case '.ttf':
+      return 'font/ttf';
+    case '.otf':
+      return 'font/otf';
+    default:
+      return 'application/octet-stream';
   }
 }
 
@@ -54,9 +82,11 @@ export async function handleStaticFiles(reqPath: string): Promise<Response | nul
   if (reqPath === '/globals.css') {
     const file = Bun.file('./globals.css');
     if (await file.exists()) {
-      return applySecurityHeaders(new Response(file, {
-        headers: { 'Content-Type': 'text/css' }
-      }));
+      return applySecurityHeaders(
+        new Response(file, {
+          headers: { 'Content-Type': 'text/css' },
+        }),
+      );
     }
   }
 
@@ -71,9 +101,11 @@ export async function handleStaticFiles(reqPath: string): Promise<Response | nul
     if (!absolute) return new Response('Forbidden', { status: 403 });
     const file = Bun.file(absolute);
     if (await file.exists()) {
-      return applySecurityHeaders(new Response(file, {
-        headers: { 'Content-Type': contentTypeFor(absolute) }
-      }));
+      return applySecurityHeaders(
+        new Response(file, {
+          headers: { 'Content-Type': contentTypeFor(absolute) },
+        }),
+      );
     }
     return new Response('File not found', { status: 404 });
   }
@@ -89,9 +121,11 @@ export async function handleStaticFiles(reqPath: string): Promise<Response | nul
     if (!absolute) return new Response('Forbidden', { status: 403 });
     const file = Bun.file(absolute);
     if (await file.exists()) {
-      return applySecurityHeaders(new Response(file, {
-        headers: { 'Content-Type': contentTypeFor(absolute) }
-      }));
+      return applySecurityHeaders(
+        new Response(file, {
+          headers: { 'Content-Type': contentTypeFor(absolute) },
+        }),
+      );
     }
     return new Response('File not found', { status: 404 });
   }

@@ -1,14 +1,19 @@
 // Main API router
-import { handleAuthAPI } from "./auth-api";
-import { handleAdminAPI } from "./admin-api";
-import { handleRequestorAPI } from "./requestor-api";
-import { handleApproverAPI } from "./approver-api";
-import { handleDTAAPI } from "./dta-api";
-import { handleSMEAPI } from "./sme-api";
-import { handleCPSOAPI } from "./cpso-api";
-import { handleTimelineAPI } from "./timeline-api";
 
-export async function handleAPI(request: Request, path: string, ipAddress: string): Promise<Response> {
+import { handleAdminAPI } from './admin-api';
+import { handleApproverAPI } from './approver-api';
+import { handleAuthAPI } from './auth-api';
+import { handleCPSOAPI } from './cpso-api';
+import { handleDTAAPI } from './dta-api';
+import { handleRequestorAPI } from './requestor-api';
+import { handleSMEAPI } from './sme-api';
+import { handleTimelineAPI } from './timeline-api';
+
+export async function handleAPI(
+  request: Request,
+  path: string,
+  ipAddress: string,
+): Promise<Response> {
   // Try each API module in order. NOTE: Media Custodian API routes are mounted
   // exclusively under /media-custodian/api/* (see server/routes/media-custodian-routes.ts)
   // so they go through the role-protected route handler. We deliberately do NOT
@@ -52,8 +57,8 @@ export async function handleAPI(request: Request, path: string, ipAddress: strin
   if (response) return response;
 
   // No matching API endpoint found
-  return new Response(JSON.stringify({ error: "API endpoint not found" }), {
+  return new Response(JSON.stringify({ error: 'API endpoint not found' }), {
     status: 404,
-    headers: { 'Content-Type': 'application/json' }
+    headers: { 'Content-Type': 'application/json' },
   });
 }

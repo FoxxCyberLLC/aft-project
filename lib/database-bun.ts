@@ -15,9 +15,9 @@
 // Connection string is taken from `DATABASE_URL`, e.g.
 //   postgres://aft:aft@127.0.0.1:5432/aft
 
-import { SQL } from "bun";
-import * as fs from "node:fs";
-import * as path from "node:path";
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { SQL } from 'bun';
 
 // ---------------------------------------------------------------------------
 // Enums and helper types (unchanged from the SQLite version)
@@ -31,10 +31,10 @@ export const UserRole = {
   CPSO: 'cpso',
   DTA: 'dta',
   SME: 'sme',
-  MEDIA_CUSTODIAN: 'media_custodian'
+  MEDIA_CUSTODIAN: 'media_custodian',
 } as const;
 
-export type UserRoleType = typeof UserRole[keyof typeof UserRole];
+export type UserRoleType = (typeof UserRole)[keyof typeof UserRole];
 
 export const AFTStatus = {
   DRAFT: 'draft',
@@ -51,7 +51,7 @@ export const AFTStatus = {
   PENDING_MEDIA_CUSTODIAN: 'pending_media_custodian',
   COMPLETED: 'completed',
   DISPOSED: 'disposed',
-  CANCELLED: 'cancelled'
+  CANCELLED: 'cancelled',
 } as const;
 
 export const AFT_STATUS_LABELS = {
@@ -69,21 +69,20 @@ export const AFT_STATUS_LABELS = {
   [AFTStatus.PENDING_MEDIA_CUSTODIAN]: 'Pending Media Disposition',
   [AFTStatus.COMPLETED]: 'Completed',
   [AFTStatus.DISPOSED]: 'Media Disposed',
-  [AFTStatus.CANCELLED]: 'Cancelled'
+  [AFTStatus.CANCELLED]: 'Cancelled',
 } as const;
 
-export type AFTStatusType = typeof AFTStatus[keyof typeof AFTStatus];
+export type AFTStatusType = (typeof AFTStatus)[keyof typeof AFTStatus];
 
 // ---------------------------------------------------------------------------
 // Postgres connection
 // ---------------------------------------------------------------------------
 
-const DATABASE_URL =
-  process.env.DATABASE_URL || 'postgres://aft:aft@127.0.0.1:5432/aft';
+const DATABASE_URL = process.env.DATABASE_URL || 'postgres://aft:aft@127.0.0.1:5432/aft';
 
 export const sql = new SQL(DATABASE_URL, {
   max: 10,
-  idleTimeout: 30
+  idleTimeout: 30,
 });
 
 // Convert bun:sqlite-style `?` placeholders to Postgres `$1, $2, ...`. We do
@@ -119,22 +118,23 @@ class Query {
 
   async run(...params: any[]): Promise<RunResult> {
     const text = convertPlaceholders(this.text);
-    const result = await sql.unsafe(text, params) as any;
+    const result = (await sql.unsafe(text, params)) as any;
     const firstRow = Array.isArray(result) ? result[0] : undefined;
     let lastInsertRowid: number | undefined;
     if (firstRow && firstRow.id !== undefined && firstRow.id !== null) {
       lastInsertRowid = Number(firstRow.id);
     }
     const changes =
-      typeof result?.count === 'number' ? result.count
-      : Array.isArray(result) ? result.length
-      : 0;
+      typeof result?.count === 'number' ? result.count : Array.isArray(result) ? result.length : 0;
     return { lastInsertRowid, changes };
   }
 }
 
 class TxQuery {
-  constructor(private text: string, private tx: any) {}
+  constructor(
+    private text: string,
+    private tx: any,
+  ) {}
 
   async get<T = any>(...params: any[]): Promise<T | undefined> {
     const text = convertPlaceholders(this.text);
@@ -150,16 +150,14 @@ class TxQuery {
 
   async run(...params: any[]): Promise<RunResult> {
     const text = convertPlaceholders(this.text);
-    const result = await this.tx.unsafe(text, params) as any;
+    const result = (await this.tx.unsafe(text, params)) as any;
     const firstRow = Array.isArray(result) ? result[0] : undefined;
     let lastInsertRowid: number | undefined;
     if (firstRow && firstRow.id !== undefined && firstRow.id !== null) {
       lastInsertRowid = Number(firstRow.id);
     }
     const changes =
-      typeof result?.count === 'number' ? result.count
-      : Array.isArray(result) ? result.length
-      : 0;
+      typeof result?.count === 'number' ? result.count : Array.isArray(result) ? result.length : 0;
     return { lastInsertRowid, changes };
   }
 }
@@ -215,10 +213,10 @@ class Db {
    *   });
    */
   async withTransaction<T>(fn: (tx: TxDb) => Promise<T>): Promise<T> {
-    return await sql.begin(async (tx) => {
+    return (await sql.begin(async (tx) => {
       const txDb = new TxDb(tx);
       return await fn(txDb);
-    }) as T;
+    })) as T;
   }
 
   /**
@@ -246,7 +244,7 @@ let initPromise: Promise<void> | null = null;
 export function getDb(): Db {
   if (!initialized) {
     initialized = true;
-    initPromise = initializeSchema().catch(err => {
+    initPromise = initializeSchema().catch((err) => {
       console.error('Failed to initialize schema:', err);
       throw err;
     });
@@ -280,22 +278,22 @@ async function initializeSchema(): Promise<void> {
 
   const schemaDir = path.resolve('./schema');
   if (fs.existsSync(schemaDir)) {
-    const files = fs.readdirSync(schemaDir).filter(f => f.endsWith('.sql')).sort();
+    const files = fs
+      .readdirSync(schemaDir)
+      .filter((f) => f.endsWith('.sql'))
+      .sort();
     for (const file of files) {
       const version = file.replace(/\.sql$/, '');
-      const applied = await sql.unsafe(
+      const applied = (await sql.unsafe(
         `SELECT version FROM schema_migrations WHERE version = $1`,
-        [version]
-      ) as any[];
+        [version],
+      )) as any[];
       if (applied.length > 0) continue;
 
       const content = fs.readFileSync(path.join(schemaDir, file), 'utf8');
       await sql.begin(async (tx) => {
         await tx.unsafe(content);
-        await tx.unsafe(
-          `INSERT INTO schema_migrations (version) VALUES ($1)`,
-          [version]
-        );
+        await tx.unsafe(`INSERT INTO schema_migrations (version) VALUES ($1)`, [version]);
       });
       console.log(`Applied schema migration: ${version}`);
     }
@@ -312,8 +310,8 @@ async function initializeSchema(): Promise<void> {
 
 async function hashPassword(password: string): Promise<string> {
   return await Bun.password.hash(password, {
-    algorithm: "bcrypt",
-    cost: 12
+    algorithm: 'bcrypt',
+    cost: 12,
   });
 }
 
@@ -338,9 +336,9 @@ export async function setUserPassword(userId: number, plainPassword: string): Pr
 
 async function initializeBootstrapAdmin(): Promise<void> {
   try {
-    const existing = await sql`
+    const existing = (await sql`
       SELECT 1 FROM users WHERE primary_role = 'admin' LIMIT 1
-    ` as any[];
+    `) as any[];
     if (existing.length > 0) return;
 
     const bootstrap = process.env.AFT_ADMIN_BOOTSTRAP_PASSWORD || '';
@@ -348,7 +346,9 @@ async function initializeBootstrapAdmin(): Promise<void> {
 
     if (!bootstrap) {
       console.warn('No admin user exists and AFT_ADMIN_BOOTSTRAP_PASSWORD is not set.');
-      console.warn('Set both AFT_ADMIN_BOOTSTRAP_EMAIL and AFT_ADMIN_BOOTSTRAP_PASSWORD on first boot to seed an initial admin.');
+      console.warn(
+        'Set both AFT_ADMIN_BOOTSTRAP_EMAIL and AFT_ADMIN_BOOTSTRAP_PASSWORD on first boot to seed an initial admin.',
+      );
       return;
     }
 
@@ -358,7 +358,7 @@ async function initializeBootstrapAdmin(): Promise<void> {
 
     const hashedPassword = await hashPassword(bootstrap);
 
-    const inserted = await sql`
+    const inserted = (await sql`
       INSERT INTO users
         (email, password, first_name, last_name, primary_role, is_active,
          organization, phone, must_change_password)
@@ -366,7 +366,7 @@ async function initializeBootstrapAdmin(): Promise<void> {
         (${bootstrapEmail}, ${hashedPassword}, 'System', 'Administrator', 'admin',
          TRUE, 'System', 'N/A', TRUE)
       RETURNING id
-    ` as any[];
+    `) as any[];
 
     const adminId = inserted[0]?.id;
     if (adminId === undefined) {
@@ -380,7 +380,9 @@ async function initializeBootstrapAdmin(): Promise<void> {
 
     delete process.env.AFT_ADMIN_BOOTSTRAP_PASSWORD;
 
-    console.log(`Created bootstrap admin user (${bootstrapEmail}) - password change required at first login.`);
+    console.log(
+      `Created bootstrap admin user (${bootstrapEmail}) - password change required at first login.`,
+    );
   } catch (error) {
     console.error('Bootstrap admin initialization failed:', error);
     throw error;
@@ -397,33 +399,37 @@ export function generateRequestNumber(): string {
   return `AFT-${timestamp}-${random}`;
 }
 
-export async function getUserRoles(userId: number): Promise<Array<{ role: UserRoleType; isPrimary: boolean }>> {
-  const userRow = await sql`
+export async function getUserRoles(
+  userId: number,
+): Promise<Array<{ role: UserRoleType; isPrimary: boolean }>> {
+  const userRow = (await sql`
     SELECT primary_role FROM users WHERE id = ${userId} AND is_active = TRUE
-  ` as any[];
+  `) as any[];
   if (userRow.length === 0) return [];
   const user = userRow[0];
 
-  let userRoles = await sql`
+  let userRoles = (await sql`
     SELECT role FROM user_roles
     WHERE user_id = ${userId} AND is_active = TRUE
     ORDER BY created_at ASC
-  ` as Array<{ role: UserRoleType }>;
+  `) as Array<{ role: UserRoleType }>;
 
   if (user.primary_role === UserRole.MEDIA_CUSTODIAN) {
-    userRoles = userRoles.filter(ur => ur.role !== UserRole.REQUESTOR);
+    userRoles = userRoles.filter((ur) => ur.role !== UserRole.REQUESTOR);
   }
 
-  const rolesWithFlags = userRoles.map(ur => ({
+  const rolesWithFlags = userRoles.map((ur) => ({
     role: ur.role,
-    isPrimary: ur.role === user.primary_role
+    isPrimary: ur.role === user.primary_role,
   }));
 
-  if (!rolesWithFlags.some(r => r.isPrimary)) {
-    if (!(user.primary_role === UserRole.REQUESTOR && user.primary_role !== UserRole.MEDIA_CUSTODIAN)) {
+  if (!rolesWithFlags.some((r) => r.isPrimary)) {
+    if (
+      !(user.primary_role === UserRole.REQUESTOR && user.primary_role !== UserRole.MEDIA_CUSTODIAN)
+    ) {
       rolesWithFlags.unshift({
         role: user.primary_role,
-        isPrimary: true
+        isPrimary: true,
       });
     }
   }
@@ -449,7 +455,7 @@ export async function backupDatabase(): Promise<string> {
   const proc = Bun.spawn(['pg_dump', '--format=plain', '--no-owner', '--no-privileges'], {
     env: { ...process.env, PGURL: DATABASE_URL, DATABASE_URL },
     stdout: Bun.file(backupPath).writer() as any,
-    stderr: 'pipe'
+    stderr: 'pipe',
   });
 
   const exitCode = await proc.exited;
@@ -473,7 +479,7 @@ export function getRoleDisplayName(role: UserRoleType): string {
     [UserRole.CPSO]: 'Contractor Program Security Officer',
     [UserRole.DTA]: 'Data Transfer Agent',
     [UserRole.SME]: 'Subject Matter Expert',
-    [UserRole.MEDIA_CUSTODIAN]: 'Media Custodian'
+    [UserRole.MEDIA_CUSTODIAN]: 'Media Custodian',
   };
   return roleNames[role] || role;
 }
@@ -487,17 +493,23 @@ export function getRoleDescription(role: UserRoleType): string {
     [UserRole.CPSO]: 'Contractor security oversight and approval',
     [UserRole.DTA]: 'Coordinate and execute data transfers',
     [UserRole.SME]: 'Technical review and digital signatures',
-    [UserRole.MEDIA_CUSTODIAN]: 'Physical media management and disposition'
+    [UserRole.MEDIA_CUSTODIAN]: 'Physical media management and disposition',
   };
   return roleDescriptions[role] || 'Role-specific access';
 }
 
 export async function getSystemSettings(): Promise<Record<string, string>> {
-  const settingsList = await sql`SELECT key, value FROM system_settings` as Array<{ key: string; value: string }>;
-  return settingsList.reduce((acc, setting) => {
-    acc[setting.key] = setting.value;
-    return acc;
-  }, {} as Record<string, string>);
+  const settingsList = (await sql`SELECT key, value FROM system_settings`) as Array<{
+    key: string;
+    value: string;
+  }>;
+  return settingsList.reduce(
+    (acc, setting) => {
+      acc[setting.key] = setting.value;
+      return acc;
+    },
+    {} as Record<string, string>,
+  );
 }
 
 export async function saveSystemSettings(settings: Record<string, string>): Promise<void> {
