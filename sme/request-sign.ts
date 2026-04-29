@@ -10,7 +10,7 @@ import {
 } from '../components/icons';
 import { ComponentBuilder } from '../components/ui/server-components';
 import { CACSignatureManager } from '../lib/cac-signature';
-import { getDb, type DbRow } from '../lib/database-bun';
+import { type DbRow, getDb } from '../lib/database-bun';
 import { SMENavigation, type SMEUser } from './sme-nav';
 
 async function render(user: SMEUser, requestId: string): Promise<string> {
@@ -55,7 +55,7 @@ async function render(user: SMEUser, requestId: string): Promise<string> {
   const _cacSignatures = await CACSignatureManager.getRequestSignatures(parseInt(requestId, 10));
 
   // Drive tracking is now handled through the media_drives table
-  const driveTracking: any[] = [];
+  const driveTracking: Array<Record<string, unknown>> = [];
 
   const content = `
     <div class="space-y-6">
@@ -189,7 +189,10 @@ function renderRequestDetails(request: DbRow): string {
   });
 }
 
-function renderDTAProcessData(request: DbRow, driveTracking: any[]): string {
+function renderDTAProcessData(
+  request: DbRow,
+  driveTracking: Array<Record<string, unknown>>,
+): string {
   return ComponentBuilder.card({
     children: `
       <div class="p-6 pb-4">
@@ -205,7 +208,7 @@ function renderDTAProcessData(request: DbRow, driveTracking: any[]): string {
           <div class="grid grid-cols-2 gap-4">
             <div>
               <label class="text-xs text-[var(--muted-foreground)] uppercase tracking-wide">Assigned DTA</label>
-              <p class="text-sm font-medium text-[var(--foreground)] mt-1">${(request.dta_name as string)}</p>
+              <p class="text-sm font-medium text-[var(--foreground)] mt-1">${request.dta_name as string}</p>
               <p class="text-xs text-[var(--muted-foreground)]">${request.dta_email}</p>
             </div>
             <div>
@@ -257,7 +260,7 @@ function renderDTAProcessData(request: DbRow, driveTracking: any[]): string {
                 <div class="text-xs p-2 bg-[var(--muted)] rounded">
                   <div class="flex justify-between">
                     <span class="font-medium">${track.action}</span>
-                    <span class="text-[var(--muted-foreground)]">${new Date(track.created_at).toLocaleString()}</span>
+                    <span class="text-[var(--muted-foreground)]">${new Date(track.created_at as number).toLocaleString()}</span>
                   </div>
                   ${track.notes ? `<div class="text-[var(--muted-foreground)] mt-1">${track.notes}</div>` : ''}
                 </div>
@@ -275,7 +278,12 @@ function renderDTAProcessData(request: DbRow, driveTracking: any[]): string {
 }
 
 function renderDestinations(request: DbRow): string {
-  let destinations: Array<{ is?: string; classification?: string; location?: string; contact?: string }> = [];
+  let destinations: Array<{
+    is?: string;
+    classification?: string;
+    location?: string;
+    contact?: string;
+  }> = [];
   try {
     const td = request.transfer_data ? JSON.parse(String(request.transfer_data)) : null;
     destinations = Array.isArray(td?.destinations) ? td.destinations : [];
@@ -321,7 +329,13 @@ function renderDestinations(request: DbRow): string {
 }
 
 function renderFileInformation(request: DbRow): string {
-  let files: Array<{ name: string; size: number; type: string; hash?: string; classification?: string }> = [];
+  let files: Array<{
+    name: string;
+    size: number;
+    type: string;
+    hash?: string;
+    classification?: string;
+  }> = [];
   try {
     files = request.files_list ? JSON.parse(String(request.files_list)) : [];
     if (!Array.isArray(files)) files = [];
@@ -532,7 +546,7 @@ function renderDTAInfo(request: DbRow): string {
             ${CheckCircleIcon({ size: 20, color: 'var(--success)' })}
           </div>
           <div>
-            <p class="text-sm font-medium text-[var(--foreground)]">${(request.dta_name as string)}</p>
+            <p class="text-sm font-medium text-[var(--foreground)]">${request.dta_name as string}</p>
             <p class="text-xs text-[var(--muted-foreground)]">${request.dta_email}</p>
           </div>
         </div>

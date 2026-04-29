@@ -142,8 +142,8 @@ First boot bootstraps Postgres, runs `schema/001_init.sql`, and seeds the admin 
 
 These are known and tracked — fix opportunistically, but they are not blocking:
 
-- **`noExplicitAny` rule temporarily downgraded** — `biome.json` has `noExplicitAny: "warn"` instead of `"error"`. There are 777 `any` usages in DB-touching code (most are `(await db.query(...).get()) as any` for untyped row results). A dedicated follow-up PR will replace each with proper inline row types and flip the rule back to `"error"`. **Do not add new `any`s while this exception is in place.**
-- **No automated tests yet.** `bun test` runs zero tests. New modules should ship with `*.test.ts` next to them.
+- **No automated tests yet.** Only smoke tests in `tests/smoke.test.ts`. New modules should ship with `*.test.ts` next to them.
+- **`noExplicitAny` is enforced** — biome rule is at `error` level. DB rows are typed via `DbRow = Record<string, unknown>` (the default for `db.query<T>().get()/all()`), or with inline column shapes per query. Property access on `DbRow` returns `unknown` and must be cast at the access site. Don't add new `any`s.
 - **File-size discipline broken in many role pages.** Workspace rule says ≤300 lines for production, ≤500 hard limit. Worst offenders: `server/api/dta-api.ts` (~1500), `media-custodian/requests.ts` (~1100), `lib/cac-signature.ts` (~770). Refactor when touching one of these.
 - **CSP `'unsafe-inline'`** — comment in `lib/security.ts` is the source of truth on the migration plan.
 - **Single migration file.** No real migrations tool yet — additions go on the end of `schema/001_init.sql` and into `scripts/*.sql`.

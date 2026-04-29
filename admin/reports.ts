@@ -1,6 +1,6 @@
 // Admin Reports Interface
 import { ComponentBuilder } from '../components/ui/server-components';
-import { getDb, type DbRow } from '../lib/database-bun';
+import { type DbRow, getDb } from '../lib/database-bun';
 import { AdminNavigation, type AdminUser } from './admin-nav';
 
 async function renderReportsPage(user: AdminUser): Promise<string> {

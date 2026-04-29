@@ -1,12 +1,15 @@
 // Admin API routes
-import { backupDatabase,
+import {
+  backupDatabase,
+  type DbRow,
   getDb,
   getRoleDescription,
   getRoleDisplayName,
   getSystemSettings,
   runMaintenance,
   saveSystemSettings,
-  UserRole, type DbRow } from '../../lib/database-bun';
+  UserRole,
+} from '../../lib/database-bun';
 import { escapeCsv } from '../../lib/formatters';
 import { auditLog } from '../../lib/security';
 import { RoleMiddleware } from '../../middleware/role-middleware';
@@ -90,7 +93,16 @@ export async function handleAdminAPI(
     if (authResult.response) return authResult.response;
 
     try {
-      const userData = (await request.json()) as { email: string; password: string; first_name: string; last_name: string; primary_role: string; organization?: string; phone?: string; is_active?: boolean; };
+      const userData = (await request.json()) as {
+        email: string;
+        password: string;
+        first_name: string;
+        last_name: string;
+        primary_role: string;
+        organization?: string;
+        phone?: string;
+        is_active?: boolean;
+      };
       const hashedPassword = await Bun.password.hash(userData.password, {
         algorithm: 'bcrypt',
         cost: 12,
@@ -135,7 +147,7 @@ export async function handleAdminAPI(
       return new Response(
         JSON.stringify({
           success: false,
-          message: (error instanceof Error ? error.message : String(error)),
+          message: error instanceof Error ? error.message : String(error),
         }),
         {
           status: 400,
@@ -288,7 +300,16 @@ export async function handleAdminAPI(
           },
         );
       }
-      const userData = (await request.json()) as { email: string; password?: string; first_name?: string; last_name?: string; primary_role?: string; organization?: string; phone?: string; is_active?: boolean; };
+      const userData = (await request.json()) as {
+        email: string;
+        password?: string;
+        first_name?: string;
+        last_name?: string;
+        primary_role?: string;
+        organization?: string;
+        phone?: string;
+        is_active?: boolean;
+      };
 
       let updateQuery = `
         UPDATE users 
@@ -348,7 +369,7 @@ export async function handleAdminAPI(
       return new Response(
         JSON.stringify({
           success: false,
-          message: (error instanceof Error ? error.message : String(error)),
+          message: error instanceof Error ? error.message : String(error),
         }),
         {
           status: 400,
@@ -387,14 +408,14 @@ export async function handleAdminAPI(
       await auditLog(
         authResult.session.userId,
         'DB_BACKUP_FAILED',
-        `Failed to create database backup: ${(error instanceof Error ? error.message : String(error))}`,
+        `Failed to create database backup: ${error instanceof Error ? error.message : String(error)}`,
         ipAddress,
       );
 
       return new Response(
         JSON.stringify({
           success: false,
-          message: `Failed to create backup: ${(error instanceof Error ? error.message : String(error))}`,
+          message: `Failed to create backup: ${error instanceof Error ? error.message : String(error)}`,
         }),
         {
           status: 500,
@@ -432,14 +453,14 @@ export async function handleAdminAPI(
       await auditLog(
         authResult.session.userId,
         'DB_MAINTENANCE_FAILED',
-        `Failed to run database maintenance: ${(error instanceof Error ? error.message : String(error))}`,
+        `Failed to run database maintenance: ${error instanceof Error ? error.message : String(error)}`,
         ipAddress,
       );
 
       return new Response(
         JSON.stringify({
           success: false,
-          message: `Failed to run maintenance: ${(error instanceof Error ? error.message : String(error))}`,
+          message: `Failed to run maintenance: ${error instanceof Error ? error.message : String(error)}`,
         }),
         {
           status: 500,
@@ -498,10 +519,16 @@ export async function handleAdminAPI(
         },
       );
     } catch (error: unknown) {
-      return new Response(JSON.stringify({ success: false, message: (error instanceof Error ? error.message : String(error)) }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' },
-      });
+      return new Response(
+        JSON.stringify({
+          success: false,
+          message: error instanceof Error ? error.message : String(error),
+        }),
+        {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' },
+        },
+      );
     }
   }
 
@@ -545,10 +572,16 @@ export async function handleAdminAPI(
         );
       }
     } catch (error: unknown) {
-      return new Response(JSON.stringify({ success: false, message: (error instanceof Error ? error.message : String(error)) }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' },
-      });
+      return new Response(
+        JSON.stringify({
+          success: false,
+          message: error instanceof Error ? error.message : String(error),
+        }),
+        {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' },
+        },
+      );
     }
   }
 
@@ -602,10 +635,16 @@ export async function handleAdminAPI(
         },
       });
     } catch (error: unknown) {
-      return new Response(JSON.stringify({ success: false, message: (error instanceof Error ? error.message : String(error)) }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' },
-      });
+      return new Response(
+        JSON.stringify({
+          success: false,
+          message: error instanceof Error ? error.message : String(error),
+        }),
+        {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' },
+        },
+      );
     }
   }
 
@@ -636,18 +675,22 @@ export async function handleAdminAPI(
     } catch (error: unknown) {
       const healthStatus = {
         overall: 'ERROR',
-        database: `ERROR: ${(error instanceof Error ? error.message : String(error))}`,
+        database: `ERROR: ${error instanceof Error ? error.message : String(error)}`,
       };
 
       await auditLog(
         authResult.session.userId,
         'HEALTH_CHECK_FAILED',
-        `System health check failed: ${(error instanceof Error ? error.message : String(error))}`,
+        `System health check failed: ${error instanceof Error ? error.message : String(error)}`,
         ipAddress,
       );
 
       return new Response(
-        JSON.stringify({ success: false, status: healthStatus, message: (error instanceof Error ? error.message : String(error)) }),
+        JSON.stringify({
+          success: false,
+          status: healthStatus,
+          message: error instanceof Error ? error.message : String(error),
+        }),
         {
           status: 500,
           headers: { 'Content-Type': 'application/json' },
@@ -689,10 +732,16 @@ export async function handleAdminAPI(
         },
       );
     } catch (error: unknown) {
-      return new Response(JSON.stringify({ success: false, message: (error instanceof Error ? error.message : String(error)) }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' },
-      });
+      return new Response(
+        JSON.stringify({
+          success: false,
+          message: error instanceof Error ? error.message : String(error),
+        }),
+        {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' },
+        },
+      );
     }
   }
 
@@ -772,10 +821,16 @@ export async function handleAdminAPI(
         },
       );
     } catch (error: unknown) {
-      return new Response(JSON.stringify({ success: false, message: (error instanceof Error ? error.message : String(error)) }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' },
-      });
+      return new Response(
+        JSON.stringify({
+          success: false,
+          message: error instanceof Error ? error.message : String(error),
+        }),
+        {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' },
+        },
+      );
     }
   }
 
@@ -838,12 +893,15 @@ export async function handleAdminAPI(
       await auditLog(
         authResult.session.userId,
         'REQUEST_DELETE_FAILED',
-        `Failed to delete request ID ${requestId}: ${(error instanceof Error ? error.message : String(error))}`,
+        `Failed to delete request ID ${requestId}: ${error instanceof Error ? error.message : String(error)}`,
         ipAddress,
       );
 
       return new Response(
-        JSON.stringify({ success: false, message: `Failed to delete request: ${(error instanceof Error ? error.message : String(error))}` }),
+        JSON.stringify({
+          success: false,
+          message: `Failed to delete request: ${error instanceof Error ? error.message : String(error)}`,
+        }),
         {
           status: 500,
           headers: { 'Content-Type': 'application/json' },

@@ -1,7 +1,7 @@
 // DTA API endpoints
 
 import { type CACSignatureData, CACSignatureManager } from '../../lib/cac-signature';
-import { getDb, UserRole, type Db, type DbRow } from '../../lib/database-bun';
+import { type Db, type DbRow, getDb, UserRole } from '../../lib/database-bun';
 import { RequestTrackingService } from '../../lib/request-tracking';
 import { auditLog, type SecureSession } from '../../lib/security';
 import { RoleMiddleware } from '../../middleware/role-middleware';
@@ -681,7 +681,11 @@ async function bulkProcessRequests(
   userEmail: string,
   ipAddress: string,
 ): Promise<Response> {
-  const { action, requestIds, reason } = body as { action?: string; requestIds?: number[]; reason?: string };
+  const { action, requestIds, reason } = body as {
+    action?: string;
+    requestIds?: number[];
+    reason?: string;
+  };
 
   if (!action || !requestIds || !Array.isArray(requestIds)) {
     return new Response(JSON.stringify({ error: 'Invalid bulk request data' }), {
@@ -832,7 +836,7 @@ async function updateRequest(
 async function updateTransferSettings(
   _db: Db,
   _requestId: number,
-  _body: any,
+  _body: Record<string, unknown>,
   _userId: number,
   _userEmail: string,
   _ipAddress: string,
@@ -868,7 +872,13 @@ async function recordAntivirusScan(
     });
   }
 
-  const { scanType, result, notes, filesScanned, threatsFound } = body as { scanType?: string; result?: string; notes?: string; filesScanned?: number; threatsFound?: number };
+  const { scanType, result, notes, filesScanned, threatsFound } = body as {
+    scanType?: string;
+    result?: string;
+    notes?: string;
+    filesScanned?: number;
+    threatsFound?: number;
+  };
 
   if (!scanType || !['origination', 'destination'].includes(scanType)) {
     return new Response(
@@ -978,7 +988,7 @@ async function recordAntivirusScan(
 async function activateTransfer(
   db: Db,
   requestId: number,
-  _body: any,
+  _body: Record<string, unknown>,
   userId: number,
   userEmail: string,
   ipAddress: string,
@@ -1181,7 +1191,11 @@ async function handleTransferFormSubmission(
   _userEmail: string,
   ipAddress: string,
 ): Promise<Response> {
-  const { requestId, saveOnly, ...formData } = body as { requestId?: number; saveOnly?: boolean; [key: string]: unknown };
+  const { requestId, saveOnly, ...formData } = body as {
+    requestId?: number;
+    saveOnly?: boolean;
+    [key: string]: unknown;
+  };
 
   if (!requestId) {
     return new Response(JSON.stringify({ error: 'Request ID is required' }), {
@@ -1224,7 +1238,7 @@ async function handleTransferFormSubmission(
           WHERE id = ?
         `)
           .run(
-            (formData.originationScanResult as string),
+            formData.originationScanResult as string,
             parseInt(String(formData.originationFilesScanned), 10),
             requestId,
           );
@@ -1236,7 +1250,7 @@ async function handleTransferFormSubmission(
           undefined,
           'active_transfer',
           JSON.stringify({
-            result: (formData.originationScanResult as string),
+            result: formData.originationScanResult as string,
             filesScanned: formData.originationFilesScanned,
           }),
           `Origination scan updated: ${formData.originationScanResult} (${formData.originationFilesScanned} files)`,
@@ -1254,7 +1268,7 @@ async function handleTransferFormSubmission(
           WHERE id = ?
         `)
           .run(
-            (formData.destinationScanResult as string),
+            formData.destinationScanResult as string,
             parseInt(String(formData.destinationFilesScanned), 10),
             requestId,
           );
@@ -1266,7 +1280,7 @@ async function handleTransferFormSubmission(
           undefined,
           'active_transfer',
           JSON.stringify({
-            result: (formData.destinationScanResult as string),
+            result: formData.destinationScanResult as string,
             filesScanned: formData.destinationFilesScanned,
           }),
           `Destination scan updated: ${formData.destinationScanResult} (${formData.destinationFilesScanned} files)`,
@@ -1373,7 +1387,12 @@ async function handleTransferFormSubmission(
             updated_at = EXTRACT(EPOCH FROM NOW())::BIGINT
         WHERE id = ?
       `)
-        .run(signatureDateTime, formData.smeUserId as number, formData.smeUserId as number, requestId);
+        .run(
+          signatureDateTime,
+          formData.smeUserId as number,
+          formData.smeUserId as number,
+          requestId,
+        );
 
       RequestTrackingService.addAuditEntry(
         requestId,
@@ -1477,7 +1496,12 @@ async function completeTransfer(
     );
   }
 
-  const { filesTransferred, smeUserId, tpiMaintained, notes } = body as { filesTransferred?: number; smeUserId?: number; tpiMaintained?: boolean; notes?: string };
+  const { filesTransferred, smeUserId, tpiMaintained, notes } = body as {
+    filesTransferred?: number;
+    smeUserId?: number;
+    tpiMaintained?: boolean;
+    notes?: string;
+  };
 
   // Validate required fields
   if (!filesTransferred) {
@@ -1562,7 +1586,13 @@ async function signTransferManual(
   userEmail: string,
   ipAddress: string,
 ): Promise<Response> {
-  const { smeUserId, notes, filesTransferred, transferDateTime, transferNotes } = body as { smeUserId?: number; notes?: string; filesTransferred?: number; transferDateTime?: string; transferNotes?: string };
+  const { smeUserId, notes, filesTransferred, transferDateTime, transferNotes } = body as {
+    smeUserId?: number;
+    notes?: string;
+    filesTransferred?: number;
+    transferDateTime?: string;
+    transferNotes?: string;
+  };
 
   try {
     // Verify request exists and DTA has access

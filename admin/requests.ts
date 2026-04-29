@@ -1,6 +1,6 @@
 // Admin Requests Management Interface
 import { ComponentBuilder } from '../components/ui/server-components';
-import { AFT_STATUS_LABELS, getDb, type DbRow } from '../lib/database-bun';
+import { AFT_STATUS_LABELS, type DbRow, getDb } from '../lib/database-bun';
 import { RequestTrackingService } from '../lib/request-tracking';
 import { AdminNavigation, type AdminUser } from './admin-nav';
 
@@ -11,7 +11,9 @@ async function renderRequestsPage(
   const db = getDb();
 
   // Get request statistics
-  const totalRequests = (await db.query('SELECT COUNT(*) as count FROM aft_requests').get()) as DbRow;
+  const totalRequests = (await db
+    .query('SELECT COUNT(*) as count FROM aft_requests')
+    .get()) as DbRow;
   const pendingRequests = (await db
     .query(
       "SELECT COUNT(*) as count FROM aft_requests WHERE status NOT IN ('completed', 'rejected', 'cancelled')",

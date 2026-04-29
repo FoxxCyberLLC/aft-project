@@ -1,6 +1,6 @@
 // Approver Dashboard - Main approver landing page
 import { ComponentBuilder } from '../components/ui/server-components';
-import { getDb, type DbRow } from '../lib/database-bun';
+import { type DbRow, getDb } from '../lib/database-bun';
 import { ApproverNavigation, type ApproverUser } from './approver-nav';
 
 async function render(user: ApproverUser, _userId: number): Promise<string> {
@@ -179,7 +179,10 @@ function buildPendingTable(rows: DbRow[]): string {
 
         const variant = statusVariant[row.status as keyof typeof statusVariant] || 'default';
 
-        return ComponentBuilder.statusBadge(String(row.status).replace('_', ' ').toUpperCase(), variant);
+        return ComponentBuilder.statusBadge(
+          String(row.status).replace('_', ' ').toUpperCase(),
+          variant,
+        );
       },
     },
     {

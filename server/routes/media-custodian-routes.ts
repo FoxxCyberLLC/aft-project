@@ -1,10 +1,10 @@
 // Media Custodian Routes - Handle all media custodian-related requests
 
-import { UserRole, type DbRow } from '../../lib/database-bun';
+import { type DbRow, UserRole } from '../../lib/database-bun';
 import type { SecureSession } from '../../lib/security';
-import type { MediaCustodianUser } from '../../media-custodian/media-custodian-nav';
 import { MediaCustodianDashboard } from '../../media-custodian/dashboard';
 import { MediaCustodianInventory } from '../../media-custodian/inventory';
+import type { MediaCustodianUser } from '../../media-custodian/media-custodian-nav';
 import { MediaCustodianReports } from '../../media-custodian/reports';
 import { MediaCustodianRequests } from '../../media-custodian/requests';
 import { RoleMiddleware } from '../../middleware/role-middleware';
@@ -106,7 +106,7 @@ async function handleRequestsPage(request: Request, user: MediaCustodianUser): P
 // Individual request detail page
 async function handleRequestDetailPage(
   _request: Request,
-  user: any,
+  user: MediaCustodianUser,
   requestId: string,
 ): Promise<Response> {
   try {
@@ -130,7 +130,7 @@ async function handleRequestDetailPage(
 // Request disposition processing page
 async function handleRequestProcessPage(
   _request: Request,
-  user: any,
+  user: MediaCustodianUser,
   requestId: string,
 ): Promise<Response> {
   try {
@@ -169,7 +169,7 @@ async function handleReportsPage(_request: Request, user: MediaCustodianUser): P
 // API endpoints for media custodian operations
 async function handleAPI(
   request: Request,
-  user: any,
+  user: MediaCustodianUser,
   endpoint: string,
   session?: SecureSession,
 ): Promise<Response> {
@@ -399,7 +399,12 @@ async function handleAPI(
     console.error('Media custodian API error:', error);
     return new Response(
       JSON.stringify({
-        error: error instanceof Error ? (error instanceof Error ? error.message : String(error)) : 'Unknown error',
+        error:
+          error instanceof Error
+            ? error instanceof Error
+              ? error.message
+              : String(error)
+            : 'Unknown error',
       }),
       {
         status: 500,

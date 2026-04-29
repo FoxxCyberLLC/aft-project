@@ -1,6 +1,6 @@
 // SME Dashboard - Main SME landing page
 import { ComponentBuilder, Templates } from '../components/ui/server-components';
-import { getDb, type DbRow } from '../lib/database-bun';
+import { type DbRow, getDb } from '../lib/database-bun';
 import { SMENavigation, type SMEUser } from './sme-nav';
 
 async function render(user: SMEUser, _userId: number): Promise<string> {
@@ -111,7 +111,10 @@ function buildRecentActivityTable(requests: DbRow[]): string {
           completed: 'success',
         } as const;
         const variant = statusVariant[row.status as keyof typeof statusVariant] || 'default';
-        return ComponentBuilder.statusBadge(String(row.status).replace(/_/g, ' ').toUpperCase(), variant);
+        return ComponentBuilder.statusBadge(
+          String(row.status).replace(/_/g, ' ').toUpperCase(),
+          variant,
+        );
       },
     },
     {

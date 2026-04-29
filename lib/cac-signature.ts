@@ -1,9 +1,9 @@
 // CAC Digital Signature Integration for AFT Requests
 // Handles the application of CAC certificate signatures to AFT request documents
 
+import type { DbRow } from './database-bun';
 import { getDb, type TxDb } from './database-bun';
 import { auditLog } from './security';
-import type { DbRow } from './database-bun';
 
 export interface CACSignatureData {
   signature: string; // Base64 encoded signature
@@ -726,14 +726,14 @@ async function verifySignatureIntegrity(
   }
 }
 
-function formatSignatureForDisplay(signature: any): {
+function formatSignatureForDisplay(signature: DbRow): {
   signerName: string;
   signedAt: string;
   certificateInfo: string;
   isValid: boolean;
 } {
   try {
-    const subject = parseCertificateSubject(signature.certificate_subject);
+    const subject = parseCertificateSubject(signature.certificate_subject as string);
     const commonName = subject.CN || 'Unknown Signer';
 
     let signerName = commonName;
@@ -777,9 +777,9 @@ function parseCertificateSubject(subject: string): Record<string, string> {
   return parsed;
 }
 
-function generateSignatureBlock(signature: any): string {
+function generateSignatureBlock(signature: DbRow): string {
   const display = formatSignatureForDisplay(signature);
-  const subject = parseCertificateSubject(signature.certificate_subject);
+  const subject = parseCertificateSubject(signature.certificate_subject as string);
   const organization = subject.OU || subject.O || 'Department of Defense';
 
   return `

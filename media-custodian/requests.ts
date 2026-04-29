@@ -2,7 +2,7 @@
 
 import { ShieldIcon } from '../components/icons';
 import { ComponentBuilder } from '../components/ui/server-components';
-import { getDb, type DbRow } from '../lib/database-bun';
+import { type DbRow, getDb } from '../lib/database-bun';
 import { RequestTrackingService } from '../lib/request-tracking';
 import { MediaCustodianNavigation, type MediaCustodianUser } from './media-custodian-nav';
 
@@ -14,7 +14,9 @@ async function renderRequestsPage(
   const db = getDb();
 
   // Get request statistics for all requests (media custodian sees all)
-  const totalRequests = (await db.query('SELECT COUNT(*) as count FROM aft_requests').get()) as DbRow;
+  const totalRequests = (await db
+    .query('SELECT COUNT(*) as count FROM aft_requests')
+    .get()) as DbRow;
   const pendingRequests = (await db
     .query(
       "SELECT COUNT(*) as count FROM aft_requests WHERE status NOT IN ('completed', 'rejected', 'cancelled')",
@@ -199,7 +201,7 @@ async function renderRequestsPage(
   );
 }
 
-function buildStatsCards(total: number, pending: number, requests: any[]): string {
+function buildStatsCards(total: number, pending: number, requests: DbRow[]): string {
   const approved = requests.filter((r) => r.status === 'approved').length;
   const _rejected = requests.filter((r) => r.status === 'rejected').length;
   const completed = requests.filter((r) => r.status === 'completed').length;
@@ -387,7 +389,9 @@ async function renderRequestDetail(user: MediaCustodianUser, requestId: number):
 
   // Build request details view
   const requestDetails = buildRequestDetailsView(request, files);
-  const timelineView = buildTimelineView(timeline?.timeline_steps || []);
+  const timelineView = buildTimelineView(
+    (timeline?.timeline_steps || []) as unknown as Array<Record<string, unknown>>,
+  );
   const historyView = buildHistoryView(history);
 
   return `
@@ -413,7 +417,13 @@ async function renderRequestDetail(user: MediaCustodianUser, requestId: number):
 
 function buildDispositionForm(
   request: DbRow,
-  files: Array<{ name: string; size: number; type: string; hash?: string; classification?: string }>,
+  files: Array<{
+    name: string;
+    size: number;
+    type: string;
+    hash?: string;
+    classification?: string;
+  }>,
   additionalSystems: Array<Record<string, unknown>>,
   user: MediaCustodianUser,
 ): string {
@@ -686,7 +696,16 @@ function buildDispositionForm(
   `;
 }
 
-function buildRequestDetailsView(request: DbRow, files: Array<{ name: string; size: number; type: string; hash?: string; classification?: string }>): string {
+function buildRequestDetailsView(
+  request: DbRow,
+  files: Array<{
+    name: string;
+    size: number;
+    type: string;
+    hash?: string;
+    classification?: string;
+  }>,
+): string {
   const statusVariant = {
     draft: 'default',
     submitted: 'info',
@@ -811,7 +830,7 @@ function buildRequestDetailsView(request: DbRow, files: Array<{ name: string; si
   `;
 }
 
-function buildHistoryView(history: any[]): string {
+function buildHistoryView(history: DbRow[]): string {
   if (!history || history.length === 0) {
     return '';
   }
@@ -828,7 +847,7 @@ function buildHistoryView(history: any[]): string {
             <div class="flex-1">
               <div class="flex items-center gap-2 mb-1">
                 <span class="text-sm font-medium text-[var(--foreground)]">${entry.action}</span>
-                <span class="text-xs text-[var(--muted-foreground)]">${new Date(entry.created_at * 1000).toLocaleString()}</span>
+                <span class="text-xs text-[var(--muted-foreground)]">${new Date((entry.created_at as number) * 1000).toLocaleString()}</span>
               </div>
               ${entry.notes ? `<p class="text-sm text-[var(--muted-foreground)]">${entry.notes}</p>` : ''}
               <p class="text-xs text-[var(--muted-foreground)]">by ${entry.user_email}</p>
@@ -842,7 +861,7 @@ function buildHistoryView(history: any[]): string {
   `;
 }
 
-function buildTimelineView(timeline: any[]): string {
+function buildTimelineView(timeline: Array<Record<string, unknown>>): string {
   return `
     <div class="bg-[var(--card)] rounded-lg border border-[var(--border)] p-6">
       <h3 class="font-semibold text-[var(--foreground)] mb-4">Request Timeline</h3>
@@ -859,7 +878,7 @@ function buildTimelineView(timeline: any[]): string {
                 event.timestamp
                   ? `
                 <p class="text-xs text-[var(--muted-foreground)] mt-1">
-                  ${new Date(event.timestamp * 1000).toLocaleString()}
+                  ${new Date((event.timestamp as number) * 1000).toLocaleString()}
                 </p>
               `
                   : ''

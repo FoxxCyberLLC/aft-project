@@ -1,7 +1,7 @@
 // CPSO Reports Page - Analytics and reporting for CPSO activities
 
 import { ChartBarIcon, DownloadIcon, PieChartIcon, TrendingUpIcon } from '../components/icons';
-import { getDb, type DbRow } from '../lib/database-bun';
+import { getDb } from '../lib/database-bun';
 import { CPSONavigation, type CPSOUser } from './cpso-nav';
 
 async function render(user: CPSOUser): Promise<string> {
@@ -68,7 +68,14 @@ async function render(user: CPSOUser): Promise<string> {
     ORDER BY month DESC
     LIMIT 6
   `)
-    .all(user.email, ...cpsoAdvancedStatuses)) as Array<{ month?: string; approved?: number; rejected?: number; source_system?: string | null; dest_system?: string | null; count?: number }>;
+    .all(user.email, ...cpsoAdvancedStatuses)) as Array<{
+    month?: string;
+    approved?: number;
+    rejected?: number;
+    source_system?: string | null;
+    dest_system?: string | null;
+    count?: number;
+  }>;
 
   // Get system breakdown
   const systemData = (await db
@@ -83,7 +90,14 @@ async function render(user: CPSOUser): Promise<string> {
     ORDER BY count DESC
     LIMIT 10
   `)
-    .all(user.email, ...cpsoAdvancedStatuses)) as Array<{ month?: string; approved?: number; rejected?: number; source_system?: string | null; dest_system?: string | null; count?: number }>;
+    .all(user.email, ...cpsoAdvancedStatuses)) as Array<{
+    month?: string;
+    approved?: number;
+    rejected?: number;
+    source_system?: string | null;
+    dest_system?: string | null;
+    count?: number;
+  }>;
 
   const approvalRate = stats.total?.count
     ? Math.round(((stats.approved?.count ?? 0) / stats.total.count) * 100)

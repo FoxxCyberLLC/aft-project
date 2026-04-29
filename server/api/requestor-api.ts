@@ -1,7 +1,7 @@
 // Requestor API routes
 
 import { type CACSignatureData, CACSignatureManager } from '../../lib/cac-signature';
-import { generateRequestNumber, getDb, UserRole, type DbRow } from '../../lib/database-bun';
+import { type DbRow, generateRequestNumber, getDb, UserRole } from '../../lib/database-bun';
 import { emailService, getNextApproverEmails } from '../../lib/email-service';
 import { auditLog } from '../../lib/security';
 import { RoleMiddleware } from '../../middleware/role-middleware';
@@ -280,7 +280,7 @@ export async function handleRequestorAPI(
           selectedDriveId = dtaDrive?.id || null;
         }
 
-        const result = (await db
+        const result = await db
           .query(`
           INSERT INTO aft_requests (
             request_number, status, requestor_id, requestor_name, requestor_org, requestor_phone, requestor_email,
@@ -313,7 +313,7 @@ export async function handleRequestorAPI(
             !!requestData.media_encrypted,
             requestData.media_encrypted ? 'Yes' : 'No',
             transferDataJson,
-          ));
+          );
 
         requestId = Number(result.lastInsertRowid);
       }
@@ -326,7 +326,9 @@ export async function handleRequestorAPI(
           FROM users
           WHERE id = ?
         `)
-          .get(parseInt(requestData.dta_id, 10))) as { email: string; first_name: string; last_name: string } | undefined;
+          .get(parseInt(requestData.dta_id, 10))) as
+          | { email: string; first_name: string; last_name: string }
+          | undefined;
 
         if (dtaUser) {
           await emailService.notifyDTASelection(requestId, dtaUser.email, {
@@ -361,7 +363,7 @@ export async function handleRequestorAPI(
       return new Response(
         JSON.stringify({
           success: false,
-          message: `Failed to save draft: ${(error instanceof Error ? error.message : String(error))}`,
+          message: `Failed to save draft: ${error instanceof Error ? error.message : String(error)}`,
         }),
         {
           status: 500,
@@ -432,7 +434,15 @@ export async function handleRequestorAPI(
         SELECT id, status, request_number, transfer_type FROM aft_requests 
         WHERE id = ? AND requestor_id = ?
       `)
-        .get(requestId, authResult.session.userId)) as { id: number; status: string; request_number: string; transfer_type: string | null; classification: string | null; } | undefined;
+        .get(requestId, authResult.session.userId)) as
+        | {
+            id: number;
+            status: string;
+            request_number: string;
+            transfer_type: string | null;
+            classification: string | null;
+          }
+        | undefined;
 
       console.log('Submit request - Request ID:', requestId, 'User ID:', authResult.session.userId);
       console.log('Found request:', existingRequest);
@@ -643,7 +653,7 @@ export async function handleRequestorAPI(
       return new Response(
         JSON.stringify({
           success: false,
-          message: `Failed to submit request: ${(error instanceof Error ? error.message : String(error))}`,
+          message: `Failed to submit request: ${error instanceof Error ? error.message : String(error)}`,
         }),
         {
           status: 500,

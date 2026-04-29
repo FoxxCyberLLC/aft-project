@@ -1,7 +1,7 @@
 // AFT Request Creation Wizard - Sections I & II from ACDS Form v1.3
 
 import { FormComponents } from '../components/ui/form-components';
-import { getDb, type DbRow } from '../lib/database-bun';
+import { getDb } from '../lib/database-bun';
 import { RequestorNavigation, type RequestorUser } from './requestor-nav';
 
 export interface AFTRequestDraft {
@@ -40,9 +40,11 @@ async function render(user: RequestorUser, userId: number, draftId?: number): Pr
   if (draftId) {
     existingDraft = (await db
       .query('SELECT * FROM aft_requests WHERE id = ? AND requestor_id = ?')
-      .get(draftId, userId)) as
-      | ({ status: string; updated_at: number; [key: string]: unknown })
-      | null;
+      .get(draftId, userId)) as {
+      status: string;
+      updated_at: number;
+      [key: string]: unknown;
+    } | null;
     if (existingDraft) {
       // Parse files list if it exists
       if (existingDraft.files_list) {
@@ -78,7 +80,9 @@ async function render(user: RequestorUser, userId: number, draftId?: number): Pr
   // Prepare initial destinations JSON from existing draft transfer_data
   const initialDestinationsJson = (() => {
     try {
-      const td = existingDraft?.transfer_data ? JSON.parse(String(existingDraft.transfer_data)) : null;
+      const td = existingDraft?.transfer_data
+        ? JSON.parse(String(existingDraft.transfer_data))
+        : null;
       const arr = td?.destinations || [];
       return JSON.stringify(arr);
     } catch {

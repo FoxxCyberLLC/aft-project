@@ -1,5 +1,5 @@
 // Authentication page routes
-import { getDb, type DbRow, type UserRoleType } from '../../lib/database-bun';
+import { type DbRow, getDb, type UserRoleType } from '../../lib/database-bun';
 import { buildClearAuthCookies, destroySession } from '../../lib/security';
 import { LoginPage } from '../../login/login-page';
 import { RoleMiddleware } from '../../middleware/role-middleware';
@@ -13,7 +13,10 @@ export async function handleLoginPage(request: Request, ipAddress: string): Prom
   const auth = await checkAuth(request, ipAddress);
   if (auth) {
     if (auth.roleSelected) {
-      return Response.redirect(RoleMiddleware.getRoleDashboardUrl(auth.activeRole as UserRoleType), 302);
+      return Response.redirect(
+        RoleMiddleware.getRoleDashboardUrl(auth.activeRole as UserRoleType),
+        302,
+      );
     } else {
       return Response.redirect('/select-role', 302);
     }
@@ -35,7 +38,10 @@ export async function handleRoleSelectionPage(
   }
 
   if (auth.roleSelected) {
-    return Response.redirect(RoleMiddleware.getRoleDashboardUrl(auth.activeRole as UserRoleType), 302);
+    return Response.redirect(
+      RoleMiddleware.getRoleDashboardUrl(auth.activeRole as UserRoleType),
+      302,
+    );
   }
 
   // Get user details

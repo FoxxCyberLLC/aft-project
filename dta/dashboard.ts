@@ -1,6 +1,6 @@
 // DTA Dashboard - Main DTA landing page
 import { ComponentBuilder, Templates } from '../components/ui/server-components';
-import { getDb, type DbRow } from '../lib/database-bun';
+import { type DbRow, getDb } from '../lib/database-bun';
 import { DTANavigation, type DTAUser } from './dta-nav';
 
 async function render(user: DTAUser, userId: number): Promise<string> {
@@ -63,7 +63,11 @@ async function render(user: DTAUser, userId: number): Promise<string> {
 
   // Get anti-virus scan statistics for dashboard - only for assigned requests
   // Check if scan columns exist first
-  let scanStats: any = { origination_scans: 0, destination_scans: 0, total_threats: 0 };
+  let scanStats: { origination_scans: number; destination_scans: number; total_threats: number } = {
+    origination_scans: 0,
+    destination_scans: 0,
+    total_threats: 0,
+  };
 
   try {
     // Check column existence via Postgres information_schema (the columns
@@ -84,7 +88,7 @@ async function render(user: DTAUser, userId: number): Promise<string> {
       columnNames.includes('origination_threats_found') &&
       columnNames.includes('destination_threats_found')
     ) {
-      scanStats = (await db
+      scanStats = ((await db
         .query(`
         SELECT 
           COUNT(CASE WHEN origination_scan_performed = TRUE THEN 1 END) as origination_scans,
@@ -94,7 +98,9 @@ async function render(user: DTAUser, userId: number): Promise<string> {
         WHERE status IN ('active_transfer', 'pending_sme_signature', 'completed', 'disposed')
           AND dta_id = ?
       `)
-        .get(userId)) as DbRow;
+        .get(userId)) as
+        | { origination_scans: number; destination_scans: number; total_threats: number }
+        | undefined) ?? { origination_scans: 0, destination_scans: 0, total_threats: 0 };
     }
   } catch (error) {
     console.warn('Could not query scan statistics, columns may not exist yet:', error);
@@ -105,7 +111,11 @@ async function render(user: DTAUser, userId: number): Promise<string> {
 
   // Build statistics card using DTANavigation.renderQuickStats
   const statsCard = DTANavigation.renderQuickStats([
-    { label: 'My Assigned Requests', value: Number(allRequests?.count) || 0, status: 'operational' },
+    {
+      label: 'My Assigned Requests',
+      value: Number(allRequests?.count) || 0,
+      status: 'operational',
+    },
     {
       label: 'Pending My Action',
       value: Number(dtaPendingRequests?.count) || 0,
@@ -204,7 +214,10 @@ function buildRecentRequestsTable(requests: DbRow[]): string {
 
         const variant = statusVariant[row.status as keyof typeof statusVariant] || 'default';
 
-        return ComponentBuilder.statusBadge(String(row.status).replace('_', ' ').toUpperCase(), variant);
+        return ComponentBuilder.statusBadge(
+          String(row.status).replace('_', ' ').toUpperCase(),
+          variant,
+        );
       },
     },
     {

@@ -1,6 +1,6 @@
 // Requestor Dashboard - Main requestor landing page
 import { ComponentBuilder, Templates } from '../components/ui/server-components';
-import { getDb, type DbRow } from '../lib/database-bun';
+import { type DbRow, getDb } from '../lib/database-bun';
 import { RequestorNavigation, type RequestorUser } from './requestor-nav';
 
 async function render(user: RequestorUser, userId: number): Promise<string> {
@@ -66,10 +66,7 @@ async function render(user: RequestorUser, userId: number): Promise<string> {
     },
     {
       label: 'Success Rate',
-      value: getSuccessRate(
-        Number(myRequests?.count) || 0,
-        Number(pendingRequests?.count) || 0,
-      ),
+      value: getSuccessRate(Number(myRequests?.count) || 0, Number(pendingRequests?.count) || 0),
       status: 'operational',
     },
   ]);
@@ -172,7 +169,10 @@ function buildRecentRequestsTable(requests: DbRow[]): string {
 
         const variant = statusVariant[row.status as keyof typeof statusVariant] || 'default';
 
-        return ComponentBuilder.statusBadge(String(row.status).replace('_', ' ').toUpperCase(), variant);
+        return ComponentBuilder.statusBadge(
+          String(row.status).replace('_', ' ').toUpperCase(),
+          variant,
+        );
       },
     },
     {

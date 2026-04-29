@@ -1,6 +1,6 @@
 // DOD-compliant security module for AFT application
+
 import { getDb } from './database-bun';
-import type { DbRow } from './database-bun';
 
 // Security configuration
 export const SECURITY_CONFIG = {

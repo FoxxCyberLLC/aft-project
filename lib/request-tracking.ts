@@ -2,8 +2,8 @@
 // Handles request status tracking, audit trails, and timeline generation
 
 import type { TimelineStep } from '../components/ui/timeline';
-import { AFT_STATUS_LABELS, AFTStatus, type AFTStatusType, getDb } from './database-bun';
 import type { DbRow } from './database-bun';
+import { AFT_STATUS_LABELS, AFTStatus, type AFTStatusType, getDb } from './database-bun';
 
 export interface RequestAuditEntry {
   id: number;
@@ -86,7 +86,10 @@ async function getRequestTimeline(requestId: number): Promise<RequestTimelineDat
 
 // Generate timeline steps from request data and audit entries
 function generateTimelineSteps(request: DbRow, auditEntries: RequestAuditEntry[]): TimelineStep[] {
-  const statusFlow = getStatusFlow(request.status as AFTStatusType, (request.transfer_type as string) ?? undefined);
+  const statusFlow = getStatusFlow(
+    request.status as AFTStatusType,
+    (request.transfer_type as string) ?? undefined,
+  );
   const statusEvents = new Map<AFTStatusType, RequestAuditEntry>();
 
   // The first audit entry for a request is its creation, which we map to the DRAFT status.
@@ -379,24 +382,28 @@ async function getRequestsWithTimeline(filters?: {
   dta_id?: number;
   limit?: number;
   offset?: number;
-}): Promise<Array<DbRow & {
-  id: number;
-  request_number: string;
-  requestor_name: string;
-  status: AFTStatusType;
-  created_at: number;
-  updated_at: number;
-  transfer_type: string | null;
-  classification: string | null;
-  source_system: string | null;
-  dest_system: string | null;
-  dta_id: number | null;
-  selected_drive_id: number | null;
-  timeline_progress: number;
-  total_steps: number;
-  current_step: number;
-  is_terminal: boolean;
-}>> {
+}): Promise<
+  Array<
+    DbRow & {
+      id: number;
+      request_number: string;
+      requestor_name: string;
+      status: AFTStatusType;
+      created_at: number;
+      updated_at: number;
+      transfer_type: string | null;
+      classification: string | null;
+      source_system: string | null;
+      dest_system: string | null;
+      dta_id: number | null;
+      selected_drive_id: number | null;
+      timeline_progress: number;
+      total_steps: number;
+      current_step: number;
+      is_terminal: boolean;
+    }
+  >
+> {
   const db = getDb();
 
   let query = `

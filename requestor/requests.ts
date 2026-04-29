@@ -2,7 +2,7 @@
 
 import { ArrowRightIcon } from '../components/icons';
 import { ComponentBuilder } from '../components/ui/server-components';
-import { AFT_STATUS_LABELS, getDb, type DbRow } from '../lib/database-bun';
+import { AFT_STATUS_LABELS, type DbRow, getDb } from '../lib/database-bun';
 import { RequestorNavigation, type RequestorUser } from './requestor-nav';
 
 async function render(
@@ -73,8 +73,7 @@ async function render(
       label: 'Status',
       render: (_value: unknown, row: DbRow) =>
         ComponentBuilder.statusBadge(
-          AFT_STATUS_LABELS[row.status as keyof typeof AFT_STATUS_LABELS] ||
-            (row.status as string),
+          AFT_STATUS_LABELS[row.status as keyof typeof AFT_STATUS_LABELS] || (row.status as string),
           getStatusVariant(row.status as string),
         ),
     },

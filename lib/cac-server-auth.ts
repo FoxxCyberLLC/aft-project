@@ -73,24 +73,31 @@ function isValidCertificate(certificate: CACClientCertificate): boolean {
 // email (extracted from the certificate) and, as a fallback, by the
 // fingerprint stored in the cac_certificates table. We refuse to auto-
 // create users from a CAC alone - admins must provision the account first.
-async function getUserFromCertificate(certificate: CACClientCertificate): Promise<{ id: number; is_active: boolean | number; [key: string]: unknown } | null> {
+async function getUserFromCertificate(
+  certificate: CACClientCertificate,
+): Promise<{ id: number; is_active: boolean | number; [key: string]: unknown } | null> {
   const db = getDb();
 
   const email = extractEmail(certificate.subject);
 
-  let user: any = null;
+  type UserRow = { id: number; is_active: boolean | number; [key: string]: unknown };
+  let user: UserRow | null = null;
   if (email) {
-    user = await db.query(`SELECT * FROM users WHERE email = ? AND is_active = TRUE`).get(email);
+    user =
+      ((await db.query(`SELECT * FROM users WHERE email = ? AND is_active = TRUE`).get(email)) as
+        | UserRow
+        | undefined) ?? null;
   }
 
   if (!user && certificate.fingerprint) {
-    user = await db
-      .query(`
+    user =
+      ((await db
+        .query(`
       SELECT u.* FROM users u
       JOIN cac_certificates cc ON cc.user_id = u.id
       WHERE cc.fingerprint = ? AND u.is_active = TRUE
     `)
-      .get(certificate.fingerprint);
+        .get(certificate.fingerprint)) as UserRow | undefined) ?? null;
   }
 
   if (user) {
@@ -138,7 +145,11 @@ async function storeCertificate(userId: number, certificate: CACClientCertificat
 async function authenticateWithCertificate(
   certificate: CACClientCertificate,
   ipAddress: string,
-): Promise<{ success: boolean; user?: any; error?: string }> {
+): Promise<{
+  success: boolean;
+  user?: { id: number; email?: string; [key: string]: unknown };
+  error?: string;
+}> {
   try {
     // Validate certificate is from DOD
     if (!isDODCertificate(certificate)) {
@@ -224,7 +235,11 @@ export const CACServerAuth = {
 export async function CACAuthMiddleware(
   request: Request,
   ipAddress: string,
-): Promise<{ success: boolean; user?: any; error?: string }> {
+): Promise<{
+  success: boolean;
+  user?: { id: number; email?: string; [key: string]: unknown };
+  error?: string;
+}> {
   const clientCert = CACServerAuth.getClientCertificate(request);
 
   if (!clientCert) {

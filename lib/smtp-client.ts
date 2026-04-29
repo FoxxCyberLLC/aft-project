@@ -1,4 +1,3 @@
-import type { DbRow } from './database-bun';
 // Minimal SMTP client implemented on top of Bun's TCP socket API.
 //
 // Supports:

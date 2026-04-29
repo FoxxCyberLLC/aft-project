@@ -1,7 +1,7 @@
 // Requestor page routes
 
 import { ChevronLeftIcon } from '../../components/icons';
-import { getDb, type DbRow } from '../../lib/database-bun';
+import { type DbRow, getDb } from '../../lib/database-bun';
 import { RoleMiddleware } from '../../middleware/role-middleware';
 import { RequestorAllRequests } from '../../requestor/all-requests';
 import { RequestorDashboard } from '../../requestor/dashboard';
@@ -111,7 +111,18 @@ export async function handleRequestDetailPage(
     LEFT JOIN users u ON ar.requestor_id = u.id
     WHERE ar.id = ? AND ar.requestor_id = ?
   `)
-    .get(requestId, userId)) as (DbRow & { id: number; request_number: string; status: string; files_list: string | null; rejection_reason: string | null; requestor_name: string; created_at: number; updated_at: number }) | undefined;
+    .get(requestId, userId)) as
+    | (DbRow & {
+        id: number;
+        request_number: string;
+        status: string;
+        files_list: string | null;
+        rejection_reason: string | null;
+        requestor_name: string;
+        created_at: number;
+        updated_at: number;
+      })
+    | undefined;
 
   if (!requestData) {
     return new Response('Request not found or access denied', { status: 404 });
@@ -148,7 +159,12 @@ export async function handleRequestDetailPage(
     | undefined;
 
   // Parse files list
-  let files: Array<{ name?: string; size?: string | number; type?: string; classification?: string }> = [];
+  let files: Array<{
+    name?: string;
+    size?: string | number;
+    type?: string;
+    classification?: string;
+  }> = [];
   try {
     files = JSON.parse(requestData.files_list || '[]');
   } catch (_e) {

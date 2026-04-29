@@ -1,5 +1,5 @@
 // Media Custodian API endpoints
-import { getDb, type DbRow, type AFTStatusType } from '../../lib/database-bun';
+import { type AFTStatusType, type DbRow, getDb } from '../../lib/database-bun';
 import { RequestTrackingService } from '../../lib/request-tracking';
 
 // Get all users for assignment dropdowns
@@ -55,7 +55,7 @@ async function getMediaDriveById(id: number): Promise<DbRow | null> {
   return row || null;
 }
 
-async function createMediaDrive(driveData: any): Promise<unknown> {
+async function createMediaDrive(driveData: Record<string, unknown>): Promise<unknown> {
   const db = getDb();
   const result = await db
     .query(`
@@ -63,50 +63,50 @@ async function createMediaDrive(driveData: any): Promise<unknown> {
     VALUES (?, ?, ?, ?, ?, ?, ?)
   `)
     .run(
-      driveData.serial_number,
-      driveData.media_control_number || null,
-      driveData.type,
-      driveData.model,
-      driveData.capacity,
-      driveData.location || '',
-      driveData.status || 'available',
+      driveData.serial_number as string,
+      (driveData.media_control_number as string | undefined) ?? null,
+      driveData.type as string,
+      driveData.model as string,
+      driveData.capacity as string | number,
+      (driveData.location as string | undefined) ?? '',
+      (driveData.status as string | undefined) ?? 'available',
     );
 
   return { id: result.lastInsertRowid, ...driveData };
 }
 
-async function updateMediaDrive(id: number, driveData: any): Promise<boolean> {
+async function updateMediaDrive(id: number, driveData: Record<string, unknown>): Promise<boolean> {
   const db = getDb();
-  const fields = [];
-  const values = [];
+  const fields: string[] = [];
+  const values: Array<string | number | null> = [];
 
   if (driveData.serial_number !== undefined) {
     fields.push('serial_number = ?');
-    values.push(driveData.serial_number);
+    values.push(driveData.serial_number as string | number | null);
   }
   if (driveData.media_control_number !== undefined) {
     fields.push('media_control_number = ?');
-    values.push(driveData.media_control_number);
+    values.push(driveData.media_control_number as string | number | null);
   }
   if (driveData.type !== undefined) {
     fields.push('type = ?');
-    values.push(driveData.type);
+    values.push(driveData.type as string | number | null);
   }
   if (driveData.model !== undefined) {
     fields.push('model = ?');
-    values.push(driveData.model);
+    values.push(driveData.model as string | number | null);
   }
   if (driveData.capacity !== undefined) {
     fields.push('capacity = ?');
-    values.push(driveData.capacity);
+    values.push(driveData.capacity as string | number | null);
   }
   if (driveData.location !== undefined) {
     fields.push('location = ?');
-    values.push(driveData.location);
+    values.push(driveData.location as string | number | null);
   }
   if (driveData.status !== undefined) {
     fields.push('status = ?');
-    values.push(driveData.status);
+    values.push(driveData.status as string | number | null);
   }
 
   fields.push('updated_at = EXTRACT(EPOCH FROM NOW())::BIGINT');
@@ -528,7 +528,7 @@ async function processRequest(
   action: string,
   userId: number,
   notes?: string,
-  dispositionData?: any,
+  dispositionData?: Record<string, unknown>,
 ): Promise<{ success: boolean; message: string; newStatus?: string }> {
   const db = getDb();
 
@@ -605,7 +605,7 @@ async function processRequest(
     // Store disposition data if provided
     if (dispositionData && (action === 'dispose' || action === 'dispose_and_return_drive')) {
       const dispositionDate = dispositionData.dispositionDate
-        ? Math.floor(new Date(dispositionData.dispositionDate).getTime() / 1000)
+        ? Math.floor(new Date(dispositionData.dispositionDate as string).getTime() / 1000)
         : Math.floor(Date.now() / 1000);
 
       await db
@@ -623,13 +623,13 @@ async function processRequest(
         WHERE id = ?
       `)
         .run(
-          dispositionData.opticalDestroyed || 'na',
-          dispositionData.opticalRetained || 'na',
-          dispositionData.ssdSanitized || 'na',
-          dispositionData.custodianName,
+          (dispositionData.opticalDestroyed as string | undefined) ?? 'na',
+          (dispositionData.opticalRetained as string | undefined) ?? 'na',
+          (dispositionData.ssdSanitized as string | undefined) ?? 'na',
+          dispositionData.custodianName as string,
           dispositionDate,
-          dispositionData.digitalSignature,
-          dispositionData.notes || '',
+          dispositionData.digitalSignature as string,
+          (dispositionData.notes as string | undefined) ?? '',
           Math.floor(Date.now() / 1000),
           requestId,
         );

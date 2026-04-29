@@ -3,7 +3,7 @@
 import { CACPinModal } from '../components/cac-pin-modal';
 import { ShieldIcon } from '../components/icons';
 import { CACSignatureManager } from '../lib/cac-signature';
-import { getDb, type DbRow } from '../lib/database-bun';
+import { type DbRow, getDb } from '../lib/database-bun';
 import { DTANavigation, type DTAUser } from './dta-nav';
 
 async function render(user: DTAUser, requestId: string, userId: number): Promise<string> {
@@ -54,7 +54,7 @@ async function render(user: DTAUser, requestId: string, userId: number): Promise
   );
 }
 
-function buildTransferForm(request: DbRow, smeUsers: DbRow[], cacSignatures: any[]): string {
+function buildTransferForm(request: DbRow, smeUsers: DbRow[], cacSignatures: DbRow[]): string {
   const currentStep = getCurrentStep(request);
   const submitText = getSubmitButtonText(currentStep, request);
   const submitButton = submitText

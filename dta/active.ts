@@ -1,6 +1,6 @@
 // DTA Active Transfers - Enhanced Professional UI
 
-import { getDb, type DbRow } from '../lib/database-bun';
+import { type DbRow, getDb } from '../lib/database-bun';
 import { DTANavigation, type DTAUser } from './dta-nav';
 
 async function render(user: DTAUser, _userId: number): Promise<string> {
@@ -215,7 +215,10 @@ function buildActiveTransfersTable(transfers: DbRow[]): string {
   `;
 }
 
-function buildProfessionalTable(columns: Array<{ key: string; label: string; render?: (value: unknown, row: DbRow) => string }>, data: DbRow[]): string {
+function buildProfessionalTable(
+  columns: Array<{ key: string; label: string; render?: (value: unknown, row: DbRow) => string }>,
+  data: DbRow[],
+): string {
   if (data.length === 0) {
     return `
       <div class="text-center py-12">

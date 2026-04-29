@@ -1,7 +1,7 @@
 // Approver API Endpoints
 
 import { type CACSignatureData, CACSignatureManager } from '../../lib/cac-signature';
-import { getDb, UserRole, type DbRow } from '../../lib/database-bun';
+import { type DbRow, getDb, UserRole } from '../../lib/database-bun';
 import { emailService, getNextApproverEmails } from '../../lib/email-service';
 import { escapeCsv, escapeHtml } from '../../lib/formatters';
 import { auditLog } from '../../lib/security';
@@ -160,7 +160,15 @@ export async function handleApproverAPI(
 
         const { signature, certificate, timestamp, algorithm, notes } = body as {
           signature: string;
-          certificate: { thumbprint: string; subject: string; issuer: string; validFrom: string; validTo: string; serialNumber: string; certificateData: string };
+          certificate: {
+            thumbprint: string;
+            subject: string;
+            issuer: string;
+            validFrom: string;
+            validTo: string;
+            serialNumber: string;
+            certificateData: string;
+          };
           timestamp: string;
           algorithm: string;
           notes?: string;
@@ -306,7 +314,14 @@ export async function handleApproverAPI(
           SELECT request_number, requestor_email, transfer_type, classification
           FROM aft_requests WHERE id = ?
         `)
-          .get(requestId)) as { request_number: string; requestor_email: string; transfer_type: string | null; classification: string | null; } | undefined;
+          .get(requestId)) as
+          | {
+              request_number: string;
+              requestor_email: string;
+              transfer_type: string | null;
+              classification: string | null;
+            }
+          | undefined;
 
         // Add to history (ISSM approval)
         const historyAction = 'ISSM_APPROVED';
@@ -323,20 +338,20 @@ export async function handleApproverAPI(
         const cpsoEmails = await getNextApproverEmails(newStatus);
         for (const email of cpsoEmails) {
           await emailService.notifyNextApprover(requestIdNum, newStatus, email, {
-            requestNumber: (requestData?.request_number ?? ""),
-            requestorName: (requestData?.requestor_email ?? ""),
-            transferType: (requestData?.transfer_type) || 'N/A',
-            classification: (requestData?.classification) || 'N/A',
+            requestNumber: requestData?.request_number ?? '',
+            requestorName: requestData?.requestor_email ?? '',
+            transferType: requestData?.transfer_type || 'N/A',
+            classification: requestData?.classification || 'N/A',
             notes: notes,
           });
         }
 
         // Notify requestor of approval progress
-        await emailService.notifyRequestApproved(requestIdNum, (requestData?.requestor_email ?? ""), {
-          requestNumber: (requestData?.request_number ?? ""),
-          requestorName: (requestData?.requestor_email ?? ""),
-          transferType: (requestData?.transfer_type) || 'N/A',
-          classification: (requestData?.classification) || 'N/A',
+        await emailService.notifyRequestApproved(requestIdNum, requestData?.requestor_email ?? '', {
+          requestNumber: requestData?.request_number ?? '',
+          requestorName: requestData?.requestor_email ?? '',
+          transferType: requestData?.transfer_type || 'N/A',
+          classification: requestData?.classification || 'N/A',
           nextApprover: 'ISSM',
           notes: notes,
         });
@@ -434,7 +449,14 @@ export async function handleApproverAPI(
           SELECT request_number, requestor_email, transfer_type, classification
           FROM aft_requests WHERE id = ?
         `)
-          .get(requestId)) as { request_number: string; requestor_email: string; transfer_type: string | null; classification: string | null; } | undefined;
+          .get(requestId)) as
+          | {
+              request_number: string;
+              requestor_email: string;
+              transfer_type: string | null;
+              classification: string | null;
+            }
+          | undefined;
 
         // Add to history
         await db
@@ -448,12 +470,12 @@ export async function handleApproverAPI(
         if (requestData) {
           await emailService.notifyRequestRejected(
             parseInt(requestId, 10),
-            (requestData?.requestor_email ?? ""),
+            requestData?.requestor_email ?? '',
             {
-              requestNumber: (requestData?.request_number ?? ""),
-              requestorName: (requestData?.requestor_email ?? ""),
-              transferType: (requestData?.transfer_type) || 'N/A',
-              classification: (requestData?.classification) || 'N/A',
+              requestNumber: requestData?.request_number ?? '',
+              requestorName: requestData?.requestor_email ?? '',
+              transferType: requestData?.transfer_type || 'N/A',
+              classification: requestData?.classification || 'N/A',
               nextApprover: 'ISSM',
               rejectionReason: reason,
               notes: notes,
@@ -564,7 +586,7 @@ function generateCSV(requests: DbRow[]): string {
   ].join('\n');
 }
 
-function generatePrintableReport(requests: any[], type: string, approverEmail: string): string {
+function generatePrintableReport(requests: DbRow[], type: string, approverEmail: string): string {
   const reportTitle = `${type.charAt(0).toUpperCase() + type.slice(1)} Report`;
   const generatedDate = new Date().toLocaleString();
 

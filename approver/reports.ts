@@ -1,7 +1,7 @@
 // Approver Reports Page - Analytics and reporting for approval activities
 
 import { ChartBarIcon, DownloadIcon, PieChartIcon, TrendingUpIcon } from '../components/icons';
-import { getDb, type DbRow } from '../lib/database-bun';
+import { getDb } from '../lib/database-bun';
 import { ApproverNavigation, type ApproverUser } from './approver-nav';
 
 async function render(user: ApproverUser): Promise<string> {

@@ -1,6 +1,6 @@
 // Media Custodian Reports Interface
 import { ComponentBuilder } from '../components/ui/server-components';
-import { getDb, type DbRow } from '../lib/database-bun';
+import { type DbRow, getDb } from '../lib/database-bun';
 import { MediaCustodianNavigation, type MediaCustodianUser } from './media-custodian-nav';
 
 async function renderReportsPage(user: MediaCustodianUser): Promise<string> {

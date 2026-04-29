@@ -2,7 +2,7 @@
 
 import { CheckIcon } from '../components/icons';
 import { ComponentBuilder } from '../components/ui/server-components';
-import { AFT_STATUS_LABELS, getDb, type DbRow } from '../lib/database-bun';
+import { AFT_STATUS_LABELS, type DbRow, getDb } from '../lib/database-bun';
 import { RequestTrackingService } from '../lib/request-tracking';
 import { RequestorNavigation, type RequestorUser } from './requestor-nav';
 
@@ -13,7 +13,9 @@ async function render(
   const db = getDb();
 
   // Stats (optional but matches format)
-  const totalRequests = (await db.query('SELECT COUNT(*) as count FROM aft_requests').get()) as DbRow;
+  const totalRequests = (await db
+    .query('SELECT COUNT(*) as count FROM aft_requests')
+    .get()) as DbRow;
   const pendingRequests = (await db
     .query(
       "SELECT COUNT(*) as count FROM aft_requests WHERE status NOT IN ('completed', 'rejected', 'cancelled')",

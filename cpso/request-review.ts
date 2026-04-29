@@ -14,7 +14,7 @@ import {
 } from '../components/icons';
 import { ComponentBuilder } from '../components/ui/server-components';
 import { CACSignatureManager } from '../lib/cac-signature';
-import { getDb, type DbRow } from '../lib/database-bun';
+import { type DbRow, getDb } from '../lib/database-bun';
 import { CPSONavigation, type CPSOUser } from './cpso-nav';
 
 async function render(user: CPSOUser, requestId: string): Promise<string> {
@@ -207,7 +207,12 @@ function renderRequestDetails(request: DbRow): string {
 
 function renderDestinations(request: DbRow): string {
   // Parse transfer_data.destinations if present
-  let destinations: Array<{ is?: string; classification?: string; location?: string; contact?: string }> = [];
+  let destinations: Array<{
+    is?: string;
+    classification?: string;
+    location?: string;
+    contact?: string;
+  }> = [];
   try {
     const td = request.transfer_data ? JSON.parse(String(request.transfer_data)) : null;
     destinations = Array.isArray(td?.destinations) ? td.destinations : [];
@@ -255,7 +260,13 @@ function renderDestinations(request: DbRow): string {
 }
 
 function renderFileInformation(request: DbRow): string {
-  let files: Array<{ name: string; size: number; type: string; hash?: string; classification?: string }> = [];
+  let files: Array<{
+    name: string;
+    size: number;
+    type: string;
+    hash?: string;
+    classification?: string;
+  }> = [];
   try {
     files = request.files_list ? JSON.parse(String(request.files_list)) : [];
     if (!Array.isArray(files)) files = [];
@@ -472,7 +483,7 @@ function renderRequestorInfo(request: DbRow): string {
                   .join('')}
               </div>
               <div>
-                <p class="text-sm font-medium text-[var(--foreground)]">${(request.dta_name as string)}</p>
+                <p class="text-sm font-medium text-[var(--foreground)]">${request.dta_name as string}</p>
                 <p class="text-xs text-[var(--muted-foreground)]">${request.dta_email || 'No email available'}</p>
               </div>
             </div>

@@ -4,7 +4,7 @@
 
 export interface NativeMessageRequest {
   action: 'connect' | 'getStatus' | 'readCertificates' | 'signData' | 'verifyPIN';
-  data?: any;
+  data?: unknown;
 }
 
 export interface NativeMessageResponse {

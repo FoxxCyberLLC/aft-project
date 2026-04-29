@@ -1,6 +1,6 @@
 // Media Custodian Dashboard - Main media custodian landing page
 import { ComponentBuilder, Templates } from '../components/ui/server-components';
-import { getDb, type DbRow } from '../lib/database-bun';
+import { type DbRow, getDb } from '../lib/database-bun';
 import { MediaCustodianNavigation, type MediaCustodianUser } from './media-custodian-nav';
 
 async function render(user: MediaCustodianUser, _userId: number): Promise<string> {
@@ -199,7 +199,10 @@ function buildRecentRequestsTable(requests: DbRow[]): string {
 
         const variant = statusVariant[row.status as keyof typeof statusVariant] || 'default';
 
-        return ComponentBuilder.statusBadge(String(row.status).replace('_', ' ').toUpperCase(), variant);
+        return ComponentBuilder.statusBadge(
+          String(row.status).replace('_', ' ').toUpperCase(),
+          variant,
+        );
       },
     },
     {

@@ -1,7 +1,6 @@
 import { getDb } from './database-bun';
 import { escapeHtml } from './formatters';
 import { SMTPClient } from './smtp-client';
-import type { DbRow } from './database-bun';
 
 interface EmailConfig {
   host: string;

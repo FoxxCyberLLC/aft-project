@@ -2,7 +2,7 @@
 
 import { AlertCircleIcon } from '../components/icons';
 import { ComponentBuilder } from '../components/ui/server-components';
-import { getDb, type DbRow } from '../lib/database-bun';
+import { type DbRow, getDb } from '../lib/database-bun';
 import { ApproverNavigation, type ApproverUser } from './approver-nav';
 
 async function render(user: ApproverUser, _userId: number): Promise<string> {
@@ -20,7 +20,15 @@ async function render(user: ApproverUser, _userId: number): Promise<string> {
     WHERE r.status IN ('pending_approver', 'pending_approval', 'submitted')
     ORDER BY r.created_at DESC
   `)
-    .all()) as Array<{ id: number; request_number: string; requestor_name: string; transfer_type: string | null; classification: string | null; created_at: number; priority: string | null; }>;
+    .all()) as Array<{
+    id: number;
+    request_number: string;
+    requestor_name: string;
+    transfer_type: string | null;
+    classification: string | null;
+    created_at: number;
+    priority: string | null;
+  }>;
 
   // Transform requests data for table
   const tableData = pendingRequests.map((request) => ({

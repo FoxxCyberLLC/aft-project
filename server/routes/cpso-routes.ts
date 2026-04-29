@@ -6,7 +6,7 @@ import { CPSODashboard } from '../../cpso/dashboard';
 import { PendingCPSOReviewsPage } from '../../cpso/pending';
 import { CPSOReportsPage } from '../../cpso/reports';
 import { RequestReviewPage } from '../../cpso/request-review';
-import { getDb, UserRole, type DbRow } from '../../lib/database-bun';
+import { type DbRow, getDb, UserRole } from '../../lib/database-bun';
 import { RoleMiddleware } from '../../middleware/role-middleware';
 import { createHtmlPage } from '../utils';
 

@@ -1,6 +1,12 @@
 // Admin User Management Interface
 import { ComponentBuilder } from '../components/ui/server-components';
-import { getDb, getRoleDisplayName, UserRole, type DbRow, type UserRoleType } from '../lib/database-bun';
+import {
+  type DbRow,
+  getDb,
+  getRoleDisplayName,
+  UserRole,
+  type UserRoleType,
+} from '../lib/database-bun';
 import { escapeHtml } from '../lib/formatters';
 import { AdminNavigation, type AdminUser } from './admin-nav';
 

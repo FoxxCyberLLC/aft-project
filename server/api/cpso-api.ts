@@ -1,7 +1,7 @@
 // CPSO API Endpoints
 
 import { type CACSignatureData, CACSignatureManager } from '../../lib/cac-signature';
-import { getDb, UserRole, type DbRow } from '../../lib/database-bun';
+import { type DbRow, getDb, UserRole } from '../../lib/database-bun';
 import { escapeCsv, escapeHtml } from '../../lib/formatters';
 import { auditLog } from '../../lib/security';
 import { RoleMiddleware } from '../../middleware/role-middleware';
@@ -156,7 +156,15 @@ export async function handleCPSOAPI(
 
         const { signature, certificate, timestamp, algorithm, notes } = body as {
           signature: string;
-          certificate: { thumbprint: string; subject: string; issuer: string; validFrom: string; validTo: string; serialNumber: string; certificateData: string };
+          certificate: {
+            thumbprint: string;
+            subject: string;
+            issuer: string;
+            validFrom: string;
+            validTo: string;
+            serialNumber: string;
+            certificateData: string;
+          };
           timestamp: string;
           algorithm: string;
           notes?: string;
@@ -444,7 +452,7 @@ function generateCSV(requests: DbRow[]): string {
   ].join('\n');
 }
 
-function generatePrintableReport(requests: any[], type: string, approverEmail: string): string {
+function generatePrintableReport(requests: DbRow[], type: string, approverEmail: string): string {
   const reportTitle = `CPSO ${type.charAt(0).toUpperCase() + type.slice(1)} Report`;
   const generatedDate = new Date().toLocaleString();
 

@@ -2,7 +2,7 @@
 
 import { CalendarIcon, CheckCircleIcon } from '../components/icons';
 import { ComponentBuilder } from '../components/ui/server-components';
-import { getDb, type DbRow } from '../lib/database-bun';
+import { type DbRow, getDb } from '../lib/database-bun';
 import { CPSONavigation, type CPSOUser } from './cpso-nav';
 
 async function render(user: CPSOUser, _userId: number): Promise<string> {
@@ -75,7 +75,8 @@ async function render(user: CPSOUser, _userId: number): Promise<string> {
     {
       key: 'updated_at',
       label: 'Approved Date',
-      render: (_value: unknown, row: DbRow) => new Date((row.updated_at as number) * 1000).toLocaleDateString(),
+      render: (_value: unknown, row: DbRow) =>
+        new Date((row.updated_at as number) * 1000).toLocaleDateString(),
     },
     {
       key: 'status',

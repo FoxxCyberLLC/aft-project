@@ -9,7 +9,7 @@ import {
   UsersIcon,
 } from '../components/icons';
 import { ComponentBuilder, Templates } from '../components/ui/server-components';
-import { getDb, type DbRow } from '../lib/database-bun';
+import { type DbRow, getDb } from '../lib/database-bun';
 import { AdminNavigation, type AdminUser } from './admin-nav';
 
 async function render(user: AdminUser): Promise<string> {
@@ -19,7 +19,9 @@ async function render(user: AdminUser): Promise<string> {
   const userCount = (await db
     .query('SELECT COUNT(*) as count FROM users WHERE is_active = TRUE')
     .get()) as DbRow;
-  const requestCount = (await db.query('SELECT COUNT(*) as count FROM aft_requests').get()) as DbRow;
+  const requestCount = (await db
+    .query('SELECT COUNT(*) as count FROM aft_requests')
+    .get()) as DbRow;
   const recentLogins = (await db
     .query(`
     SELECT COUNT(*) as count FROM security_audit_log 

@@ -1,6 +1,6 @@
 // AFT Server - Modular implementation
 
-import { waitForReady, type DbRow } from './lib/database-bun';
+import { type DbRow, waitForReady } from './lib/database-bun';
 import { applySecurityHeaders, initializeSecurity } from './lib/security';
 import { handleAPI } from './server/api/index';
 import { handleAdminRoutes } from './server/routes/admin-routes';

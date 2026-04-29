@@ -1,6 +1,6 @@
 // Role-based middleware for request authorization
 
-import { UserRole, type UserRoleType, type DbRow } from '../lib/database-bun';
+import { UserRole, type UserRoleType } from '../lib/database-bun';
 import { type SecureSession, validateSession } from '../lib/security';
 
 // Check if user is authenticated and has selected a role

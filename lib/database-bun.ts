@@ -113,14 +113,15 @@ interface RunResult {
 type SqlParam = string | number | bigint | boolean | Date | null | undefined | Uint8Array;
 
 function extractRunResult(result: unknown): RunResult {
-  const firstRow = Array.isArray(result) ? (result[0] as Record<string, unknown> | undefined) : undefined;
+  const firstRow = Array.isArray(result)
+    ? (result[0] as Record<string, unknown> | undefined)
+    : undefined;
   let lastInsertRowid: number | undefined;
   if (firstRow && firstRow.id !== undefined && firstRow.id !== null) {
     lastInsertRowid = Number(firstRow.id);
   }
   const count = (result as { count?: unknown } | null)?.count;
-  const changes =
-    typeof count === 'number' ? count : Array.isArray(result) ? result.length : 0;
+  const changes = typeof count === 'number' ? count : Array.isArray(result) ? result.length : 0;
   return { lastInsertRowid, changes };
 }
 

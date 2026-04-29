@@ -1,7 +1,7 @@
 // SME API Endpoints
 
 import { type CACSignatureData, CACSignatureManager } from '../../lib/cac-signature';
-import { getDb, UserRole, type DbRow } from '../../lib/database-bun';
+import { type DbRow, getDb, UserRole } from '../../lib/database-bun';
 import { RequestTrackingService } from '../../lib/request-tracking';
 import { auditLog, type SecureSession } from '../../lib/security';
 import { RoleMiddleware } from '../../middleware/role-middleware';
@@ -183,7 +183,15 @@ async function signRequestWithCAC(
   try {
     const body = (await request.json()) as {
       signature: string;
-      certificate: { thumbprint: string; subject: string; issuer: string; validFrom: string; validTo: string; serialNumber: string; certificateData: string };
+      certificate: {
+        thumbprint: string;
+        subject: string;
+        issuer: string;
+        validFrom: string;
+        validTo: string;
+        serialNumber: string;
+        certificateData: string;
+      };
       timestamp: string;
       algorithm: string;
       notes?: string;

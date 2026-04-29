@@ -1,5 +1,5 @@
 // Timeline API routes
-import { getDb, type DbRow } from '../../lib/database-bun';
+import { type DbRow, getDb } from '../../lib/database-bun';
 import { checkAuth } from '../utils';
 
 const db = getDb();

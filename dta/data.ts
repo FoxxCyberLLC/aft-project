@@ -1,6 +1,6 @@
 // DTA Data Tracking - Section 4 transfer history and anti-virus scan records
 import { ComponentBuilder, Templates } from '../components/ui/server-components';
-import { getDb, type Db, type DbRow } from '../lib/database-bun';
+import { type Db, type DbRow, getDb } from '../lib/database-bun';
 import { DTANavigation, type DTAUser } from './dta-nav';
 
 async function render(user: DTAUser, userId: number): Promise<string> {
@@ -119,9 +119,9 @@ async function getTransferHistory(db: Db, userId?: number) {
     FROM aft_requests
     WHERE status IN ('active_transfer', 'pending_sme_signature', 'pending_media_custodian', 'completed', 'disposed')`;
 
-  const stats = (userId
-    ? await db.query(baseQuery).get(userId)
-    : await db.query(baseQuery).get()) as
+  const stats = (
+    userId ? await db.query(baseQuery).get(userId) : await db.query(baseQuery).get()
+  ) as
     | {
         total_transfers: number;
         total_files_transferred: number;
@@ -156,9 +156,9 @@ async function getScanStatistics(db: Db, userId?: number) {
     FROM aft_requests
     WHERE status IN ('active_transfer', 'pending_sme_signature', 'pending_media_custodian', 'completed', 'disposed')`;
 
-  const scanStats = (userId
-    ? await db.query(baseQuery).get(userId)
-    : await db.query(baseQuery).get()) as
+  const scanStats = (
+    userId ? await db.query(baseQuery).get(userId) : await db.query(baseQuery).get()
+  ) as
     | {
         origination_scans: number;
         destination_scans: number;
@@ -339,7 +339,10 @@ function buildTransferTrackingTable(transfers: DbRow[]): string {
 
         const variant = statusVariant[row.status as keyof typeof statusVariant] || 'default';
 
-        return ComponentBuilder.statusBadge(String(row.status).replace('_', ' ').toUpperCase(), variant);
+        return ComponentBuilder.statusBadge(
+          String(row.status).replace('_', ' ').toUpperCase(),
+          variant,
+        );
       },
     },
     {

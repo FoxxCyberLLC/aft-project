@@ -1,5 +1,5 @@
 // Authentication API routes
-import { getDb, getUserRoles, setUserPassword, verifyPassword, type DbRow } from '../../lib/database-bun';
+import { getDb, getUserRoles, setUserPassword, verifyPassword } from '../../lib/database-bun';
 import {
   auditLog,
   buildCsrfCookie,
