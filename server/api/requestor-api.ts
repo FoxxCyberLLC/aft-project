@@ -356,12 +356,12 @@ export async function handleRequestorAPI(
           headers: { 'Content-Type': 'application/json' },
         },
       );
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error saving AFT draft:', error);
       return new Response(
         JSON.stringify({
           success: false,
-          message: `Failed to save draft: ${error.message}`,
+          message: `Failed to save draft: ${(error instanceof Error ? error.message : String(error))}`,
         }),
         {
           status: 500,
@@ -638,12 +638,12 @@ export async function handleRequestorAPI(
           headers: { 'Content-Type': 'application/json' },
         },
       );
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error submitting AFT request:', error);
       return new Response(
         JSON.stringify({
           success: false,
-          message: `Failed to submit request: ${error.message}`,
+          message: `Failed to submit request: ${(error instanceof Error ? error.message : String(error))}`,
         }),
         {
           status: 500,

@@ -399,7 +399,7 @@ async function handleAPI(
     console.error('Media custodian API error:', error);
     return new Response(
       JSON.stringify({
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: error instanceof Error ? (error instanceof Error ? error.message : String(error)) : 'Unknown error',
       }),
       {
         status: 500,

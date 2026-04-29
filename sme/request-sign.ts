@@ -189,7 +189,7 @@ function renderRequestDetails(request: DbRow): string {
   });
 }
 
-function renderDTAProcessData(request: any, driveTracking: any[]): string {
+function renderDTAProcessData(request: DbRow, driveTracking: any[]): string {
   return ComponentBuilder.card({
     children: `
       <div class="p-6 pb-4">

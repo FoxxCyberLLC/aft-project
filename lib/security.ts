@@ -148,7 +148,15 @@ export async function createSecureSession(
   availableRoles: string[],
   ipAddress: string,
   userAgent: string,
-  cacCertificate?: any,
+  cacCertificate?: {
+    subject: string;
+    issuer: string;
+    serialNumber: string;
+    thumbprint: string;
+    validFrom: string;
+    validTo: string;
+    pemData?: string;
+  },
 ): Promise<SecureSession> {
   const sessionId = generateSecureToken(32);
   const csrfToken = generateSecureToken(32);
@@ -507,7 +515,7 @@ export async function auditLog(
   action: string,
   description: string,
   ipAddress: string,
-  additionalData?: any,
+  additionalData?: Record<string, unknown>,
 ): Promise<void> {
   const db = getDb();
 

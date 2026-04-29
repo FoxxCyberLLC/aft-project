@@ -42,7 +42,7 @@ async function getAllMediaDrives(): Promise<DbRow[]> {
     .all()) as DbRow[];
 }
 
-async function getMediaDriveById(id: number): Promise<any | null> {
+async function getMediaDriveById(id: number): Promise<DbRow | null> {
   const db = getDb();
   const row = (await db
     .query(`

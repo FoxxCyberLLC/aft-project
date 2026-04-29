@@ -357,7 +357,7 @@ function buildAddDriveForm(): string {
   `;
 }
 
-function buildIssueDriveModal(users: any[]): string {
+function buildIssueDriveModal(users: DbRow[]): string {
   const userOptions = users
     .map(
       (user) =>

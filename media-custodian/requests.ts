@@ -412,9 +412,9 @@ async function renderRequestDetail(user: MediaCustodianUser, requestId: number):
 }
 
 function buildDispositionForm(
-  request: any,
-  files: any[],
-  additionalSystems: any[],
+  request: DbRow,
+  files: Array<{ name: string; size: number; type: string; hash?: string; classification?: string }>,
+  additionalSystems: Array<Record<string, unknown>>,
   user: MediaCustodianUser,
 ): string {
   return `
@@ -686,7 +686,7 @@ function buildDispositionForm(
   `;
 }
 
-function buildRequestDetailsView(request: any, files: any[]): string {
+function buildRequestDetailsView(request: DbRow, files: Array<{ name: string; size: number; type: string; hash?: string; classification?: string }>): string {
   const statusVariant = {
     draft: 'default',
     submitted: 'info',
@@ -708,7 +708,7 @@ function buildRequestDetailsView(request: any, files: any[]): string {
           <h2 class="text-2xl font-bold text-[var(--foreground)]">${request.request_number}</h2>
           <p class="text-[var(--muted-foreground)]">Submitted by ${request.requestor_name || request.requestor_email}</p>
         </div>
-        ${ComponentBuilder.statusBadge(request.status.replace('_', ' ').toUpperCase(), variant)}
+        ${ComponentBuilder.statusBadge(String(request.status).replace('_', ' ').toUpperCase(), variant)}
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -786,7 +786,7 @@ function buildRequestDetailsView(request: any, files: any[]): string {
         <div class="text-sm text-[var(--muted-foreground)]">
           Created: ${new Date((request.created_at as number) * 1000).toLocaleString()}
           <br>
-          Updated: ${new Date(request.updated_at * 1000).toLocaleString()}
+          Updated: ${new Date((request.updated_at as number) * 1000).toLocaleString()}
         </div>
         <div class="flex space-x-2">
           <button onclick="window.location.href='/media-custodian/requests'" class="px-4 py-2 text-sm border border-[var(--border)] rounded-md hover:bg-[var(--muted)]">

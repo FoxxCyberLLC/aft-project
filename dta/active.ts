@@ -45,7 +45,7 @@ async function render(user: DTAUser, _userId: number): Promise<string> {
   );
 }
 
-function buildActiveTransfersTable(transfers: any[]): string {
+function buildActiveTransfersTable(transfers: DbRow[]): string {
   if (transfers.length === 0) {
     return `
       <div class="status-card text-center">
@@ -215,7 +215,7 @@ function buildActiveTransfersTable(transfers: any[]): string {
   `;
 }
 
-function buildProfessionalTable(columns: any[], data: any[]): string {
+function buildProfessionalTable(columns: Array<{ key: string; label: string; render?: (value: unknown, row: DbRow) => string }>, data: DbRow[]): string {
   if (data.length === 0) {
     return `
       <div class="text-center py-12">

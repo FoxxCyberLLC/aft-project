@@ -738,7 +738,7 @@ async function bulkProcessRequests(
       }
     } catch (error) {
       errors.push(
-        `Error processing request ${requestId}: ${error instanceof Error ? error.message : String(error)}`,
+        `Error processing request ${requestId}: ${error instanceof Error ? (error instanceof Error ? error.message : String(error)) : String(error)}`,
       );
     }
   }

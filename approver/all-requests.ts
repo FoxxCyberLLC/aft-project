@@ -418,7 +418,7 @@ function getScript(): string {
               </div>
               <div>
                 <span class="font-medium text-[var(--muted-foreground)]">Status:</span>
-                <div class="text-[var(--foreground)]">\${request.status.replace('_', ' ').toUpperCase()}</div>
+                <div class="text-[var(--foreground)]">\${String(request.status).replace('_', ' ').toUpperCase()}</div>
               </div>
               <div>
                 <span class="font-medium text-[var(--muted-foreground)]">Transfer Type:</span>

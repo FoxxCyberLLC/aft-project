@@ -94,7 +94,7 @@ export async function handleTimelineAPI(
           headers: { 'Content-Type': 'application/json' },
         },
       );
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error fetching timeline:', error);
       return new Response(
         JSON.stringify({

@@ -85,8 +85,8 @@ async function getRequestTimeline(requestId: number): Promise<RequestTimelineDat
 }
 
 // Generate timeline steps from request data and audit entries
-function generateTimelineSteps(request: any, auditEntries: RequestAuditEntry[]): TimelineStep[] {
-  const statusFlow = getStatusFlow(request.status, request.transfer_type);
+function generateTimelineSteps(request: DbRow, auditEntries: RequestAuditEntry[]): TimelineStep[] {
+  const statusFlow = getStatusFlow(request.status as AFTStatusType, (request.transfer_type as string) ?? undefined);
   const statusEvents = new Map<AFTStatusType, RequestAuditEntry>();
 
   // The first audit entry for a request is its creation, which we map to the DRAFT status.
@@ -231,7 +231,7 @@ function getDefaultAssignee(status: string): string {
 function calculateStepDuration(
   status: string,
   auditEntries: RequestAuditEntry[],
-  request: any,
+  request: DbRow,
 ): number | undefined {
   const statusEntry = auditEntries.find((e) => e.new_status === status);
   if (!statusEntry) return undefined;

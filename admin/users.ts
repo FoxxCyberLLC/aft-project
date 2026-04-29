@@ -364,7 +364,7 @@ function getScript(): string {
           document.getElementById('user-modal').classList.add('flex');
         })
         .catch(error => {
-          alert('Error loading user data: ' + error.message);
+          alert('Error loading user data: ' + (error instanceof Error ? error.message : String(error)));
         });
     }
     
@@ -399,7 +399,7 @@ function getScript(): string {
         }
       })
       .catch(error => {
-        alert('Network error: ' + error.message);
+        alert('Network error: ' + (error instanceof Error ? error.message : String(error)));
       });
     }
     
@@ -414,7 +414,7 @@ function getScript(): string {
           document.getElementById('roles-modal').classList.add('flex');
         })
         .catch(error => {
-          alert('Error loading roles: ' + error.message);
+          alert('Error loading roles: ' + (error instanceof Error ? error.message : String(error)));
         });
     }
     
@@ -493,7 +493,7 @@ function getScript(): string {
         }
       })
       .catch(error => {
-        alert('Network error: ' + error.message);
+        alert('Network error: ' + (error instanceof Error ? error.message : String(error)));
       });
     }
     

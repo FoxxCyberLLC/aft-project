@@ -34,18 +34,20 @@ export interface AFTRequestDraft {
 
 async function render(user: RequestorUser, userId: number, draftId?: number): Promise<string> {
   const db = getDb();
-  let existingDraft: any = null;
+  let existingDraft: { status: string; updated_at: number; [key: string]: unknown } | null = null;
 
   // Load existing draft if editing
   if (draftId) {
     existingDraft = (await db
       .query('SELECT * FROM aft_requests WHERE id = ? AND requestor_id = ?')
-      .get(draftId, userId)) as DbRow;
+      .get(draftId, userId)) as
+      | ({ status: string; updated_at: number; [key: string]: unknown })
+      | null;
     if (existingDraft) {
       // Parse files list if it exists
       if (existingDraft.files_list) {
         try {
-          existingDraft.files = JSON.parse(existingDraft.files_list);
+          existingDraft.files = JSON.parse(String(existingDraft.files_list));
         } catch {
           existingDraft.files = [];
         }
@@ -76,7 +78,7 @@ async function render(user: RequestorUser, userId: number, draftId?: number): Pr
   // Prepare initial destinations JSON from existing draft transfer_data
   const initialDestinationsJson = (() => {
     try {
-      const td = existingDraft?.transfer_data ? JSON.parse(existingDraft.transfer_data) : null;
+      const td = existingDraft?.transfer_data ? JSON.parse(String(existingDraft.transfer_data)) : null;
       const arr = td?.destinations || [];
       return JSON.stringify(arr);
     } catch {
@@ -111,7 +113,7 @@ async function render(user: RequestorUser, userId: number, draftId?: number): Pr
         description: 'Unique identifier for this media transfer',
         children: FormComponents.textInput({
           name: 'media_control_number',
-          value: existingDraft?.request_number || '',
+          value: (existingDraft?.request_number as string) ?? '',
           maxLength: 50,
         }),
       })}
@@ -122,7 +124,7 @@ async function render(user: RequestorUser, userId: number, draftId?: number): Pr
         description: 'Type of media being used for transfer',
         children: FormComponents.select({
           name: 'media_type',
-          value: existingDraft?.media_type || '',
+          value: (existingDraft?.media_type as string) ?? '',
           required: true,
           options: [
             { value: 'SSD', label: 'SSD (Solid State Drive)' },
@@ -155,7 +157,7 @@ async function render(user: RequestorUser, userId: number, draftId?: number): Pr
           required: true,
           children: FormComponents.textInput({
             name: 'source_is',
-            value: existingDraft?.source_system || '',
+            value: (existingDraft?.source_system as string) ?? '',
             required: true,
             maxLength: 100,
           }),
@@ -166,7 +168,7 @@ async function render(user: RequestorUser, userId: number, draftId?: number): Pr
           required: true,
           children: FormComponents.select({
             name: 'source_classification',
-            value: existingDraft?.source_classification || '',
+            value: (existingDraft?.source_classification as string) ?? '',
             required: true,
             options: [
               { value: 'UNCLASSIFIED', label: 'UNCLASSIFIED' },
@@ -184,7 +186,7 @@ async function render(user: RequestorUser, userId: number, draftId?: number): Pr
           required: true,
           children: FormComponents.textInput({
             name: 'destination_is',
-            value: existingDraft?.dest_system || '',
+            value: (existingDraft?.dest_system as string) ?? '',
             required: true,
             maxLength: 100,
           }),
@@ -195,7 +197,7 @@ async function render(user: RequestorUser, userId: number, draftId?: number): Pr
           required: true,
           children: FormComponents.select({
             name: 'destination_classification',
-            value: existingDraft?.destination_classification || '',
+            value: (existingDraft?.destination_classification as string) ?? '',
             required: true,
             options: [
               { value: 'UNCLASSIFIED', label: 'UNCLASSIFIED' },
@@ -223,7 +225,7 @@ async function render(user: RequestorUser, userId: number, draftId?: number): Pr
           description: 'How will the media be handled after transfer',
           children: FormComponents.select({
             name: 'media_disposition',
-            value: existingDraft?.media_disposition || '',
+            value: (existingDraft?.media_disposition as string) ?? '',
             required: true,
             options: [
               { value: 'Destroy', label: 'Destroy (Physical destruction)' },
@@ -242,7 +244,7 @@ async function render(user: RequestorUser, userId: number, draftId?: number): Pr
           description: 'Highest classification level of all data',
           children: FormComponents.select({
             name: 'overall_classification',
-            value: existingDraft?.classification || '',
+            value: (existingDraft?.classification as string) ?? '',
             required: true,
             options: [
               { value: 'UNCLASSIFIED', label: 'UNCLASSIFIED' },
@@ -263,7 +265,7 @@ async function render(user: RequestorUser, userId: number, draftId?: number): Pr
           required: true,
           children: FormComponents.select({
             name: 'transfer_type',
-            value: existingDraft?.transfer_type || '',
+            value: (existingDraft?.transfer_type as string) ?? '',
             required: true,
             options: [
               { value: 'High-to-Low', label: 'High-to-Low' },
@@ -280,7 +282,7 @@ async function render(user: RequestorUser, userId: number, draftId?: number): Pr
           description: 'Are you adding files to or removing files from the destination IS?',
           children: FormComponents.radioGroup({
             name: 'destination_file',
-            value: existingDraft?.destination_file || '',
+            value: (existingDraft?.destination_file as string) ?? '',
             inline: true,
             options: [
               { value: 'upload', label: 'Upload (Add Files to IS)' },
@@ -297,7 +299,7 @@ async function render(user: RequestorUser, userId: number, draftId?: number): Pr
           description: 'Required if transferring machine-readable files',
           children: FormComponents.textInput({
             name: 'process_name',
-            value: existingDraft?.process_name || '',
+            value: (existingDraft?.process_name as string) ?? '',
             maxLength: 200,
           }),
         })}
@@ -307,7 +309,7 @@ async function render(user: RequestorUser, userId: number, draftId?: number): Pr
           description: 'Reference document number (as applicable)',
           children: FormComponents.textInput({
             name: 'procedure_document',
-            value: existingDraft?.procedure_document || '',
+            value: (existingDraft?.procedure_document as string) ?? '',
             maxLength: 100,
           }),
         })}
@@ -320,7 +322,7 @@ async function render(user: RequestorUser, userId: number, draftId?: number): Pr
         description: 'Explain the business need and purpose for this transfer',
         children: FormComponents.textarea({
           name: 'justification',
-          value: existingDraft?.transfer_purpose || '',
+          value: (existingDraft?.transfer_purpose as string) ?? '',
           rows: 4,
           required: true,
         }),
@@ -343,7 +345,13 @@ async function render(user: RequestorUser, userId: number, draftId?: number): Pr
         required: true,
         description: 'List each file with its type and classification level',
         children: FormComponents.fileListInput({
-          files: existingDraft?.files || [],
+          files:
+            (existingDraft?.files as Array<{
+              name: string;
+              type: string;
+              size?: string;
+              classification: string;
+            }>) ?? [],
           maxFiles: 5,
         }),
       })}
@@ -372,7 +380,7 @@ async function render(user: RequestorUser, userId: number, draftId?: number): Pr
               label: 'Media Destination',
               children: FormComponents.textInput({
                 name: 'media_destination',
-                value: existingDraft?.media_destination || '',
+                value: (existingDraft?.media_destination as string) ?? '',
                 maxLength: 200,
               }),
             })}
@@ -381,7 +389,7 @@ async function render(user: RequestorUser, userId: number, draftId?: number): Pr
               label: 'Destination POC / Customer Name',
               children: FormComponents.textInput({
                 name: 'destination_poc',
-                value: existingDraft?.dest_contact || '',
+                value: (existingDraft?.dest_contact as string) ?? '',
                 maxLength: 100,
               }),
             })}
@@ -390,7 +398,7 @@ async function render(user: RequestorUser, userId: number, draftId?: number): Pr
               label: 'Destination Address / Location',
               children: FormComponents.textarea({
                 name: 'destination_address',
-                value: existingDraft?.dest_location || '',
+                value: (existingDraft?.dest_location as string) ?? '',
                 rows: 3,
               }),
             })}

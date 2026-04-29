@@ -162,7 +162,7 @@ async function signRequest(
       }),
       { headers: { 'Content-Type': 'application/json' } },
     );
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error signing request:', error);
     return new Response(
       JSON.stringify({ success: false, error: 'Database error while signing request.' }),
@@ -183,7 +183,7 @@ async function signRequestWithCAC(
   try {
     const body = (await request.json()) as {
       signature: string;
-      certificate: any;
+      certificate: { thumbprint: string; subject: string; issuer: string; validFrom: string; validTo: string; serialNumber: string; certificateData: string };
       timestamp: string;
       algorithm: string;
       notes?: string;
@@ -272,7 +272,7 @@ async function signRequestWithCAC(
         headers: { 'Content-Type': 'application/json' },
       },
     );
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error signing request with CAC:', error);
     return new Response(
       JSON.stringify({ success: false, error: 'Failed to apply CAC signature' }),

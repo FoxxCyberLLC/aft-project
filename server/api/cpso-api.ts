@@ -141,7 +141,7 @@ export async function handleCPSOAPI(
 
     // POST endpoints
     if (method === 'POST') {
-      const body: any = await request.json();
+      const body = (await request.json()) as Record<string, unknown>;
 
       // Approve request with CAC signature
       if (apiPath.startsWith('approve-cac/')) {
@@ -156,7 +156,7 @@ export async function handleCPSOAPI(
 
         const { signature, certificate, timestamp, algorithm, notes } = body as {
           signature: string;
-          certificate: any;
+          certificate: { thumbprint: string; subject: string; issuer: string; validFrom: string; validTo: string; serialNumber: string; certificateData: string };
           timestamp: string;
           algorithm: string;
           notes?: string;
@@ -294,7 +294,7 @@ export async function handleCPSOAPI(
             headers: { 'Content-Type': 'application/json' },
           });
         }
-        const { reason, notes }: { reason: string; notes?: string } = body;
+        const { reason, notes } = body as { reason: string; notes?: string };
 
         if (!reason) {
           return new Response(JSON.stringify({ error: 'Rejection reason is required' }), {
@@ -353,7 +353,7 @@ export async function handleCPSOAPI(
 
       // Generate reports
       if (apiPath === 'reports/generate') {
-        const { type }: { type: 'monthly' | 'quarterly' | 'annual' } = body;
+        const { type } = body as { type: 'monthly' | 'quarterly' | 'annual' };
 
         // r.updated_at is stored as unixepoch (seconds), so use EXTRACT(EPOCH FROM NOW())::BIGINT
         // arithmetic instead of comparing against date() text.

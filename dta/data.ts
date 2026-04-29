@@ -229,7 +229,7 @@ async function getRecentDTATransfers(db: Db, userId?: number) {
     : ((await db.query(baseQuery).all()) as DbRow[]);
 }
 
-function buildTransferTrackingTable(transfers: any[]): string {
+function buildTransferTrackingTable(transfers: DbRow[]): string {
   if (transfers.length === 0) {
     return `
       <div class="bg-[var(--card)] p-8 rounded-lg border border-[var(--border)] text-center">
@@ -242,7 +242,7 @@ function buildTransferTrackingTable(transfers: any[]): string {
 
   // Transform transfers data for table
   const tableData = transfers.map((transfer) => ({
-    id: transfer.id,
+    id: transfer.id as string | number,
     request_number: transfer.request_number,
     requestor_name: transfer.requestor_name,
     status: transfer.status,

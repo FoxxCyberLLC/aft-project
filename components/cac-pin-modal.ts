@@ -212,7 +212,7 @@ function getScript(): string {
           handleCACCertificates(certificates);
         }
       } catch (error) {
-        handleCACError({ message: error.message });
+        handleCACError({ message: (error instanceof Error ? error.message : String(error)) });
       }
     }
 
@@ -277,7 +277,7 @@ function getScript(): string {
     // Handle CAC errors
     function handleCACError(error) {
       console.error('CAC error:', error);
-      showCACError(error.message);
+      showCACError((error instanceof Error ? error.message : String(error)));
       
       pinAttempts++;
       if (pinAttempts >= maxPinAttempts) {
@@ -443,7 +443,7 @@ function getScript(): string {
           showCACError('Maximum certificate request attempts exceeded. Please check your CAC setup and try again.');
           authenticateBtn.disabled = true;
         } else {
-          showCACError('Error: ' + error.message + '. Attempts remaining: ' + (maxAttempts - certificateRequestAttempts));
+          showCACError('Error: ' + (error instanceof Error ? error.message : String(error)) + '. Attempts remaining: ' + (maxAttempts - certificateRequestAttempts));
           authenticateBtn.disabled = false;
           authenticateBtn.textContent = 'Try Again';
         }

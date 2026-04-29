@@ -95,7 +95,7 @@ Bun.serve({
   port: 3001,
   hostname: '127.0.0.1', // Loopback only - nginx is the public entry point.
 
-  async fetch(originalRequest: Request, server: any): Promise<Response> {
+  async fetch(originalRequest: Request, server: Bun.Server<unknown>): Promise<Response> {
     // Liveness probe - exempt from the proxy-secret check so it can be hit
     // from inside the container by HEALTHCHECK without needing the secret.
     {
