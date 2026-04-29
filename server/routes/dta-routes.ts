@@ -1,80 +1,86 @@
 // DTA page routes
-import { UserRole } from "../../lib/database-bun";
-import { RoleMiddleware } from "../../middleware/role-middleware";
-import { DTADashboard } from "../../dta/dashboard";
-import { DtaRequests } from "../../dta/requests";
-import { DTAActiveTransfers } from "../../dta/active";
-import { DTADataManagement } from "../../dta/data";
-import { DTAReports } from "../../dta/reports";
-import { DTARequestReviewPage } from "../../dta/request-review";
-import { DTATransferForm } from "../../dta/transfer-form";
-import { createHtmlPage } from "../utils";
+
+import { DTAActiveTransfers } from '../../dta/active';
+import { DTADashboard } from '../../dta/dashboard';
+import { DTADataManagement } from '../../dta/data';
+import { DTAReports } from '../../dta/reports';
+import { DTARequestReviewPage } from '../../dta/request-review';
+import { DtaRequests } from '../../dta/requests';
+import { DTATransferForm } from '../../dta/transfer-form';
+import { UserRole } from '../../lib/database-bun';
+import { RoleMiddleware } from '../../middleware/role-middleware';
+import { createHtmlPage } from '../utils';
 
 // DTA Routes Handler
-export async function handleDTARoutes(request: Request, path: string, ipAddress: string): Promise<Response> {
+export async function handleDTARoutes(
+  request: Request,
+  path: string,
+  ipAddress: string,
+): Promise<Response> {
   const authResult = await RoleMiddleware.checkAuthAndRole(request, ipAddress, UserRole.DTA);
   if (authResult.response) return authResult.response;
-  
-  const user = { 
-    email: authResult.session.email, 
-    role: authResult.session.activeRole || authResult.session.primaryRole 
+
+  const user = {
+    email: authResult.session.email,
+    role: authResult.session.activeRole || authResult.session.primaryRole,
   };
   const userId = authResult.session.userId;
-  
+
   // Parse query parameters for view mode
   const url = new URL(request.url);
-  const viewMode = url.searchParams.get('view') as 'table' | 'timeline' || 'table';
-  
+  const viewMode = (url.searchParams.get('view') as 'table' | 'timeline') || 'table';
+
   switch (path) {
-    case '/dta':
+    case '/dta': {
       const dashboardHtml = await DTADashboard.render(user, userId);
-      return new Response(createHtmlPage(
-        "AFT - DTA Dashboard",
-        dashboardHtml
-      ), {
-        headers: { "Content-Type": "text/html" }
+      return new Response(createHtmlPage('AFT - DTA Dashboard', dashboardHtml), {
+        headers: { 'Content-Type': 'text/html' },
       });
+    }
 
-    case '/dta/requests':
+    case '/dta/requests': {
       const requestsHtml = await DtaRequests.renderRequestsPage(user, viewMode, userId);
-      return new Response(createHtmlPage(
-        "AFT - DTA Requests",
-        requestsHtml,
-        DtaRequests.getScript()
-      ), {
-        headers: { "Content-Type": "text/html" }
-      });
+      return new Response(
+        createHtmlPage('AFT - DTA Requests', requestsHtml, DtaRequests.getScript()),
+        {
+          headers: { 'Content-Type': 'text/html' },
+        },
+      );
+    }
 
-    case '/dta/active':
+    case '/dta/active': {
       const activeTransfersHtml = await DTAActiveTransfers.render(user, userId);
-      return new Response(createHtmlPage(
-        "AFT - Active Transfers",
-        activeTransfersHtml,
-        DTAActiveTransfers.getScript()
-      ), {
-        headers: { "Content-Type": "text/html" }
-      });
+      return new Response(
+        createHtmlPage(
+          'AFT - Active Transfers',
+          activeTransfersHtml,
+          DTAActiveTransfers.getScript(),
+        ),
+        {
+          headers: { 'Content-Type': 'text/html' },
+        },
+      );
+    }
 
-    case '/dta/data':
+    case '/dta/data': {
       const dataManagementHtml = await DTADataManagement.render(user, userId);
-      return new Response(createHtmlPage(
-        "AFT - Data Management",
-        dataManagementHtml,
-        DTADataManagement.getScript()
-      ), {
-        headers: { "Content-Type": "text/html" }
-      });
+      return new Response(
+        createHtmlPage('AFT - Data Management', dataManagementHtml, DTADataManagement.getScript()),
+        {
+          headers: { 'Content-Type': 'text/html' },
+        },
+      );
+    }
 
-
-    case '/dta/reports':
+    case '/dta/reports': {
       const reportsHtml = await DTAReports.renderReportsPage(user);
-      return new Response(createHtmlPage(
-        "AFT - DTA Reports",
-        reportsHtml,
-        DTAReports.getScript()
-      ), {
-        headers: { "Content-Type": "text/html" }
-      });
+      return new Response(
+        createHtmlPage('AFT - DTA Reports', reportsHtml, DTAReports.getScript()),
+        {
+          headers: { 'Content-Type': 'text/html' },
+        },
+      );
+    }
 
     case '/dta/monitor':
       return renderTransferMonitorPage(user);
@@ -84,30 +90,29 @@ export async function handleDTARoutes(request: Request, path: string, ipAddress:
       if (path.startsWith('/dta/request/') && path.split('/').length === 4) {
         const requestId = path.split('/')[3] ?? '';
         const reviewHtml = await DTARequestReviewPage.render(user, requestId, userId);
-        return new Response(createHtmlPage(
-          "AFT - DTA Request Review",
-          reviewHtml,
-          DTARequestReviewPage.getScript()
-        ), {
-          headers: { "Content-Type": "text/html" }
-        });
+        return new Response(
+          createHtmlPage('AFT - DTA Request Review', reviewHtml, DTARequestReviewPage.getScript()),
+          {
+            headers: { 'Content-Type': 'text/html' },
+          },
+        );
       } else if (path.startsWith('/dta/transfer/') && path.split('/').length === 4) {
         const requestId = path.split('/')[3] ?? '';
         const transferFormHtml = await DTATransferForm.render(user, requestId, userId);
-        return new Response(createHtmlPage(
-          "AFT - DTA Transfer Form",
-          transferFormHtml,
-          DTATransferForm.getScript()
-        ), {
-          headers: { "Content-Type": "text/html" }
-        });
+        return new Response(
+          createHtmlPage('AFT - DTA Transfer Form', transferFormHtml, DTATransferForm.getScript()),
+          {
+            headers: { 'Content-Type': 'text/html' },
+          },
+        );
       } else if (path.startsWith('/dta/monitor/') && path.split('/').length === 4) {
-        const requestId = parseInt(path.split('/')[3] ?? '');
+        const requestId = parseInt(path.split('/')[3] ?? '', 10);
         return renderTransferMonitorPage(user, requestId);
       } else {
-        return new Response(createHtmlPage(
-          "Page Not Found",
-          `
+        return new Response(
+          createHtmlPage(
+            'Page Not Found',
+            `
             <div class="min-h-screen bg-[var(--background)] flex items-center justify-center">
               <div class="text-center">
                 <h1 class="text-4xl font-bold text-[var(--foreground)] mb-4">404 - Page Not Found</h1>
@@ -117,16 +122,18 @@ export async function handleDTARoutes(request: Request, path: string, ipAddress:
                 </a>
               </div>
             </div>
-          `
-        ), {
-          status: 404,
-          headers: { "Content-Type": "text/html" }
-        });
+          `,
+          ),
+          {
+            status: 404,
+            headers: { 'Content-Type': 'text/html' },
+          },
+        );
       }
   }
 }
 
-function renderDataManagementPage(user: any): Response {
+function _renderDataManagementPage(_user: any): Response {
   const content = `
     <!DOCTYPE html>
     <html lang="en">
@@ -197,11 +204,11 @@ function renderDataManagementPage(user: any): Response {
   `;
 
   return new Response(content, {
-    headers: { "Content-Type": "text/html" }
+    headers: { 'Content-Type': 'text/html' },
   });
 }
 
-function renderReportsPage(user: any): Response {
+function _renderReportsPage(_user: any): Response {
   const content = `
     <!DOCTYPE html>
     <html lang="en">
@@ -274,11 +281,11 @@ function renderReportsPage(user: any): Response {
   `;
 
   return new Response(content, {
-    headers: { "Content-Type": "text/html" }
+    headers: { 'Content-Type': 'text/html' },
   });
 }
 
-function renderTransferMonitorPage(user: any, requestId?: number): Response {
+function renderTransferMonitorPage(_user: any, requestId?: number): Response {
   const title = requestId ? `Transfer Monitor - Request ${requestId}` : 'Transfer Monitor';
   const content = `
     <!DOCTYPE html>
@@ -299,9 +306,10 @@ function renderTransferMonitorPage(user: any, requestId?: number): Response {
                     </div>
                     <h1 class="text-3xl font-bold text-[var(--foreground)] mb-4">${title}</h1>
                     <p class="text-[var(--muted-foreground)]">
-                        ${requestId ? 
-                          `Real-time monitoring for transfer request ${requestId}` : 
-                          'Real-time monitoring dashboard for all active transfers'
+                        ${
+                          requestId
+                            ? `Real-time monitoring for transfer request ${requestId}`
+                            : 'Real-time monitoring dashboard for all active transfers'
                         }
                     </p>
                 </div>
@@ -325,7 +333,9 @@ function renderTransferMonitorPage(user: any, requestId?: number): Response {
                     </div>
                 </div>
                 
-                ${requestId ? `
+                ${
+                  requestId
+                    ? `
                 <div class="bg-[var(--card)] p-6 rounded-lg border border-[var(--border)] mb-8">
                     <h3 class="text-lg font-semibold text-[var(--foreground)] mb-4">Request ${requestId} Details</h3>
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -348,7 +358,9 @@ function renderTransferMonitorPage(user: any, requestId?: number): Response {
                         </div>
                     </div>
                 </div>
-                ` : ''}
+                `
+                    : ''
+                }
                 
                 <div class="bg-[var(--card)] p-6 rounded-lg border border-[var(--border)] mb-8">
                     <h3 class="text-lg font-semibold text-[var(--foreground)] mb-4">Transfer Performance</h3>
@@ -375,11 +387,11 @@ function renderTransferMonitorPage(user: any, requestId?: number): Response {
   `;
 
   return new Response(content, {
-    headers: { "Content-Type": "text/html" }
+    headers: { 'Content-Type': 'text/html' },
   });
 }
 
-function renderRequestDetailsPage(user: any, requestId: number): Response {
+function _renderRequestDetailsPage(_user: any, requestId: number): Response {
   const content = `
     <!DOCTYPE html>
     <html lang="en">
@@ -431,6 +443,6 @@ function renderRequestDetailsPage(user: any, requestId: number): Response {
   `;
 
   return new Response(content, {
-    headers: { "Content-Type": "text/html" }
+    headers: { 'Content-Type': 'text/html' },
   });
 }

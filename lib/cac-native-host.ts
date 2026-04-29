@@ -18,9 +18,7 @@ export const NATIVE_HOST_MANIFEST = {
   description: 'CAC Certificate Reader for AFT Application',
   path: 'aft_cac_reader.exe',
   type: 'stdio',
-  allowed_origins: [
-    'chrome-extension://EXTENSION_ID_HERE/'
-  ]
+  allowed_origins: ['chrome-extension://EXTENSION_ID_HERE/'],
 };
 
 // PowerShell script template for Windows CAC operations

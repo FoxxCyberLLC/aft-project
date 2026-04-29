@@ -5,5 +5,5 @@ const columns = db.query('PRAGMA table_info(aft_requests)').all();
 
 console.log('Total columns:', columns.length);
 columns.forEach((col, i) => {
-  console.log(`${i+1}. ${col.name}`);
+  console.log(`${i + 1}. ${col.name}`);
 });

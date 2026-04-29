@@ -1,16 +1,19 @@
 // Server utility functions
-import { validateSession, type SecureSession } from "../lib/security";
+import { type SecureSession, validateSession } from '../lib/security';
 
 // Check authentication with role validation
-export async function checkAuth(request: Request, ipAddress: string): Promise<SecureSession | null> {
-  const cookies = request.headers.get("cookie");
+export async function checkAuth(
+  request: Request,
+  ipAddress: string,
+): Promise<SecureSession | null> {
+  const cookies = request.headers.get('cookie');
   if (!cookies) return null;
-  
+
   const sessionMatch = cookies.match(/session=([^;]+)/);
-  if (!sessionMatch || !sessionMatch[1]) return null;
-  
+  if (!sessionMatch?.[1]) return null;
+
   const userAgent = request.headers.get('user-agent') || 'unknown';
-  
+
   return await validateSession(sessionMatch[1], ipAddress, userAgent);
 }
 

@@ -1,6 +1,15 @@
 // Timeline Components for AFT Request Tracking
 // Provides visual timeline representation of request workflow states
-import { EditIcon, UserIcon, SearchIcon, ShieldIcon, CheckCircleIcon, XCircleIcon, PackageIcon, TrashIcon } from '../icons';
+import {
+  CheckCircleIcon,
+  EditIcon,
+  PackageIcon,
+  SearchIcon,
+  ShieldIcon,
+  TrashIcon,
+  UserIcon,
+  XCircleIcon,
+} from '../icons';
 
 export interface TimelineStep {
   id: string;
@@ -36,39 +45,48 @@ export function Timeline({
   showTimestamps = true,
   showDuration = false,
   compact = false,
-  className = ''
+  className = '',
 }: TimelineProps): string {
   const isVertical = orientation === 'vertical';
-  
+
   return `
     <div class="timeline-container ${isVertical ? 'timeline-vertical' : 'timeline-horizontal'} ${compact ? 'timeline-compact' : ''} ${className}">
       <div class="timeline-track">
-        ${steps.map((step, index) => renderTimelineStep(step, index, steps.length, {
-          isVertical,
-          showTimestamps,
-          showDuration,
-          compact
-        })).join('')}
+        ${steps
+          .map((step, index) =>
+            renderTimelineStep(step, index, steps.length, {
+              isVertical,
+              showTimestamps,
+              showDuration,
+              compact,
+            }),
+          )
+          .join('')}
       </div>
     </div>
   `;
 }
 
 function renderTimelineStep(
-  step: TimelineStep, 
-  index: number, 
-  totalSteps: number, 
-  options: { isVertical: boolean; showTimestamps: boolean; showDuration: boolean; compact: boolean }
+  step: TimelineStep,
+  index: number,
+  totalSteps: number,
+  options: {
+    isVertical: boolean;
+    showTimestamps: boolean;
+    showDuration: boolean;
+    compact: boolean;
+  },
 ): string {
   const { isVertical, showTimestamps, showDuration, compact } = options;
   const isLast = index === totalSteps - 1;
-  
+
   const statusClasses = {
     completed: 'timeline-step-completed',
     current: 'timeline-step-current',
     pending: 'timeline-step-pending',
     skipped: 'timeline-step-skipped',
-    error: 'timeline-step-error'
+    error: 'timeline-step-error',
   };
 
   const statusIcons = {
@@ -76,7 +94,7 @@ function renderTimelineStep(
     current: '●',
     pending: '○',
     skipped: '⊘',
-    error: '✗'
+    error: '✗',
   };
 
   const statusColors = {
@@ -84,7 +102,7 @@ function renderTimelineStep(
     current: 'var(--primary)',
     pending: 'var(--muted-foreground)',
     skipped: 'var(--warning)',
-    error: 'var(--destructive)'
+    error: 'var(--destructive)',
   };
 
   return `
@@ -99,37 +117,57 @@ function renderTimelineStep(
       <div class="timeline-step-content">
         <div class="timeline-step-header">
           <h4 class="timeline-step-title">${step.title}</h4>
-          ${showTimestamps && step.timestamp ? `
+          ${
+            showTimestamps && step.timestamp
+              ? `
             <time class="timeline-step-timestamp" datetime="${new Date(step.timestamp * 1000).toISOString()}">
               ${formatTimestamp(step.timestamp)}
             </time>
-          ` : ''}
+          `
+              : ''
+          }
         </div>
         
-        ${step.description && !compact ? `
+        ${
+          step.description && !compact
+            ? `
           <p class="timeline-step-description">${step.description}</p>
-        ` : ''}
+        `
+            : ''
+        }
         
-        ${step.assignedTo ? `
+        ${
+          step.assignedTo
+            ? `
           <div class="timeline-step-assignee">
             <span class="timeline-step-label">Assigned to:</span>
             <span class="timeline-step-value">${step.assignedTo}</span>
           </div>
-        ` : ''}
+        `
+            : ''
+        }
         
-        ${showDuration && step.duration ? `
+        ${
+          showDuration && step.duration
+            ? `
           <div class="timeline-step-duration">
             <span class="timeline-step-label">Duration:</span>
             <span class="timeline-step-value">${formatDuration(step.duration)}</span>
           </div>
-        ` : ''}
+        `
+            : ''
+        }
         
-        ${step.notes ? `
+        ${
+          step.notes
+            ? `
           <div class="timeline-step-notes">
             <span class="timeline-step-label">Notes:</span>
             <p class="timeline-step-value">${step.notes}</p>
           </div>
-        ` : ''}
+        `
+            : ''
+        }
       </div>
     </div>
   `;
@@ -140,23 +178,27 @@ export function StatusProgress({
   currentStatus,
   allStatuses,
   statusLabels = {},
-  className = ''
+  className = '',
 }: StatusProgressProps): string {
   const currentIndex = allStatuses.indexOf(currentStatus);
-  const progressPercentage = currentIndex >= 0 ? ((currentIndex + 1) / allStatuses.length) * 100 : 0;
-  
+  const progressPercentage =
+    currentIndex >= 0 ? ((currentIndex + 1) / allStatuses.length) * 100 : 0;
+
   return `
     <div class="status-progress ${className}">
       <div class="status-progress-bar">
         <div class="status-progress-fill" style="width: ${progressPercentage}%"></div>
       </div>
       <div class="status-progress-steps">
-        ${allStatuses.map((status, index) => {
-          const isCompleted = index < currentIndex;
-          const isCurrent = index === currentIndex;
-          const label = statusLabels[status] || status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-          
-          return `
+        ${allStatuses
+          .map((status, index) => {
+            const isCompleted = index < currentIndex;
+            const isCurrent = index === currentIndex;
+            const label =
+              statusLabels[status] ||
+              status.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
+
+            return `
             <div class="status-progress-step ${isCompleted ? 'completed' : ''} ${isCurrent ? 'current' : ''}">
               <div class="status-progress-step-indicator">
                 ${isCompleted ? '✓' : isCurrent ? '●' : '○'}
@@ -164,7 +206,8 @@ export function StatusProgress({
               <span class="status-progress-step-label">${label}</span>
             </div>
           `;
-        }).join('')}
+          })
+          .join('')}
       </div>
     </div>
   `;
@@ -172,19 +215,20 @@ export function StatusProgress({
 
 // Enhanced Status Badge with Timeline Context
 export function TimelineStatusBadge(
-  status: string, 
+  status: string,
   variant?: 'default' | 'success' | 'warning' | 'error' | 'info',
   showProgress?: boolean,
-  progressData?: { current: number; total: number }
+  progressData?: { current: number; total: number },
 ): string {
-  const baseClasses = 'inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium border transition-all duration-200';
-  
+  const baseClasses =
+    'inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium border transition-all duration-200';
+
   const variantClasses = {
     default: 'bg-[var(--muted)] text-[var(--muted-foreground)] border-[var(--border)]',
     success: 'bg-[var(--success)]/10 text-[var(--success)] border-[var(--success)]/20',
     warning: 'bg-[var(--warning)]/10 text-[var(--warning)] border-[var(--warning)]/20',
     error: 'bg-[var(--destructive)]/10 text-[var(--destructive)] border-[var(--destructive)]/20',
-    info: 'bg-[var(--info)]/10 text-[var(--info)] border-[var(--info)]/20'
+    info: 'bg-[var(--info)]/10 text-[var(--info)] border-[var(--info)]/20',
   };
 
   const statusIcons = {
@@ -202,21 +246,27 @@ export function TimelineStatusBadge(
     pending_media_custodian: PackageIcon({ size: 14 }),
     completed: CheckCircleIcon({ size: 14 }),
     disposed: TrashIcon({ size: 14 }),
-    cancelled: XCircleIcon({ size: 14 })
+    cancelled: XCircleIcon({ size: 14 }),
   };
 
-  const icon = statusIcons[status.toLowerCase() as keyof typeof statusIcons] || `<div class="w-3 h-3 rounded-full bg-current"></div>`;
+  const icon =
+    statusIcons[status.toLowerCase() as keyof typeof statusIcons] ||
+    `<div class="w-3 h-3 rounded-full bg-current"></div>`;
   const classes = `${baseClasses} ${variantClasses[variant || 'default']}`;
-  
+
   return `
-    <span class="${classes}" title="${status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}">
+    <span class="${classes}" title="${status.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())}">
       <span class="timeline-badge-icon inline-flex items-center justify-center">${icon}</span>
-      <span class="timeline-badge-text">${status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</span>
-      ${showProgress && progressData ? `
+      <span class="timeline-badge-text">${status.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())}</span>
+      ${
+        showProgress && progressData
+          ? `
         <span class="timeline-badge-progress">
           (${progressData.current}/${progressData.total})
         </span>
-      ` : ''}
+      `
+          : ''
+      }
     </span>
   `;
 }
@@ -227,7 +277,7 @@ function formatTimestamp(timestamp: number): string {
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
   const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-  
+
   if (diffDays === 0) {
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   } else if (diffDays === 1) {
@@ -256,7 +306,7 @@ export const AFT_WORKFLOW_STEPS = [
   'draft',
   'submitted',
   'pending_dao',
-  'pending_approver', 
+  'pending_approver',
   'pending_cpso',
   'approved',
   'pending_dta',
@@ -265,7 +315,7 @@ export const AFT_WORKFLOW_STEPS = [
   'pending_sme',
   'pending_media_custodian',
   'completed',
-  'disposed'
+  'disposed',
 ];
 
 export const AFT_STATUS_LABELS = {
@@ -283,5 +333,5 @@ export const AFT_STATUS_LABELS = {
   pending_media_custodian: 'Pending Media Disposition',
   completed: 'Completed',
   disposed: 'Media Disposed',
-  cancelled: 'Cancelled'
+  cancelled: 'Cancelled',
 };

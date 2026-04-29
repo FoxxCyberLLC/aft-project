@@ -36,20 +36,26 @@ export function PageHeader({
   classification = 'UNCLASSIFIED',
   user,
   actions,
-  navigation
+  navigation,
 }: PageHeaderProps): string {
-  const navItems = navigation ? navigation.map(item => `
+  const navItems = navigation
+    ? navigation
+        .map(
+          (item) => `
     <a 
       href="${item.href}" 
       class="px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-        item.active 
+        item.active
           ? 'bg-[var(--primary)] text-[var(--primary-foreground)]'
           : 'text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--muted)]'
       }"
     >
       ${item.label}
     </a>
-  `).join('') : '';
+  `,
+        )
+        .join('')
+    : '';
 
   return `
     <header class="bg-[var(--card)] border-b border-[var(--border)] shadow-[var(--shadow-sm)] sticky top-0 z-50">
@@ -68,47 +74,45 @@ export function PageHeader({
           </div>
           
           <div class="flex items-center space-x-4">
-            ${user ? `
+            ${
+              user
+                ? `
               <div class="text-right">
                 <div class="text-sm font-medium text-[var(--foreground)]">${user.email}</div>
                 <div class="text-xs text-[var(--muted-foreground)] uppercase">${user.role}</div>
               </div>
-            ` : ''}
+            `
+                : ''
+            }
             ${actions ? `<div class="flex items-center space-x-2">${actions}</div>` : ''}
           </div>
         </div>
         
-        ${navigation ? `
+        ${
+          navigation
+            ? `
           <nav class="flex space-x-1 pb-4 border-t border-[var(--border)] pt-4">
             ${navItems}
           </nav>
-        ` : ''}
+        `
+            : ''
+        }
       </div>
     </header>
   `;
 }
 
-export function Container({
-  className = '',
-  children,
-  maxWidth = 'xl'
-}: ContainerProps): string {
+export function Container({ className = '', children, maxWidth = 'xl' }: ContainerProps): string {
   const maxWidthClasses = {
     sm: 'max-w-sm',
     md: 'max-w-md',
     lg: 'max-w-lg',
     xl: 'max-w-7xl',
     '2xl': 'max-w-2xl',
-    full: 'max-w-full'
+    full: 'max-w-full',
   };
 
-  const baseClasses = [
-    'mx-auto',
-    'px-4',
-    'sm:px-6',
-    'lg:px-8',
-    maxWidthClasses[maxWidth]
-  ];
+  const baseClasses = ['mx-auto', 'px-4', 'sm:px-6', 'lg:px-8', maxWidthClasses[maxWidth]];
 
   const allClasses = [...baseClasses, className].filter(Boolean).join(' ');
 
@@ -124,35 +128,33 @@ export function Grid({
   children,
   cols = 3,
   gap = 'md',
-  responsive = true
+  responsive = true,
 }: GridProps): string {
-  const colClasses = responsive ? {
-    1: 'grid-cols-1',
-    2: 'grid-cols-1 md:grid-cols-2',
-    3: 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3',
-    4: 'grid-cols-1 md:grid-cols-2 lg:grid-cols-4',
-    5: 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5',
-    6: 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6'
-  } : {
-    1: 'grid-cols-1',
-    2: 'grid-cols-2',
-    3: 'grid-cols-3',
-    4: 'grid-cols-4',
-    5: 'grid-cols-5',
-    6: 'grid-cols-6'
-  };
+  const colClasses = responsive
+    ? {
+        1: 'grid-cols-1',
+        2: 'grid-cols-1 md:grid-cols-2',
+        3: 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3',
+        4: 'grid-cols-1 md:grid-cols-2 lg:grid-cols-4',
+        5: 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5',
+        6: 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6',
+      }
+    : {
+        1: 'grid-cols-1',
+        2: 'grid-cols-2',
+        3: 'grid-cols-3',
+        4: 'grid-cols-4',
+        5: 'grid-cols-5',
+        6: 'grid-cols-6',
+      };
 
   const gapClasses = {
     sm: 'gap-4',
     md: 'gap-6',
-    lg: 'gap-8'
+    lg: 'gap-8',
   };
 
-  const baseClasses = [
-    'grid',
-    colClasses[cols],
-    gapClasses[gap]
-  ];
+  const baseClasses = ['grid', colClasses[cols], gapClasses[gap]];
 
   const allClasses = [...baseClasses, className].filter(Boolean).join(' ');
 
@@ -167,19 +169,14 @@ export function PageLayout({
   header,
   children,
   footer,
-  className = ''
+  className = '',
 }: {
   header: string;
   children: string;
   footer?: string;
   className?: string;
 }): string {
-  const baseClasses = [
-    'min-h-screen',
-    'bg-[var(--muted)]',
-    'flex',
-    'flex-col'
-  ];
+  const baseClasses = ['min-h-screen', 'bg-[var(--muted)]', 'flex', 'flex-col'];
 
   const allClasses = [...baseClasses, className].filter(Boolean).join(' ');
 
@@ -197,7 +194,7 @@ export function PageLayout({
 export function Sidebar({
   className = '',
   children,
-  width = 'md'
+  width = 'md',
 }: {
   className?: string;
   children: string;
@@ -206,7 +203,7 @@ export function Sidebar({
   const widthClasses = {
     sm: 'w-64',
     md: 'w-80',
-    lg: 'w-96'
+    lg: 'w-96',
   };
 
   const baseClasses = [
@@ -214,7 +211,7 @@ export function Sidebar({
     'border-r',
     'border-[var(--border)]',
     'overflow-y-auto',
-    widthClasses[width]
+    widthClasses[width],
   ];
 
   const allClasses = [...baseClasses, className].filter(Boolean).join(' ');
@@ -228,15 +225,12 @@ export function Sidebar({
 
 export function MainContent({
   className = '',
-  children
+  children,
 }: {
   className?: string;
   children: string;
 }): string {
-  const baseClasses = [
-    'flex-1',
-    'overflow-auto'
-  ];
+  const baseClasses = ['flex-1', 'overflow-auto'];
 
   const allClasses = [...baseClasses, className].filter(Boolean).join(' ');
 
@@ -249,17 +243,12 @@ export function MainContent({
 
 export function PageFooter({
   className = '',
-  children
+  children,
 }: {
   className?: string;
   children: string;
 }): string {
-  const baseClasses = [
-    'border-t',
-    'border-[var(--border)]',
-    'bg-[var(--card)]',
-    'py-6'
-  ];
+  const baseClasses = ['border-t', 'border-[var(--border)]', 'bg-[var(--card)]', 'py-6'];
 
   const allClasses = [...baseClasses, className].filter(Boolean).join(' ');
 
@@ -276,7 +265,7 @@ export function SectionHeader({
   title,
   description,
   actions,
-  className = ''
+  className = '',
 }: {
   title: string;
   description?: string;
@@ -290,7 +279,7 @@ export function SectionHeader({
     'mb-8',
     'pb-4',
     'border-b',
-    'border-[var(--border)]'
+    'border-[var(--border)]',
   ];
 
   const allClasses = [...baseClasses, className].filter(Boolean).join(' ');
