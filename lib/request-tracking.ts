@@ -455,7 +455,7 @@ async function getRequestsWithTimeline(filters?: {
       timeline_progress: progress,
       total_steps: flow.length,
       current_step: currentIndex + 1,
-      is_terminal: (terminalStatuses as ReadonlyArray<AFTStatusType>).includes(request.status),
+      is_terminal: (terminalStatuses as ReadonlyArray<string>).includes(request.status),
     };
   });
 }

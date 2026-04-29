@@ -148,7 +148,7 @@ async function renderRequestsPage(
             'pending_approver',
             'pending_cpso',
             'pending_media_custodian',
-          ].includes(row.status)
+          ].includes(row.status as string)
         ) {
           actions.push({
             label: 'Process',
@@ -172,8 +172,8 @@ async function renderRequestsPage(
 
   // Build statistics cards
   const statsCards = buildStatsCards(
-    totalRequests?.count || 0,
-    pendingRequests?.count || 0,
+    Number(totalRequests?.count) || 0,
+    Number(pendingRequests?.count) || 0,
     tableData,
   );
 
@@ -276,13 +276,13 @@ async function renderRequestProcessPage(
   }
 
   // Check if request is in the right state for processing
-  if (!['pending_media_custodian', 'completed'].includes(request.status)) {
+  if (!['pending_media_custodian', 'completed'].includes(request.status as string)) {
     return `
       ${MediaCustodianNavigation.renderPageHeader('Cannot Process Request', 'Request is not ready for media custodian processing', user, '/media-custodian/requests')}
       <div class="max-w-4xl mx-auto px-3 sm:px-5 lg:px-6 py-6">
         <div class="text-center">
           <h2 class="text-2xl font-bold text-[var(--foreground)] mb-4">Request Not Ready</h2>
-          <p class="text-[var(--muted-foreground)] mb-6">This request is currently in "${request.status}" status and cannot be processed by media custodian at this time.</p>
+          <p class="text-[var(--muted-foreground)] mb-6">This request is currently in "${request.status as string}" status and cannot be processed by media custodian at this time.</p>
           <button onclick="window.location.href='/media-custodian/requests/${requestId}'" class="px-4 py-2 bg-[var(--primary)] text-[var(--primary-foreground)] rounded-md">
             View Request Details
           </button>
@@ -296,14 +296,14 @@ async function renderRequestProcessPage(
   let additionalSystems = [];
   if (request.files_list) {
     try {
-      files = JSON.parse(request.files_list);
+      files = JSON.parse(String(request.files_list));
     } catch {
       files = [];
     }
   }
   if (request.additional_systems) {
     try {
-      additionalSystems = JSON.parse(request.additional_systems);
+      additionalSystems = JSON.parse(String(request.additional_systems));
     } catch {
       additionalSystems = [];
     }
@@ -367,7 +367,7 @@ async function renderRequestDetail(user: MediaCustodianUser, requestId: number):
   let files = [];
   if (request.files_list) {
     try {
-      files = JSON.parse(request.files_list);
+      files = JSON.parse(String(request.files_list));
     } catch {
       files = [];
     }
@@ -793,7 +793,7 @@ function buildRequestDetailsView(request: any, files: any[]): string {
             Back to Requests
           </button>
           ${
-            request.drive_id && ['completed', 'disposed'].includes(request.status)
+            request.drive_id && ['completed', 'disposed'].includes(request.status as string)
               ? `
             <button 
               onclick="returnDriveToInventory(${request.drive_id}, '${request.drive_serial}', ${request.id})"

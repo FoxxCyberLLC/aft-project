@@ -227,7 +227,9 @@ function buildDrivesTable(drives: any[]): string {
       key: 'last_activity',
       label: 'Last Activity',
       render: (_value: unknown, row: DbRow) => {
-        const ts = row.issued_at || row.returned_at || row.last_used || row.created_at;
+        const ts = (row.issued_at || row.returned_at || row.last_used || row.created_at) as
+          | number
+          | undefined;
         const label = row.issued_at
           ? 'Issued'
           : row.returned_at

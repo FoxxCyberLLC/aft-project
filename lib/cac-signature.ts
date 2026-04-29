@@ -521,7 +521,7 @@ async function applyDTASignatureOnly(
       if (request.status !== 'active_transfer') {
         return {
           success: false as const,
-          error: `Request must be in active transfer status. Current status: ${request.status}`,
+          error: `Request must be in active transfer status. Current status: ${request.status as string}`,
         };
       }
 
@@ -823,11 +823,22 @@ async function exportSignatureData(signatureId: number): Promise<any> {
     LEFT JOIN users u ON cs.user_id = u.id
     WHERE cs.id = ?
   `)
-    .get(signatureId)) as DbRow;
+    .get(signatureId)) as
+    | (DbRow & {
+        id: number;
+        request_id: number;
+        request_number: string;
+        first_name: string;
+        last_name: string;
+        email: string;
+        signature_algorithm: string;
+        signed_data: string;
+      })
+    | undefined;
 
   if (!signature) return null;
 
-  let original: any = null;
+  let original: CACSignatureData | null = null;
   try {
     original = JSON.parse(signature.signed_data);
   } catch {}

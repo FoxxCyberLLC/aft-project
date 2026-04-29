@@ -119,7 +119,7 @@ export async function handleRequestorAPI(
       }> = [];
       try {
         if (requestData.destinations_json) {
-          const parsed = JSON.parse(requestData.destinations_json);
+          const parsed = JSON.parse(String(requestData.destinations_json));
           if (Array.isArray(parsed)) destinations = parsed;
         }
       } catch {}

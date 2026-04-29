@@ -277,7 +277,7 @@ function renderDTAProcessData(request: any, driveTracking: any[]): string {
 function renderDestinations(request: any): string {
   let destinations: any[] = [];
   try {
-    const td = request.transfer_data ? JSON.parse(request.transfer_data) : null;
+    const td = request.transfer_data ? JSON.parse(String(request.transfer_data)) : null;
     destinations = Array.isArray(td?.destinations) ? td.destinations : [];
   } catch {}
 
@@ -323,7 +323,7 @@ function renderDestinations(request: any): string {
 function renderFileInformation(request: any): string {
   let files: any[] = [];
   try {
-    files = request.files_list ? JSON.parse(request.files_list) : [];
+    files = request.files_list ? JSON.parse(String(request.files_list)) : [];
     if (!Array.isArray(files)) files = [];
   } catch {
     files = [];

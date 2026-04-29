@@ -64,8 +64,9 @@ async function render(
       label: 'Status',
       render: (_value: unknown, row: DbRow) =>
         ComponentBuilder.statusBadge(
-          AFT_STATUS_LABELS[row.status as keyof typeof AFT_STATUS_LABELS] || row.status,
-          getStatusVariant(row.status),
+          AFT_STATUS_LABELS[row.status as keyof typeof AFT_STATUS_LABELS] ||
+            (row.status as string),
+          getStatusVariant(row.status as string),
         ),
     },
     {

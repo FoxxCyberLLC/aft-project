@@ -90,7 +90,10 @@ async function render(user: MediaCustodianUser, _userId: number): Promise<string
     },
     {
       label: 'Processing Rate',
-      value: getProcessingRate(allRequests?.count || 0, pendingRequests?.count || 0),
+      value: getProcessingRate(
+        Number(allRequests?.count) || 0,
+        Number(pendingRequests?.count) || 0,
+      ),
       status: 'operational',
     },
   ]);

@@ -95,7 +95,8 @@ async function render(user: ApproverUser, _userId: number): Promise<string> {
           cancelled: 'error',
           approved: 'success',
         } as const;
-        const label = statusLabels[row.status as keyof typeof statusLabels] || row.status;
+        const label =
+          statusLabels[row.status as keyof typeof statusLabels] || (row.status as string);
         const variant = statusVariants[row.status as keyof typeof statusVariants] || 'default';
         return ComponentBuilder.statusBadge(label, variant);
       },

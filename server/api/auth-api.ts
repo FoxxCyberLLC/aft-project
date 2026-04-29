@@ -112,7 +112,16 @@ export async function handleAuthAPI(
 
     const user = (await db
       .query('SELECT * FROM users WHERE email = ? AND is_active = TRUE')
-      .get(body.email)) as DbRow;
+      .get(body.email)) as
+      | {
+          id: number;
+          email: string;
+          password: string;
+          primary_role: string;
+          is_active: boolean;
+          must_change_password?: boolean;
+        }
+      | undefined;
 
     if (!user) {
       recordFailedAttempt(`${ipAddress}:${body.email}`);
@@ -245,7 +254,7 @@ export async function handleAuthAPI(
 
     const user = (await db
       .query('SELECT id, password FROM users WHERE id = ? AND is_active = TRUE')
-      .get(auth.userId)) as DbRow;
+      .get(auth.userId)) as { id: number; password: string } | undefined;
     if (!user) {
       return new Response(JSON.stringify({ success: false, message: 'User not found' }), {
         status: 404,

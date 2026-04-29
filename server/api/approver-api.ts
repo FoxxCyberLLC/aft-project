@@ -306,7 +306,7 @@ export async function handleApproverAPI(
           SELECT request_number, requestor_email, transfer_type, classification
           FROM aft_requests WHERE id = ?
         `)
-          .get(requestId)) as DbRow;
+          .get(requestId)) as { request_number: string; requestor_email: string; transfer_type: string | null; classification: string | null; } | undefined;
 
         // Add to history (ISSM approval)
         const historyAction = 'ISSM_APPROVED';
@@ -323,20 +323,20 @@ export async function handleApproverAPI(
         const cpsoEmails = await getNextApproverEmails(newStatus);
         for (const email of cpsoEmails) {
           await emailService.notifyNextApprover(requestIdNum, newStatus, email, {
-            requestNumber: requestData.request_number,
-            requestorName: requestData.requestor_email,
-            transferType: requestData.transfer_type || 'N/A',
-            classification: requestData.classification || 'N/A',
+            requestNumber: (requestData?.request_number ?? ""),
+            requestorName: (requestData?.requestor_email ?? ""),
+            transferType: (requestData?.transfer_type) || 'N/A',
+            classification: (requestData?.classification) || 'N/A',
             notes: notes,
           });
         }
 
         // Notify requestor of approval progress
-        await emailService.notifyRequestApproved(requestIdNum, requestData.requestor_email, {
-          requestNumber: requestData.request_number,
-          requestorName: requestData.requestor_email,
-          transferType: requestData.transfer_type || 'N/A',
-          classification: requestData.classification || 'N/A',
+        await emailService.notifyRequestApproved(requestIdNum, (requestData?.requestor_email ?? ""), {
+          requestNumber: (requestData?.request_number ?? ""),
+          requestorName: (requestData?.requestor_email ?? ""),
+          transferType: (requestData?.transfer_type) || 'N/A',
+          classification: (requestData?.classification) || 'N/A',
           nextApprover: 'ISSM',
           notes: notes,
         });
@@ -434,7 +434,7 @@ export async function handleApproverAPI(
           SELECT request_number, requestor_email, transfer_type, classification
           FROM aft_requests WHERE id = ?
         `)
-          .get(requestId)) as DbRow;
+          .get(requestId)) as { request_number: string; requestor_email: string; transfer_type: string | null; classification: string | null; } | undefined;
 
         // Add to history
         await db
@@ -448,12 +448,12 @@ export async function handleApproverAPI(
         if (requestData) {
           await emailService.notifyRequestRejected(
             parseInt(requestId, 10),
-            requestData.requestor_email,
+            (requestData?.requestor_email ?? ""),
             {
-              requestNumber: requestData.request_number,
-              requestorName: requestData.requestor_email,
-              transferType: requestData.transfer_type || 'N/A',
-              classification: requestData.classification || 'N/A',
+              requestNumber: (requestData?.request_number ?? ""),
+              requestorName: (requestData?.requestor_email ?? ""),
+              transferType: (requestData?.transfer_type) || 'N/A',
+              classification: (requestData?.classification) || 'N/A',
               nextApprover: 'ISSM',
               rejectionReason: reason,
               notes: notes,

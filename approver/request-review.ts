@@ -130,8 +130,8 @@ function renderStatusBanner(request: any): string {
   };
 
   const statusKey = (
-    ['pending_approver', 'pending_cpso', 'submitted', 'approved', 'rejected'] as const
-  ).includes(request.status)
+    ['pending_approver', 'pending_cpso', 'submitted', 'approved', 'rejected'] as readonly string[]
+  ).includes(request.status as string)
     ? (request.status as
         | 'pending_approver'
         | 'pending_cpso'
@@ -209,7 +209,7 @@ function renderDestinations(request: any): string {
   // Parse transfer_data.destinations if present
   let destinations: any[] = [];
   try {
-    const td = request.transfer_data ? JSON.parse(request.transfer_data) : null;
+    const td = request.transfer_data ? JSON.parse(String(request.transfer_data)) : null;
     destinations = Array.isArray(td?.destinations) ? td.destinations : [];
   } catch {}
 
@@ -257,7 +257,7 @@ function renderDestinations(request: any): string {
 function renderFileInformation(request: any): string {
   let files: any[] = [];
   try {
-    files = request.files_list ? JSON.parse(request.files_list) : [];
+    files = request.files_list ? JSON.parse(String(request.files_list)) : [];
     if (!Array.isArray(files)) files = [];
   } catch {
     files = [];
@@ -376,7 +376,7 @@ function renderApprovalActions(request: any): string {
         statusMessage = 'This request has been cancelled.';
         break;
       default:
-        statusMessage = `This request has already been ${request.status}.`;
+        statusMessage = `This request has already been ${request.status as string}.`;
     }
 
     return ComponentBuilder.card({

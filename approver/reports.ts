@@ -82,9 +82,9 @@ async function render(user: ApproverUser): Promise<string> {
           Key Performance Metrics
         </h3>
         <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-          ${renderMetricCard('Total Processed', stats.total?.count || 0, 'primary')}
-          ${renderMetricCard('Approved', stats.approved?.count || 0, 'success')}
-          ${renderMetricCard('Rejected', stats.rejected?.count || 0, 'destructive')}
+          ${renderMetricCard('Total Processed', Number(stats.total?.count) || 0, 'primary')}
+          ${renderMetricCard('Approved', Number(stats.approved?.count) || 0, 'success')}
+          ${renderMetricCard('Rejected', Number(stats.rejected?.count) || 0, 'destructive')}
           ${renderMetricCard('Avg. Processing', `${Math.round(stats.avgProcessingTime?.hours || 0)}h`, 'warning')}
         </div>
       </div>

@@ -50,9 +50,9 @@ export async function handleAdminAPI(
 
     return new Response(
       JSON.stringify({
-        activeUsers: userCount?.count || 0,
-        totalRequests: requestCount?.count || 0,
-        todayLogins: recentLogins?.count || 0,
+        activeUsers: Number(userCount?.count) || 0,
+        totalRequests: Number(requestCount?.count) || 0,
+        todayLogins: Number(recentLogins?.count) || 0,
         systemStatus: 'operational',
       }),
       {
@@ -90,7 +90,7 @@ export async function handleAdminAPI(
     if (authResult.response) return authResult.response;
 
     try {
-      const userData = (await request.json()) as DbRow;
+      const userData = (await request.json()) as { email: string; password: string; first_name: string; last_name: string; primary_role: string; organization?: string; phone?: string; is_active?: boolean; };
       const hashedPassword = await Bun.password.hash(userData.password, {
         algorithm: 'bcrypt',
         cost: 12,
@@ -111,7 +111,7 @@ export async function handleAdminAPI(
           userData.organization || null,
           userData.phone || null,
           !!userData.is_active,
-        )) as DbRow;
+        )) as { id: number } | undefined;
 
       // Add primary role to user_roles table
       await db
@@ -119,7 +119,7 @@ export async function handleAdminAPI(
         INSERT INTO user_roles (user_id, role, is_active, assigned_by)
         VALUES (?, ?, 1, ?)
       `)
-        .run(result.id, userData.primary_role, authResult.session.userId);
+        .run(result?.id ?? 0, userData.primary_role, authResult.session.userId);
 
       await auditLog(
         authResult.session.userId,
@@ -207,7 +207,9 @@ export async function handleAdminAPI(
     const { roles } = (await request.json()) as { roles: string[] };
 
     // Get user's primary role (cannot be removed)
-    const user = (await db.query('SELECT primary_role FROM users WHERE id = ?').get(userId)) as DbRow;
+    const user = (await db.query('SELECT primary_role FROM users WHERE id = ?').get(userId)) as
+      | { primary_role: string }
+      | undefined;
     if (!user) {
       return new Response(JSON.stringify({ error: 'User not found' }), {
         status: 404,
@@ -286,7 +288,7 @@ export async function handleAdminAPI(
           },
         );
       }
-      const userData = (await request.json()) as DbRow;
+      const userData = (await request.json()) as { email: string; password?: string; first_name?: string; last_name?: string; primary_role?: string; organization?: string; phone?: string; is_active?: boolean; };
 
       let updateQuery = `
         UPDATE users 
@@ -469,11 +471,15 @@ export async function handleAdminAPI(
     if (authResult.response) return authResult.response;
 
     try {
-      const body = (await request.json()) as DbRow;
-      const settingsToSave = {
-        'email.smtpServer': body.smtpServer,
-        'email.smtpPort': body.smtpPort,
-        'email.smtpSecurity': body.smtpSecurity,
+      const body = (await request.json()) as {
+        smtpServer?: string;
+        smtpPort?: string | number;
+        smtpSecurity?: string;
+      };
+      const settingsToSave: Record<string, string> = {
+        'email.smtpServer': body.smtpServer ?? '',
+        'email.smtpPort': String(body.smtpPort ?? ''),
+        'email.smtpSecurity': body.smtpSecurity ?? '',
       };
 
       await saveSystemSettings(settingsToSave);
@@ -504,7 +510,7 @@ export async function handleAdminAPI(
     if (authResult.response) return authResult.response;
 
     try {
-      const body = (await request.json()) as DbRow;
+      const body = (await request.json()) as { smtpServer?: string };
 
       // In a real app, you'd use a library like Nodemailer to send a test email.
       // For now, we'll just simulate it by checking if the server is configured.

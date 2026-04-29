@@ -66,7 +66,10 @@ async function render(user: RequestorUser, userId: number): Promise<string> {
     },
     {
       label: 'Success Rate',
-      value: getSuccessRate(myRequests?.count || 0, pendingRequests?.count || 0),
+      value: getSuccessRate(
+        Number(myRequests?.count) || 0,
+        Number(pendingRequests?.count) || 0,
+      ),
       status: 'operational',
     },
   ]);

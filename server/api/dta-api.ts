@@ -990,7 +990,7 @@ async function activateTransfer(
   console.log(`[DEBUG] DTA Activation - Request ${requestId}, User ${userId}`);
   console.log(`[DEBUG] Request found:`, request ? 'YES' : 'NO');
   if (request) {
-    console.log(`[DEBUG] Request status: ${request.status}, Expected: pending_dta`);
+    console.log(`[DEBUG] Request status: ${request.status as string}, Expected: pending_dta`);
     console.log(`[DEBUG] Request DTA ID: ${request.dta_id}, User ID: ${userId}`);
   }
 
@@ -1005,7 +1005,7 @@ async function activateTransfer(
   if (request.status !== 'pending_dta' && request.status !== 'approved') {
     return new Response(
       JSON.stringify({
-        error: `Request is not ready for DTA activation. Current status: ${request.status}`,
+        error: `Request is not ready for DTA activation. Current status: ${request.status as string}`,
       }),
       {
         status: 400,

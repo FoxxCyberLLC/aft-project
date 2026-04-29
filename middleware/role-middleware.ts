@@ -180,7 +180,7 @@ async function checkAuthAndRole(
   const session = await requireAuth(request, ipAddress);
 
   if (!session) {
-    return { session: null as DbRow, response: redirectToLogin() };
+    return { session: null as unknown as SecureSession, response: redirectToLogin() };
   }
 
   // Check if role is selected
