@@ -57,7 +57,7 @@ async function render(user: MediaCustodianUser, _userId: number): Promise<string
     status: {
       label: 'Pending',
       value: Number(pendingRequests?.count).toString() || '0',
-      status: pendingRequests?.count > 0 ? 'warning' : 'operational',
+      status: Number(pendingRequests?.count) > 0 ? 'warning' : 'operational',
     },
   });
 
@@ -81,7 +81,7 @@ async function render(user: MediaCustodianUser, _userId: number): Promise<string
     {
       label: 'Pending Actions',
       value: Number(pendingRequests?.count) || 0,
-      status: pendingRequests?.count > 0 ? 'warning' : 'operational',
+      status: Number(pendingRequests?.count) > 0 ? 'warning' : 'operational',
     },
     {
       label: 'This Month',
@@ -196,7 +196,7 @@ function buildRecentRequestsTable(requests: any[]): string {
 
         const variant = statusVariant[row.status as keyof typeof statusVariant] || 'default';
 
-        return ComponentBuilder.statusBadge(row.status.replace('_', ' ').toUpperCase(), variant);
+        return ComponentBuilder.statusBadge(String(row.status).replace('_', ' ').toUpperCase(), variant);
       },
     },
     {

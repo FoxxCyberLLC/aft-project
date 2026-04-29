@@ -28,7 +28,17 @@ async function render(user: CPSOUser, _userId: number): Promise<string> {
     GROUP BY r.id
     ORDER BY r.updated_at DESC
   `)
-    .all(user.email, user.email)) as DbRow[];
+    .all(user.email, user.email)) as Array<{
+    id: number;
+    request_number: string;
+    requestor_name: string;
+    requestor_email: string;
+    source_system: string | null;
+    destination_system: string | null;
+    classification: string | null;
+    updated_at: number;
+    status: string;
+  }>;
 
   // Calculate statistics
   const todayCount = approvedRequests.filter((r) => {

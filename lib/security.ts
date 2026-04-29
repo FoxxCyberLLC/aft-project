@@ -92,7 +92,21 @@ async function initializeSessionStore() {
     .query(`
     SELECT * FROM sessions WHERE is_active = TRUE
   `)
-    .all()) as DbRow[];
+    .all()) as Array<{
+    session_id: string;
+    user_id: number;
+    email: string;
+    primary_role: string;
+    active_role: string | null;
+    available_roles: string | string[] | null;
+    created_at: number;
+    last_activity: number;
+    ip_address: string;
+    user_agent: string;
+    csrf_token: string;
+    is_active: boolean | number;
+    role_selected: boolean | number;
+  }>;
 
   existingSessions.forEach((row) => {
     const session: SecureSession = {
@@ -100,7 +114,7 @@ async function initializeSessionStore() {
       userId: row.user_id,
       email: row.email,
       primaryRole: row.primary_role,
-      activeRole: row.active_role,
+      activeRole: row.active_role ?? undefined,
       availableRoles:
         typeof row.available_roles === 'string'
           ? JSON.parse(row.available_roles)

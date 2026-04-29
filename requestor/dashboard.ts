@@ -57,7 +57,7 @@ async function render(user: RequestorUser, userId: number): Promise<string> {
     {
       label: 'Pending Review',
       value: Number(pendingRequests?.count) || 0,
-      status: pendingRequests?.count > 0 ? 'warning' : 'operational',
+      status: Number(pendingRequests?.count) > 0 ? 'warning' : 'operational',
     },
     {
       label: 'This Month',
@@ -169,7 +169,7 @@ function buildRecentRequestsTable(requests: any[]): string {
 
         const variant = statusVariant[row.status as keyof typeof statusVariant] || 'default';
 
-        return ComponentBuilder.statusBadge(row.status.replace('_', ' ').toUpperCase(), variant);
+        return ComponentBuilder.statusBadge(String(row.status).replace('_', ' ').toUpperCase(), variant);
       },
     },
     {

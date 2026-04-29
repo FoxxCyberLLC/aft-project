@@ -36,7 +36,7 @@ async function render(user: SMEUser, _userId: number): Promise<string> {
     status: {
       label: 'Pending',
       value: Number(pendingSignatures?.count).toString() || '0',
-      status: pendingSignatures?.count > 0 ? 'warning' : 'operational',
+      status: Number(pendingSignatures?.count) > 0 ? 'warning' : 'operational',
     },
   });
 
@@ -111,7 +111,7 @@ function buildRecentActivityTable(requests: any[]): string {
           completed: 'success',
         } as const;
         const variant = statusVariant[row.status as keyof typeof statusVariant] || 'default';
-        return ComponentBuilder.statusBadge(row.status.replace(/_/g, ' ').toUpperCase(), variant);
+        return ComponentBuilder.statusBadge(String(row.status).replace(/_/g, ' ').toUpperCase(), variant);
       },
     },
     {

@@ -40,7 +40,19 @@ async function getRequestTimeline(requestId: number): Promise<RequestTimelineDat
     FROM aft_requests
     WHERE id = ?
   `)
-    .get(requestId)) as DbRow;
+    .get(requestId)) as
+    | {
+        id: number;
+        status: AFTStatusType;
+        created_at: number;
+        updated_at: number;
+        requestor_name: string;
+        approval_date: number | null;
+        actual_start_date: number | null;
+        actual_end_date: number | null;
+        transfer_type: string | null;
+      }
+    | undefined;
 
   if (!request) return null;
 

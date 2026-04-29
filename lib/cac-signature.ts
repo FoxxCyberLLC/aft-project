@@ -669,7 +669,19 @@ async function verifySignatureIntegrity(
       .query(`
       SELECT * FROM cac_signatures WHERE id = ?
     `)
-      .get(signatureId)) as DbRow;
+      .get(signatureId)) as
+      | {
+          signed_data: string;
+          signature_data: string;
+          certificate_thumbprint: string;
+          certificate_subject: string;
+          certificate_issuer: string;
+          certificate_not_before: number;
+          certificate_not_after: number;
+          certificate_serial: string;
+          signature_algorithm: string;
+        }
+      | undefined;
 
     if (!signature) {
       return { isValid: false, error: 'Signature not found' };

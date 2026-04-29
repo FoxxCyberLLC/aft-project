@@ -29,7 +29,7 @@ async function render(user: CPSOUser): Promise<string> {
       SELECT COUNT(*) as count FROM aft_requests
       WHERE approver_email = ? AND status IN (${advancedStatusList})
     `)
-      .get(user.email, ...cpsoAdvancedStatuses)) as DbRow,
+      .get(user.email, ...cpsoAdvancedStatuses)) as { count: number } | undefined,
 
     approved: (await db
       .query(`
@@ -37,14 +37,14 @@ async function render(user: CPSOUser): Promise<string> {
       WHERE approver_email = ? AND status NOT IN ('rejected', 'cancelled')
         AND status IN (${advancedStatusList})
     `)
-      .get(user.email, ...cpsoAdvancedStatuses)) as DbRow,
+      .get(user.email, ...cpsoAdvancedStatuses)) as { count: number } | undefined,
 
     rejected: (await db
       .query(`
       SELECT COUNT(*) as count FROM aft_requests
       WHERE approver_email = ? AND status = 'rejected'
     `)
-      .get(user.email)) as DbRow,
+      .get(user.email)) as { count: number } | undefined,
 
     avgProcessingTime: (await db
       .query(`
@@ -52,7 +52,7 @@ async function render(user: CPSOUser): Promise<string> {
       FROM aft_requests
       WHERE approver_email = ? AND status IN (${advancedStatusList})
     `)
-      .get(user.email, ...cpsoAdvancedStatuses)) as DbRow,
+      .get(user.email, ...cpsoAdvancedStatuses)) as { hours: number } | undefined,
   };
 
   // Get monthly breakdown

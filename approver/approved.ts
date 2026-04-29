@@ -11,7 +11,7 @@ async function render(user: ApproverUser, _userId: number): Promise<string> {
   // Get all requests approved by this approver (regardless of current status)
   const approvedRequests = (await db
     .query(`
-    SELECT 
+    SELECT
       r.*,
       u.email as requestor_email,
       u.first_name || ' ' || u.last_name as requestor_name,
@@ -23,7 +23,17 @@ async function render(user: ApproverUser, _userId: number): Promise<string> {
     WHERE r.approver_email = ? AND r.status NOT IN ('draft', 'submitted', 'pending_approver', 'rejected')
     ORDER BY r.updated_at DESC
   `)
-    .all(user.email)) as DbRow[];
+    .all(user.email)) as Array<{
+    id: number;
+    request_number: string;
+    requestor_name: string;
+    requestor_email: string;
+    source_system: string | null;
+    destination_system: string | null;
+    classification: string | null;
+    updated_at: number;
+    status: string;
+  }>;
 
   // Calculate statistics
   const todayCount = approvedRequests.filter((r) => {

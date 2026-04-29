@@ -274,13 +274,13 @@ function buildTransferTrackingTable(transfers: any[]): string {
             <span class="${row.origination_scan_performed ? 'text-[var(--success)]' : 'text-[var(--muted-foreground)]'}">
               ${row.origination_scan_performed ? '✓' : '○'} Origin
             </span>
-            ${row.origination_threats_found > 0 ? `<span class="text-[var(--destructive)]">${row.origination_threats_found} threats</span>` : ''}
+            ${Number(row.origination_threats_found) > 0 ? `<span class="text-[var(--destructive)]">${row.origination_threats_found} threats</span>` : ''}
           </div>
           <div class="flex items-center gap-2 text-xs">
             <span class="${row.destination_scan_performed ? 'text-[var(--success)]' : 'text-[var(--muted-foreground)]'}">
               ${row.destination_scan_performed ? '✓' : '○'} Dest
             </span>
-            ${row.destination_threats_found > 0 ? `<span class="text-[var(--destructive)]">${row.destination_threats_found} threats</span>` : ''}
+            ${Number(row.destination_threats_found) > 0 ? `<span class="text-[var(--destructive)]">${row.destination_threats_found} threats</span>` : ''}
           </div>
         </div>
       `,
@@ -290,7 +290,7 @@ function buildTransferTrackingTable(transfers: any[]): string {
       label: 'Files Scanned',
       render: (_value: unknown, row: DbRow) => `
         <div class="text-sm text-[var(--foreground)]">
-          ${(row.origination_files_scanned || 0) + (row.destination_files_scanned || 0)} files
+          ${Number(row.origination_files_scanned || 0) + Number(row.destination_files_scanned || 0)} files
         </div>
       `,
     },
@@ -299,7 +299,7 @@ function buildTransferTrackingTable(transfers: any[]): string {
       label: 'Files Transferred',
       render: (_value: unknown, row: DbRow) => `
         <div class="text-sm text-[var(--foreground)]">
-          ${row.files_transferred_count > 0 ? `${row.files_transferred_count.toLocaleString()} files` : 'Not completed'}
+          ${Number(row.files_transferred_count) > 0 ? `${Number(row.files_transferred_count).toLocaleString()} files` : 'Not completed'}
         </div>
       `,
     },
@@ -325,7 +325,7 @@ function buildTransferTrackingTable(transfers: any[]): string {
 
         const variant = statusVariant[row.status as keyof typeof statusVariant] || 'default';
 
-        return ComponentBuilder.statusBadge(row.status.replace('_', ' ').toUpperCase(), variant);
+        return ComponentBuilder.statusBadge(String(row.status).replace('_', ' ').toUpperCase(), variant);
       },
     },
     {

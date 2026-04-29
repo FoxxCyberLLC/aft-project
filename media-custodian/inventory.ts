@@ -206,7 +206,7 @@ function buildDrivesTable(drives: any[]): string {
 
         const variant = statusVariant[row.status as keyof typeof statusVariant] || 'default';
 
-        return ComponentBuilder.statusBadge(row.status.replace('_', ' ').toUpperCase(), variant);
+        return ComponentBuilder.statusBadge(String(row.status).replace('_', ' ').toUpperCase(), variant);
       },
     },
     {

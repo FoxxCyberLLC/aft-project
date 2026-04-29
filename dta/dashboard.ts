@@ -43,7 +43,7 @@ async function render(user: DTAUser, userId: number): Promise<string> {
     status: {
       label: 'Pending',
       value: Number(dtaPendingRequests?.count).toString() || '0',
-      status: dtaPendingRequests?.count > 0 ? 'warning' : 'operational',
+      status: Number(dtaPendingRequests?.count) > 0 ? 'warning' : 'operational',
     },
   });
 
@@ -54,7 +54,7 @@ async function render(user: DTAUser, userId: number): Promise<string> {
     status: {
       label: 'Active',
       value: Number(activeTransfers?.count).toString() || '0',
-      status: activeTransfers?.count > 0 ? 'info' : 'operational',
+      status: Number(activeTransfers?.count) > 0 ? 'info' : 'operational',
     },
   });
 
@@ -109,12 +109,12 @@ async function render(user: DTAUser, userId: number): Promise<string> {
     {
       label: 'Pending My Action',
       value: Number(dtaPendingRequests?.count) || 0,
-      status: dtaPendingRequests?.count > 0 ? 'warning' : 'operational',
+      status: Number(dtaPendingRequests?.count) > 0 ? 'warning' : 'operational',
     },
     {
       label: 'My Active Transfers',
       value: Number(activeTransfers?.count) || 0,
-      status: activeTransfers?.count > 0 ? 'info' : 'operational',
+      status: Number(activeTransfers?.count) > 0 ? 'info' : 'operational',
     },
     {
       label: 'AV Scans',
@@ -204,7 +204,7 @@ function buildRecentRequestsTable(requests: any[]): string {
 
         const variant = statusVariant[row.status as keyof typeof statusVariant] || 'default';
 
-        return ComponentBuilder.statusBadge(row.status.replace('_', ' ').toUpperCase(), variant);
+        return ComponentBuilder.statusBadge(String(row.status).replace('_', ' ').toUpperCase(), variant);
       },
     },
     {

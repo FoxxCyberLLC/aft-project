@@ -11,24 +11,24 @@ async function render(user: ApproverUser): Promise<string> {
   const stats = {
     total: (await db
       .query(`
-      SELECT COUNT(*) as count FROM aft_requests 
+      SELECT COUNT(*) as count FROM aft_requests
       WHERE approver_email = ?
     `)
-      .get(user.email)) as DbRow,
+      .get(user.email)) as { count: number } | undefined,
 
     approved: (await db
       .query(`
-      SELECT COUNT(*) as count FROM aft_requests 
+      SELECT COUNT(*) as count FROM aft_requests
       WHERE status = 'approved' AND approver_email = ?
     `)
-      .get(user.email)) as DbRow,
+      .get(user.email)) as { count: number } | undefined,
 
     rejected: (await db
       .query(`
-      SELECT COUNT(*) as count FROM aft_requests 
+      SELECT COUNT(*) as count FROM aft_requests
       WHERE status = 'rejected' AND approver_email = ?
     `)
-      .get(user.email)) as DbRow,
+      .get(user.email)) as { count: number } | undefined,
 
     avgProcessingTime: (await db
       .query(`
@@ -36,7 +36,7 @@ async function render(user: ApproverUser): Promise<string> {
       FROM aft_requests
       WHERE status IN ('approved', 'rejected') AND approver_email = ?
     `)
-      .get(user.email)) as DbRow,
+      .get(user.email)) as { hours: number } | undefined,
   };
 
   // Get monthly breakdown
