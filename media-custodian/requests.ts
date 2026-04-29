@@ -320,7 +320,14 @@ async function renderRequestProcessPage(
     <div class="max-w-6xl mx-auto px-3 sm:px-5 lg:px-6 py-6">
       <div class="space-y-6">
         ${MediaCustodianNavigation.renderBreadcrumb(`/media-custodian/requests/${requestId}/process`)}
-        
+
+        ${ComponentBuilder.daoAttestationBlock({
+          transferType: request.transfer_type as string | null,
+          daoApproved: request.dao_approved as boolean | number | null,
+          daoApproverName: request.dao_approver_name as string | null,
+          daoApprovalDate: request.dao_approval_date as number | null,
+        })}
+
         ${dispositionForm}
       </div>
     </div>
@@ -400,7 +407,14 @@ async function renderRequestDetail(user: MediaCustodianUser, requestId: number):
     <div class="max-w-6xl mx-auto px-3 sm:px-5 lg:px-6 py-6">
       <div class="space-y-6">
         ${MediaCustodianNavigation.renderBreadcrumb(`/media-custodian/requests/${requestId}`)}
-        
+
+        ${ComponentBuilder.daoAttestationBlock({
+          transferType: request.transfer_type as string | null,
+          daoApproved: request.dao_approved as boolean | number | null,
+          daoApproverName: request.dao_approver_name as string | null,
+          daoApprovalDate: request.dao_approval_date as number | null,
+        })}
+
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div class="lg:col-span-2 space-y-6">
             ${requestDetails}

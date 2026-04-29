@@ -140,23 +140,15 @@ function generateTimelineSteps(request: DbRow, auditEntries: RequestAuditEntry[]
 }
 
 // Get the expected status flow for a request type
-function getStatusFlow(requestStatus: AFTStatusType, transferType?: string): AFTStatusType[] {
-  const highToLowFlow: AFTStatusType[] = [
-    AFTStatus.DRAFT,
-    AFTStatus.SUBMITTED,
-    AFTStatus.PENDING_DAO,
-    AFTStatus.PENDING_APPROVER,
-    AFTStatus.PENDING_CPSO,
-    AFTStatus.APPROVED,
-    AFTStatus.PENDING_DTA,
-    AFTStatus.ACTIVE_TRANSFER,
-    AFTStatus.PENDING_SME_SIGNATURE,
-    AFTStatus.COMPLETED,
-    AFTStatus.PENDING_MEDIA_CUSTODIAN,
-    AFTStatus.DISPOSED,
-  ];
-
-  const standardFlow: AFTStatusType[] = [
+function getStatusFlow(requestStatus: AFTStatusType, _transferType?: string): AFTStatusType[] {
+  // DAO approval for high-to-low transfers is captured as an out-of-band
+  // attestation on the request itself (the DAO signs the AFT form on the
+  // unclassified side and never accesses this app). The previous
+  // `pending_dao` step in the workflow has been removed; high-to-low and
+  // standard transfers now share the same in-app flow. The
+  // `_transferType` parameter is retained so callers can pass it without
+  // breakage if a future divergence is needed.
+  const flow: AFTStatusType[] = [
     AFTStatus.DRAFT,
     AFTStatus.SUBMITTED,
     AFTStatus.PENDING_APPROVER,
@@ -169,15 +161,10 @@ function getStatusFlow(requestStatus: AFTStatusType, transferType?: string): AFT
     AFTStatus.PENDING_MEDIA_CUSTODIAN,
     AFTStatus.DISPOSED,
   ];
-
-  const flow = transferType === 'high_to_low' ? highToLowFlow : standardFlow;
 
   // If a terminal status is reached, adjust the flow to show the final state correctly
   if (requestStatus === AFTStatus.REJECTED || requestStatus === AFTStatus.CANCELLED) {
-    const lastCompletedStepIndex =
-      flow.indexOf(requestStatus) > -1
-        ? flow.indexOf(requestStatus)
-        : highToLowFlow.indexOf(requestStatus);
+    const lastCompletedStepIndex = flow.indexOf(requestStatus);
     if (lastCompletedStepIndex > -1) {
       return [...flow.slice(0, lastCompletedStepIndex), requestStatus];
     }

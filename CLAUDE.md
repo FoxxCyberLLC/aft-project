@@ -31,25 +31,29 @@ The whole product is a single all-in-one container: nginx (TLS + CAC) → Bun ap
 
 ## Roles & Workflow
 
-Eight roles, defined in `lib/database-bun.ts` (`UserRole` const):
+Eight roles are defined in `lib/database-bun.ts` (`UserRole` const), but only **seven are in-app**:
 
-`admin`, `requestor`, `dao`, `approver`, `cpso`, `dta`, `sme`, `media_custodian`
+`admin`, `requestor`, `approver` (ISSM), `cpso`, `dta`, `sme`, `media_custodian`
+
+The eighth role — `dao` — is a government **Designated Approving Authority** who only operates on NIPR and never accesses this system. DAO approval is captured **out-of-band** (wet signature on the printed AFT form) and recorded on the request itself as a checkbox attestation. The `UserRole.DAO` const is retained so existing audit data and historical role grants don't break, but no `/dashboard/dao` UI is mounted and the DAO is not part of the live workflow state machine.
 
 Standard transfer flow (status state machine, `AFTStatus` const):
 
 ```
-draft → submitted → pending_dao → pending_approver → pending_cpso → approved
-                                                                       ↓
-                                                                 pending_dta
-                                                                       ↓
-                                                                 active_transfer
-                                                                       ↓
-                                                  pending_sme_signature / pending_sme
-                                                                       ↓
-                                                              pending_media_custodian
-                                                                       ↓
-                                                              completed → disposed
+draft → submitted → pending_approver → pending_cpso → approved
+                                                          ↓
+                                                    pending_dta
+                                                          ↓
+                                                    active_transfer
+                                                          ↓
+                                     pending_sme_signature / pending_sme
+                                                          ↓
+                                                 pending_media_custodian
+                                                          ↓
+                                                 completed → disposed
 ```
+
+For **high-to-low** transfers the requestor must additionally check the DAO attestation block in the wizard and supply the DAO approver name + approval date (validated server-side at save and submit). The block + values render on every review page (`approver`, `cpso`, `dta`, `sme`, `media-custodian`, requestor's own detail) so downstream signers can verify the out-of-band approval before signing. See `components/ui/server-components.ts` (`daoAttestationBlock`) and `lib/database-bun.ts` (`isHighToLowTransfer`).
 
 Side branches: `rejected`, `cancelled`. Each transition is signed (CAC where available, manual signature otherwise) and recorded in `aft_request_history`.
 

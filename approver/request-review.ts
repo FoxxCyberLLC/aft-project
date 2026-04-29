@@ -64,7 +64,15 @@ async function render(user: ApproverUser, requestId: string): Promise<string> {
     <div class="space-y-6">
       <!-- Status Banner -->
       ${renderStatusBanner(request)}
-      
+
+      <!-- DAO out-of-band attestation (renders only for high-to-low transfers) -->
+      ${ComponentBuilder.daoAttestationBlock({
+        transferType: request.transfer_type as string | null,
+        daoApproved: request.dao_approved as boolean | number | null,
+        daoApproverName: request.dao_approver_name as string | null,
+        daoApprovalDate: request.dao_approval_date as number | null,
+      })}
+
       <!-- Main Content Grid -->
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <!-- Left Column - Request Details -->

@@ -1,6 +1,7 @@
 // Requestor page routes
 
 import { ChevronLeftIcon } from '../../components/icons';
+import { ComponentBuilder } from '../../components/ui/server-components';
 import { type DbRow, getDb } from '../../lib/database-bun';
 import { RoleMiddleware } from '../../middleware/role-middleware';
 import { RequestorAllRequests } from '../../requestor/all-requests';
@@ -187,7 +188,14 @@ export async function handleRequestDetailPage(
           <h1 class="text-3xl font-bold text-[var(--foreground)]">Request Details</h1>
           <p class="text-[var(--muted-foreground)]">Request #${requestData.request_number}</p>
         </div>
-        
+
+        ${ComponentBuilder.daoAttestationBlock({
+          transferType: requestData.transfer_type as string | null,
+          daoApproved: requestData.dao_approved as boolean | number | null,
+          daoApproverName: requestData.dao_approver_name as string | null,
+          daoApprovalDate: requestData.dao_approval_date as number | null,
+        })}
+
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <!-- Main Content -->
           <div class="lg:col-span-2 space-y-6">

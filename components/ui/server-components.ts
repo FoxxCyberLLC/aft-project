@@ -165,6 +165,77 @@ function viewToggle(activeView: 'table' | 'timeline'): string {
   `;
 }
 
+/**
+ * Renders the DAO out-of-band attestation block for a request review page.
+ * For high-to-low transfers this surfaces the DAO approver name and approval
+ * date that the requestor recorded at submission. For other transfer types
+ * the block is omitted entirely (returns empty string) so it doesn't add
+ * noise to non-applicable requests.
+ */
+function daoAttestationBlock(args: {
+  transferType: string | null | undefined;
+  daoApproved: boolean | number | null | undefined;
+  daoApproverName: string | null | undefined;
+  daoApprovalDate: number | null | undefined;
+}): string {
+  // Inline normalization (server-components.ts must not import from lib/).
+  const tt = (args.transferType ?? '').toLowerCase().replace(/[-_\s]/g, '_');
+  if (tt !== 'high_to_low') return '';
+
+  const approved = !!args.daoApproved;
+  const dateStr = args.daoApprovalDate
+    ? new Date(Number(args.daoApprovalDate) * 1000).toISOString().slice(0, 10)
+    : '';
+  const name = args.daoApproverName ?? '';
+
+  const tone = approved
+    ? {
+        border: 'border-[var(--success)]',
+        bg: 'bg-[var(--success)]/5',
+        title: 'DAO Approval Attested (out-of-band)',
+        icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-[var(--success)]"><path d="M20 6L9 17l-5-5"/></svg>',
+      }
+    : {
+        border: 'border-[var(--destructive)]',
+        bg: 'bg-[var(--destructive)]/5',
+        title: 'DAO Approval Missing',
+        icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-[var(--destructive)]"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>',
+      };
+
+  return `
+    <div class="border-2 ${tone.border} ${tone.bg} rounded-lg p-4">
+      <div class="flex items-center gap-2 mb-2">
+        ${tone.icon}
+        <span class="font-semibold text-[var(--foreground)]">${tone.title}</span>
+      </div>
+      <p class="text-xs text-[var(--muted-foreground)] mb-3">
+        High-to-low transfers require the DAO to sign the AFT request form on the
+        unclassified side. The fields below are the requestor's attestation that
+        this signature was obtained.
+      </p>
+      ${
+        approved
+          ? `
+        <dl class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+          <div>
+            <dt class="text-xs text-[var(--muted-foreground)] uppercase tracking-wide">DAO Approver</dt>
+            <dd class="text-[var(--foreground)] font-medium">${name || '—'}</dd>
+          </div>
+          <div>
+            <dt class="text-xs text-[var(--muted-foreground)] uppercase tracking-wide">Approval Date</dt>
+            <dd class="text-[var(--foreground)] font-medium">${dateStr || '—'}</dd>
+          </div>
+        </dl>`
+          : `
+        <p class="text-sm text-[var(--destructive)]">
+          The requestor has not attested to DAO approval for this high-to-low transfer.
+          The request should not be approved further until this is corrected.
+        </p>`
+      }
+    </div>
+  `;
+}
+
 export const ComponentBuilder = {
   button,
   primaryButton,
@@ -192,6 +263,7 @@ export const ComponentBuilder = {
   statusProgress,
   timelineStatusBadge,
   viewToggle,
+  daoAttestationBlock,
 };
 
 // Pre-built component templates for common layouts
