@@ -43,7 +43,7 @@ RUN bun install --frozen-lockfile
 ###############################################################################
 # Stage 2: runtime - postgres:17 + nginx + supervisord + bun + app
 ###############################################################################
-FROM postgres:17
+FROM postgres:18
 
 # Install nginx, supervisord, tini, ca-certs, curl. Then drop the apt lists.
 RUN apt-get update \
