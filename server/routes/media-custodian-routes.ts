@@ -2,6 +2,7 @@
 
 import { UserRole, type DbRow } from '../../lib/database-bun';
 import type { SecureSession } from '../../lib/security';
+import type { MediaCustodianUser } from '../../media-custodian/media-custodian-nav';
 import { MediaCustodianDashboard } from '../../media-custodian/dashboard';
 import { MediaCustodianInventory } from '../../media-custodian/inventory';
 import { MediaCustodianReports } from '../../media-custodian/reports';
@@ -55,7 +56,7 @@ export async function handleMediaCustodianRoutes(
 }
 
 // Dashboard route
-async function handleDashboard(_request: Request, user: { email: string; [key: string]: unknown }): Promise<Response> {
+async function handleDashboard(_request: Request, user: MediaCustodianUser): Promise<Response> {
   try {
     const content = await MediaCustodianDashboard.render(user, user.id);
     const script = MediaCustodianDashboard.getScript();
@@ -70,7 +71,7 @@ async function handleDashboard(_request: Request, user: { email: string; [key: s
 }
 
 // Inventory route
-async function handleInventory(_request: Request, user: { email: string; [key: string]: unknown }): Promise<Response> {
+async function handleInventory(_request: Request, user: MediaCustodianUser): Promise<Response> {
   try {
     const content = await MediaCustodianInventory.render(user, user.id);
     const script = MediaCustodianInventory.getScript();
@@ -85,7 +86,7 @@ async function handleInventory(_request: Request, user: { email: string; [key: s
 }
 
 // All requests page
-async function handleRequestsPage(request: Request, user: { email: string; [key: string]: unknown }): Promise<Response> {
+async function handleRequestsPage(request: Request, user: MediaCustodianUser): Promise<Response> {
   try {
     const url = new URL(request.url);
     const viewMode = (url.searchParams.get('view') as 'table' | 'timeline') || 'table';
@@ -151,7 +152,7 @@ async function handleRequestProcessPage(
 }
 
 // Reports page
-async function handleReportsPage(_request: Request, user: { email: string; [key: string]: unknown }): Promise<Response> {
+async function handleReportsPage(_request: Request, user: MediaCustodianUser): Promise<Response> {
   try {
     const content = await MediaCustodianReports.renderReportsPage(user);
     const script = MediaCustodianReports.getScript();

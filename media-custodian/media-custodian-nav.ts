@@ -2,6 +2,7 @@
 import { ComponentBuilder } from '../components/ui/server-components';
 
 export interface MediaCustodianUser {
+  id: number;
   email: string;
   role: string;
 }

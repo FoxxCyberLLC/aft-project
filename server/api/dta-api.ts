@@ -681,7 +681,7 @@ async function bulkProcessRequests(
   userEmail: string,
   ipAddress: string,
 ): Promise<Response> {
-  const { action, requestIds, reason } = body;
+  const { action, requestIds, reason } = body as { action?: string; requestIds?: number[]; reason?: string };
 
   if (!action || !requestIds || !Array.isArray(requestIds)) {
     return new Response(JSON.stringify({ error: 'Invalid bulk request data' }), {
@@ -747,7 +747,7 @@ async function bulkProcessRequests(
   await auditLog(
     userId,
     'BULK_PROCESS',
-    `Bulk ${body.action} for ${body.requestIds.length} requests`,
+    `Bulk ${action} for ${requestIds?.length ?? 0} requests`,
     ipAddress,
     {
       action,
@@ -868,7 +868,7 @@ async function recordAntivirusScan(
     });
   }
 
-  const { scanType, result, notes, filesScanned, threatsFound } = body;
+  const { scanType, result, notes, filesScanned, threatsFound } = body as { scanType?: string; result?: string; notes?: string; filesScanned?: number; threatsFound?: number };
 
   if (!scanType || !['origination', 'destination'].includes(scanType)) {
     return new Response(
@@ -1100,7 +1100,7 @@ async function signDTARequest(
   }
 
   // Extract SME assignment from body
-  const { smeUserId, notes } = body;
+  const { smeUserId, notes } = body as { smeUserId?: number; notes?: string };
 
   if (!smeUserId) {
     return new Response(JSON.stringify({ error: 'SME user must be assigned when signing' }), {
@@ -1181,7 +1181,7 @@ async function handleTransferFormSubmission(
   _userEmail: string,
   ipAddress: string,
 ): Promise<Response> {
-  const { requestId, saveOnly, ...formData } = body;
+  const { requestId, saveOnly, ...formData } = body as { requestId?: number; saveOnly?: boolean; [key: string]: unknown };
 
   if (!requestId) {
     return new Response(JSON.stringify({ error: 'Request ID is required' }), {
@@ -1224,8 +1224,8 @@ async function handleTransferFormSubmission(
           WHERE id = ?
         `)
           .run(
-            formData.originationScanResult,
-            parseInt(formData.originationFilesScanned, 10),
+            (formData.originationScanResult as string),
+            parseInt(String(formData.originationFilesScanned), 10),
             requestId,
           );
 
@@ -1236,7 +1236,7 @@ async function handleTransferFormSubmission(
           undefined,
           'active_transfer',
           JSON.stringify({
-            result: formData.originationScanResult,
+            result: (formData.originationScanResult as string),
             filesScanned: formData.originationFilesScanned,
           }),
           `Origination scan updated: ${formData.originationScanResult} (${formData.originationFilesScanned} files)`,
@@ -1254,8 +1254,8 @@ async function handleTransferFormSubmission(
           WHERE id = ?
         `)
           .run(
-            formData.destinationScanResult,
-            parseInt(formData.destinationFilesScanned, 10),
+            (formData.destinationScanResult as string),
+            parseInt(String(formData.destinationFilesScanned), 10),
             requestId,
           );
 
@@ -1266,7 +1266,7 @@ async function handleTransferFormSubmission(
           undefined,
           'active_transfer',
           JSON.stringify({
-            result: formData.destinationScanResult,
+            result: (formData.destinationScanResult as string),
             filesScanned: formData.destinationFilesScanned,
           }),
           `Destination scan updated: ${formData.destinationScanResult} (${formData.destinationFilesScanned} files)`,
@@ -1293,7 +1293,7 @@ async function handleTransferFormSubmission(
       }
 
       const transferDateTime = formData.transferDateTime
-        ? new Date(formData.transferDateTime).getTime() / 1000
+        ? new Date(formData.transferDateTime as string).getTime() / 1000
         : Math.floor(Date.now() / 1000);
 
       await db
@@ -1304,7 +1304,7 @@ async function handleTransferFormSubmission(
             updated_at = EXTRACT(EPOCH FROM NOW())::BIGINT
         WHERE id = ?
       `)
-        .run(transferDateTime, parseInt(formData.filesTransferred, 10), requestId);
+        .run(transferDateTime, parseInt(String(formData.filesTransferred), 10), requestId);
 
       RequestTrackingService.addAuditEntry(
         requestId,
@@ -1352,7 +1352,7 @@ async function handleTransferFormSubmission(
           SELECT user_id FROM user_roles WHERE role = 'sme'
         ))
       `)
-        .get(formData.smeUserId);
+        .get(formData.smeUserId as number);
 
       if (!smeUser) {
         return new Response(JSON.stringify({ error: 'Invalid SME user selected' }), {
@@ -1361,7 +1361,7 @@ async function handleTransferFormSubmission(
         });
       }
 
-      const signatureDateTime = new Date(formData.dtaSignatureDateTime).getTime() / 1000;
+      const signatureDateTime = new Date(formData.dtaSignatureDateTime as string).getTime() / 1000;
 
       await db
         .query(`
@@ -1373,7 +1373,7 @@ async function handleTransferFormSubmission(
             updated_at = EXTRACT(EPOCH FROM NOW())::BIGINT
         WHERE id = ?
       `)
-        .run(signatureDateTime, formData.smeUserId, formData.smeUserId, requestId);
+        .run(signatureDateTime, formData.smeUserId as number, formData.smeUserId as number, requestId);
 
       RequestTrackingService.addAuditEntry(
         requestId,
@@ -1477,7 +1477,7 @@ async function completeTransfer(
     );
   }
 
-  const { filesTransferred, smeUserId, tpiMaintained, notes } = body;
+  const { filesTransferred, smeUserId, tpiMaintained, notes } = body as { filesTransferred?: number; smeUserId?: number; tpiMaintained?: boolean; notes?: string };
 
   // Validate required fields
   if (!filesTransferred) {
@@ -1562,7 +1562,7 @@ async function signTransferManual(
   userEmail: string,
   ipAddress: string,
 ): Promise<Response> {
-  const { smeUserId, notes, filesTransferred, transferDateTime, transferNotes } = body;
+  const { smeUserId, notes, filesTransferred, transferDateTime, transferNotes } = body as { smeUserId?: number; notes?: string; filesTransferred?: number; transferDateTime?: string; transferNotes?: string };
 
   try {
     // Verify request exists and DTA has access
@@ -1627,7 +1627,7 @@ async function signTransferManual(
           updated_at = EXTRACT(EPOCH FROM NOW())::BIGINT
       WHERE id = ?
     `)
-      .run(transferTimestamp, parseInt(filesTransferred, 10), requestId);
+      .run(transferTimestamp, parseInt(String(filesTransferred), 10), requestId);
 
     // Add transfer completion to audit trail
     if (transferNotes) {
@@ -1722,7 +1722,25 @@ async function signTransferWithCAC(
     filesTransferred,
     transferDateTime,
     transferNotes,
-  } = body;
+  } = body as {
+    signature?: string;
+    certificate?: {
+      thumbprint: string;
+      subject: string;
+      issuer: string;
+      validFrom: string;
+      validTo: string;
+      serialNumber: string;
+      certificateData: string;
+    };
+    timestamp?: string;
+    algorithm?: string;
+    smeUserId?: number;
+    notes?: string;
+    filesTransferred?: number;
+    transferDateTime?: string;
+    transferNotes?: string;
+  };
 
   try {
     // Verify request exists and DTA has access
@@ -1801,7 +1819,7 @@ async function signTransferWithCAC(
           updated_at = EXTRACT(EPOCH FROM NOW())::BIGINT
       WHERE id = ?
     `)
-      .run(transferTimestamp, parseInt(filesTransferred, 10), requestId);
+      .run(transferTimestamp, parseInt(String(filesTransferred), 10), requestId);
 
     // Add transfer completion to audit trail
     if (transferNotes) {
